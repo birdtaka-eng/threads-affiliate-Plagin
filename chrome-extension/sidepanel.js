@@ -77,11 +77,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function sendToThreads(draft) {
-        // 現在のアクティブなタブ(Threads)を探す
+        // 現在のアクティブなタブを探す
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const tab = tabs[0];
-            if (!tab || !tab.url.includes("threads.net")) {
-                alert("Threadsのタブを開いてから実行してください。");
+
+            // タブが見つからない場合のみエラー
+            if (!tab) {
+                alert("有効なタブが見つかりません。");
+                return;
+            }
+
+            // URLチェック: 権限不足で読めない場合もあるため、
+            // 「threads.netを含まない」と明示的に分かる場合以外は続行する(Permissive)
+            if (tab.url && !tab.url.includes("threads.net")) {
+                // 明らかに違うサイトにいる場合は警告して中断
+                alert("Threadsのタブ(threads.net)を開いて実行してください。");
                 return;
             }
 
@@ -91,23 +101,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 scheduledTime: draft.scheduledTime
             };
 
-            // メッセージ送信
+            // メッセージ送信 (とにかく送ってみる)
             chrome.tabs.sendMessage(tab.id, payload, (response) => {
                 if (chrome.runtime.lastError) {
-                    // Content Scriptがロードされていない場合(リロード直後や初回)
-                    // Scripting APIで注入してから再試行
-                    console.log("Injecting content script...");
+                    console.log("Content script not ready or error:", chrome.runtime.lastError.message);
+
+                    // スクリプト注入を試みる
                     chrome.scripting.executeScript({
                         target: { tabId: tab.id },
                         files: ['content.js']
                     }, () => {
-                        // 少し待ってから再送信
+                        // 注入後の再試行 (少し待つ)
                         setTimeout(() => {
                             chrome.tabs.sendMessage(tab.id, payload);
-                        }, 200);
+                        }, 500);
                     });
                 } else {
-                    console.log("Message sent:", response);
+                    console.log("Message sent successfully:", response);
                 }
             });
         });
