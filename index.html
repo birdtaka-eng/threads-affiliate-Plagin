@@ -24,32 +24,29 @@
 
 <body class="bg-gray-50 min-h-screen p-8 font-sans text-gray-800">
 
-    <header class="mb-8 flex items-center justify-between max-w-6xl mx-auto">
+    <header class="mb-8 flex items-center justify-between max-w-7xl mx-auto">
         <h1 class="text-2xl font-bold flex items-center gap-2">
             🧵 Threads Shokunin
-            <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">ver2.0 (Fixed Categories)</span>
+            <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">ver2.1 (Affiliate Mode)</span>
         </h1>
-        <!-- "Add Category" button removed for fixed structure -->
     </header>
 
-    <div class="max-w-6xl mx-auto overflow-x-auto bg-white shadow rounded-lg border border-gray-200">
+    <div class="max-w-7xl mx-auto overflow-x-auto bg-white shadow rounded-lg border border-gray-200">
         <table class="w-full text-left border-collapse">
             <thead class="bg-gray-100 border-b border-gray-200">
                 <tr>
-                    <th class="p-4 w-1/6 font-semibold">Category</th>
-                    <th class="p-4 w-1/3 font-semibold">Topic / Keywords (Prompt)</th>
+                    <th class="p-4 w-48 font-semibold">Category</th>
+                    <th class="p-4 font-semibold">Inputs (Keywords & Image)</th>
                     <th class="p-4 w-1/3 font-semibold">Stock (Output)</th>
-                    <th class="p-4 w-1/6 font-semibold">Actions</th>
+                    <th class="p-4 w-32 font-semibold">Actions</th>
                 </tr>
             </thead>
-            <tbody id="tableBody" class="divide-y divide-gray-100">
-                <!-- Javascript will inject rows here -->
-            </tbody>
+            <tbody id="tableBody" class="divide-y divide-gray-100"></tbody>
         </table>
     </div>
 
     <!-- API Key Setting Area -->
-    <div class="max-w-6xl mx-auto mt-8 p-4 bg-white border border-gray-200 rounded-lg">
+    <div class="max-w-7xl mx-auto mt-8 p-4 bg-white border border-gray-200 rounded-lg">
         <h3 class="font-bold text-sm mb-2">⚙️ Settings (Local Browser Only)</h3>
         <div class="flex gap-2">
             <input type="password" id="apiKeyInput" placeholder="Paste Gemini API Key here (AIza...)"
@@ -61,86 +58,127 @@
     </div>
 
     <div class="mt-8 text-sm text-gray-500 text-center">
-        Data is saved to your browser's <strong>LocalStorage</strong> (v2).
+        Data is saved to your browser's LocalStorage (v2.1).
     </div>
 
-    <!-- LOGIC -->
     <script type="module">
         import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
 
-        // --- Data Definitions ---
-        // 6 Fixed Categories
+        // Categories
         const FIXED_CATEGORIES = [
-            { id: '1', category: '単品投稿', desc: '商品1点を紹介', prompt: '' },
-            { id: '2', category: '有益ネタ', desc: '知識・ノウハウ', prompt: '' },
-            { id: '3', category: '日常・ネタ', desc: '共感・笑い', prompt: '' },
-            { id: '4', category: 'まとめ投稿', desc: 'リスト形式', prompt: '' },
-            { id: '5', category: 'リンク無投稿', desc: '交流・インプ稼ぎ', prompt: '' },
-            { id: '6', category: '自己紹介・想い', desc: 'ファン化', prompt: '' }
+            { id: '1', category: '単品投稿', desc: '商品紹介 (Imageあり)', isAffiliate: true },
+            { id: '2', category: '有益ネタ', desc: '知識・ノウハウ', isAffiliate: false },
+            { id: '3', category: '日常・ネタ', desc: '共感・笑い', isAffiliate: false },
+            { id: '4', category: 'まとめ投稿', desc: 'リスト形式', isAffiliate: false },
+            { id: '5', category: 'リンク無投稿', desc: '交流・インプ稼ぎ', isAffiliate: false },
+            { id: '6', category: '自己紹介・想い', desc: 'ファン化', isAffiliate: false }
         ];
 
         let rows = [];
         let geminiKey = '';
 
-        // --- Initialization ---
         window.onload = () => {
-            // Load Data (using v2 key to force migration to new structure)
-            const saved = localStorage.getItem('shokunin_data_v2');
+            // Load key
+            geminiKey = localStorage.getItem('gemini_api_key') || '';
+            if (geminiKey) document.getElementById('apiKeyInput').value = '*'.repeat(20);
+
+            // Load Data
+            const saved = localStorage.getItem('shokunin_data_v21');
             if (saved) {
                 rows = JSON.parse(saved);
-                // Ensure all 6 categories exist even if saved data is old (simple merge logic could go here, but v2 ensures fresh start for now)
             } else {
-                // Initialize with empty stocks
+                // Init structure
                 rows = FIXED_CATEGORIES.map(c => ({
                     id: c.id,
                     category: c.category,
                     desc: c.desc,
-                    prompt: '', // User input
-                    stock: ''   // AI Output
+                    isAffiliate: c.isAffiliate,
+                    prompt: '',
+                    imageUrl: '', // New field
+                    stock: ''
                 }));
             }
-
-            // Load Key
-            geminiKey = localStorage.getItem('gemini_api_key') || '';
-            if (geminiKey) document.getElementById('apiKeyInput').value = '*'.repeat(20);
-
             render();
         };
 
-        // --- Global Functions ---
-        window.saveApiKey = () => {
-            const val = document.getElementById('apiKeyInput').value;
-            if (val && !val.startsWith('***')) {
-                localStorage.setItem('gemini_api_key', val);
-                geminiKey = val;
-                alert('API Key Saved!');
-                document.getElementById('apiKeyInput').value = '*'.repeat(20);
-            }
-        };
+        // --- Render ---
+        function render() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
 
-        window.clearApiKey = () => {
-            localStorage.removeItem('gemini_api_key');
-            geminiKey = '';
-            document.getElementById('apiKeyInput').value = '';
-            alert('Key Cleared');
-        };
+            rows.forEach(row => {
+                const safePrompt = escapeHtml(row.prompt);
+                const safeStock = escapeHtml(row.stock);
+                const safeImg = escapeHtml(row.imageUrl || '');
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition border-b border-gray-100';
+
+                // --- Input Column Construction ---
+                let inputHtml = `
+                    <textarea oninput="updateRow('${row.id}', 'prompt', this.value)"
+                        class="w-full h-20 border border-gray-300 rounded p-2 text-sm outline-none focus:border-blue-500 resize-none mb-2"
+                        placeholder="${row.isAffiliate ? '商品名、特徴、ターゲット層など...' : 'キーワードや指示を入力...'}">${safePrompt}</textarea>
+                `;
+
+                // Add Image Input for Affiliate Row
+                if (row.isAffiliate) {
+                    inputHtml += `
+                        <div class="flex gap-2 items-center">
+                            <input type="text" value="${safeImg}" 
+                                oninput="updateRow('${row.id}', 'imageUrl', this.value)"
+                                class="flex-1 border border-gray-300 rounded p-1 text-xs outline-none focus:border-blue-500"
+                                placeholder="Image URL (http://...)">
+                            ${row.imageUrl ? `<img src="${safeImg}" class="h-10 w-10 object-cover rounded border border-gray-300" title="Preview">` : ''}
+                        </div>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-4 align-top w-48">
+                        <div class="font-bold text-gray-800 text-sm">${row.category}</div>
+                        <div class="text-xs text-gray-500 mt-1">${row.desc}</div>
+                    </td>
+                    <td class="p-4 align-top">
+                        ${inputHtml}
+                    </td>
+                    <td class="p-4 align-top">
+                        <textarea id="input-stock-${row.id}" oninput="updateRow('${row.id}', 'stock', this.value)"
+                            class="w-full h-24 bg-slate-50 border border-gray-200 rounded p-2 text-sm text-gray-700 resize-none font-mono"
+                            placeholder="(AI Output)">${safeStock}</textarea>
+                    </td>
+                    <td class="p-4 align-top space-y-2 w-32">
+                        <button id="btn-gen-${row.id}" onclick="handleGenerate('${row.id}')"
+                            class="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm hover:bg-blue-700 transition">
+                            ✨ Generate
+                        </button>
+                        <button onclick="handleCopyToExt('${row.id}')" ${!row.stock ? 'disabled' : ''}
+                            class="w-full px-3 py-2 rounded text-sm font-bold shadow-sm border
+                            ${!row.stock ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                            📋 Copy
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- Logic ---
 
         window.updateRow = (id, field, value) => {
             const row = rows.find(r => r.id === id);
             if (row) {
                 row[field] = value;
                 saveData();
+                if (field === 'imageUrl') render(); // re-render to update preview
             }
         };
 
-        // Note: Add/Delete functions removed as categories are fixed.
-
         window.handleGenerate = async (id) => {
             const row = rows.find(r => r.id === id);
-            if (!row.prompt) return alert("Please enter a Topic/Keyword.");
-            if (!geminiKey) return alert("Please set your Gemini API Key below.");
+            if (!row.prompt) return alert("Please enter keywords.");
+            if (!geminiKey) return alert("Please set your Gemini API Key.");
 
-            // UI Loading
             const btn = document.getElementById(`btn-gen-${id}`);
             const originalText = btn.innerHTML;
             btn.innerHTML = '🤖 Thinking...';
@@ -151,13 +189,28 @@
                 const genAI = new GoogleGenerativeAI(geminiKey);
                 const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-                // Future: Construct a better prompt based on Category + User Input
-                // For now: Just pass the user input directly
-                const finalPrompt = `【カテゴリ: ${row.category}】\n${row.prompt}\n\nこの条件でThreadsの投稿文を作成してください。`;
+                let systemPrompt = "";
 
-                const result = await model.generateContent(finalPrompt);
-                const response = await result.response;
-                const text = response.text();
+                if (row.isAffiliate) {
+                    // Specialized prompt for Affiliate
+                    systemPrompt = `
+あなたはSNSアフィリエイトのプロです。
+以下の商品について、Threads（スレッズ）に投稿するための「クリックしたくなる紹介文」を作成してください。
+画像と一緒に投稿するため、画像の説明は不要です。「画像で紹介したこれ、実は...」のような画像への誘導を含めてください。
+また、最後に自然に商品リンクへの誘導（「プロフのリンクへ！」など）を添えてください。
+入力情報: ${row.prompt}
+`;
+                } else {
+                    // Standard prompt
+                    systemPrompt = `
+Threads（スレッズ）用の投稿文を作成してください。
+カテゴリ: ${row.category}
+内容: ${row.prompt}
+`;
+                }
+
+                const result = await model.generateContent(systemPrompt);
+                const text = result.response.text();
 
                 row.stock = text;
                 saveData();
@@ -166,6 +219,7 @@
 
             } catch (err) {
                 alert("Error: " + err.message);
+            } finally {
                 btn.innerHTML = originalText;
                 btn.className = "w-full bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm hover:bg-blue-700 transition";
                 btn.disabled = false;
@@ -180,50 +234,25 @@
             });
         };
 
+        // Key Management helpers (same as before)
+        window.saveApiKey = () => {
+            const val = document.getElementById('apiKeyInput').value;
+            if (val && !val.startsWith('***')) {
+                localStorage.setItem('gemini_api_key', val);
+                geminiKey = val;
+                alert('Saved!');
+                document.getElementById('apiKeyInput').value = '*'.repeat(20);
+                render(); // Reload to check state
+            }
+        };
+        window.clearApiKey = () => {
+            localStorage.removeItem('gemini_api_key');
+            geminiKey = '';
+            document.getElementById('apiKeyInput').value = '';
+        };
+
         function saveData() {
-            localStorage.setItem('shokunin_data_v2', JSON.stringify(rows));
-        }
-
-        function render() {
-            const tbody = document.getElementById('tableBody');
-            tbody.innerHTML = '';
-
-            rows.forEach(row => {
-                const safePrompt = escapeHtml(row.prompt);
-                const safeStock = escapeHtml(row.stock);
-
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-gray-50 transition border-b border-gray-100';
-
-                tr.innerHTML = `
-                    <td class="p-4 align-top">
-                        <div class="font-bold text-gray-800">${row.category}</div>
-                        <div class="text-xs text-gray-500 mt-1">${row.desc || ''}</div>
-                    </td>
-                    <td class="p-4 align-top">
-                        <textarea oninput="updateRow('${row.id}', 'prompt', this.value)"
-                            class="w-full h-24 border border-gray-300 rounded p-2 text-sm outline-none focus:border-blue-500 resize-none"
-                            placeholder="Enter keywords or instructions...">${safePrompt}</textarea>
-                    </td>
-                    <td class="p-4 align-top">
-                        <textarea id="input-stock-${row.id}" oninput="updateRow('${row.id}', 'stock', this.value)"
-                            class="w-full h-24 bg-slate-50 border border-gray-200 rounded p-2 text-sm text-gray-700 resize-none"
-                            placeholder="(AI Output)">${safeStock}</textarea>
-                    </td>
-                    <td class="p-4 align-top space-y-2">
-                        <button id="btn-gen-${row.id}" onclick="handleGenerate('${row.id}')"
-                            class="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm hover:bg-blue-700 transition">
-                            ✨ Generate
-                        </button>
-                        <button onclick="handleCopyToExt('${row.id}')" ${!row.stock ? 'disabled' : ''}
-                            class="w-full px-3 py-2 rounded text-sm font-bold shadow-sm border
-                            ${!row.stock ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50'}">
-                            📋 Copy
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+            localStorage.setItem('shokunin_data_v21', JSON.stringify(rows));
         }
 
         function escapeHtml(text) {
