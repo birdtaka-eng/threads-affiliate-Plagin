@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { width: 320px; padding: 15px; font-family: sans-serif; box-sizing: border-box; }
+    h3 { margin-top: 0; }
+    label { display: block; margin-top: 10px; font-weight: bold; font-size: 12px; }
+    input[type="text"], textarea { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+    textarea { height: 100px; resize: vertical; }
+    
+    .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+    button { flex: 1; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; }
+    button:hover { opacity: 0.9; }
+    
+    #syncBtn { background-color: #007bff; }
+    #postBtn { background-color: #28a745; }
+    
+    .status { margin-top: 15px; font-size: 12px; padding: 10px; border-radius: 4px; display: none; }
+    .status.success { background-color: #d4edda; color: #155724; display: block; }
+    .status.error { background-color: #f8d7da; color: #721c24; display: block; }
+    .status.loading { background-color: #e2e3e5; color: #383d41; display: block; }
+  </style>
+  <!-- Ensuring script loads after parser or defers -->
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <h3>Threads Shokunin</h3>
+  
+  <label>Cloud Run URL (Root):</label>
+  <input type="text" id="apiUrl" placeholder="https://your-service-url.run.app" />
+  <label>Post Content:</label>
+  <textarea id="postContent" placeholder="Enter text to post..."></textarea>
+  <div class="btn-group">
+    <button id="syncBtn">🔄 Sync Session</button>
+    <button id="postBtn">📝 Post</button>
+  </div>
+  <div id="status" class="status"></div>
+</body>
+</html>

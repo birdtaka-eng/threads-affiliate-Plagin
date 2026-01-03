@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Threads Shokunin Session Sync",
+  "version": "1.0",
+  "description": "ThreadsのログインセッションをCloud Runに同期します",
+  "permissions": [
+    "cookies",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.threads.net/*",
+    "https://threads-post-tool-898567949420.asia-northeast1.run.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
