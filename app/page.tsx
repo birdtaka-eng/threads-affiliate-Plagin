@@ -1,65 +1,164 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useState, useEffect } from 'react';
+
+// Types
+interface RowData {
+  id: string;
+  category: string;
+  prompt: string;
+  stock: string;
+}
+
+export default function Dashboard() {
+  const [rows, setRows] = useState<RowData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Initial Data
+  const INITIAL_ROWS: RowData[] = [
+    { id: '1', category: 'ギャグ', prompt: '面白いダジャレを考えて', stock: '' },
+    { id: '2', category: '技術解説', prompt: 'Next.jsのメリットを3行で', stock: '' },
+    { id: '3', category: '日常', prompt: '今日のランチの感想風テキスト', stock: '' },
+  ];
+
+  // Load from LocalStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('dashboard_data');
+    if (saved) {
+      setRows(JSON.parse(saved));
+    } else {
+      setRows(INITIAL_ROWS);
+    }
+    setLoading(false);
+  }, []);
+
+  // Save to LocalStorage
+  useEffect(() => {
+    if (!loading) {
+      localStorage.setItem('dashboard_data', JSON.stringify(rows));
+    }
+  }, [rows, loading]);
+
+  // Handlers
+  const handleUpdate = (id: string, field: keyof RowData, value: string) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
+
+  const handleGenerate = (id: string) => {
+    alert(`[Mock] Generating for ID: ${id}...\n(Gemini integration coming next)`);
+    // Mock result
+    handleUpdate(id, 'stock', 'ここにGeminiの生成結果が入ります。\n(Mock Result)');
+  };
+
+  const handleSetToExt = (text: string) => {
+    // Idea: Copy to clipboard or send event
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard! (Extension integration coming next)');
+  };
+
+  const addNewRow = () => {
+    const newId = Date.now().toString();
+    setRows([...rows, { id: newId, category: '', prompt: '', stock: '' }]);
+  };
+
+  const deleteRow = (id: string) => {
+    if (confirm('Delete this row?')) {
+      setRows(rows.filter(r => r.id !== id));
+    }
+  };
+
+  if (loading) return <div className="p-10">Loading Dashboard...</div>;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="min-h-screen bg-gray-50 p-8 font-sans text-gray-800">
+      <header className="mb-8 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Threads Shokunin Dashboard</h1>
+        <button
+          onClick={addNewRow}
+          className="bg-black text-white px-4 py-2 rounded shadow hover:bg-gray-800"
+        >
+          + Add Category
+        </button>
+      </header>
+
+      <div className="overflow-x-auto bg-white shadow rounded-lg border border-gray-200">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-gray-100 border-b border-gray-200">
+            <tr>
+              <th className="p-4 w-1/6 font-semibold">Category</th>
+              <th className="p-4 w-1/3 font-semibold">Prompt</th>
+              <th className="p-4 w-1/3 font-semibold">Stock (Output)</th>
+              <th className="p-4 w-1/6 font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map((row) => (
+              <tr key={row.id} className="hover:bg-gray-50 transition">
+                {/* Category */}
+                <td className="p-4 align-top">
+                  <input
+                    type="text"
+                    value={row.category}
+                    onChange={(e) => handleUpdate(row.id, 'category', e.target.value)}
+                    className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Category..."
+                  />
+                </td>
+
+                {/* Prompt */}
+                <td className="p-4 align-top">
+                  <textarea
+                    value={row.prompt}
+                    onChange={(e) => handleUpdate(row.id, 'prompt', e.target.value)}
+                    className="w-full h-24 border border-gray-300 rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    placeholder="Prompt to AI..."
+                  />
+                </td>
+
+                {/* Stock */}
+                <td className="p-4 align-top">
+                  <textarea
+                    value={row.stock}
+                    onChange={(e) => handleUpdate(row.id, 'stock', e.target.value)}
+                    className="w-full h-24 bg-gray-50 border border-gray-200 rounded p-2 text-gray-600 resize-none"
+                    placeholder="(Generated content)"
+                  />
+                </td>
+
+                {/* Actions */}
+                <td className="p-4 align-top space-y-2">
+                  <button
+                    onClick={() => handleGenerate(row.id)}
+                    className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm hover:bg-blue-700"
+                  >
+                    ✨ Generate
+                  </button>
+                  <button
+                    onClick={() => handleSetToExt(row.stock)}
+                    disabled={!row.stock}
+                    className={`w-full px-3 py-2 rounded text-sm font-bold shadow-sm border ${!row.stock
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                  >
+                    💾 Set to Ext
+                  </button>
+                  <button
+                    onClick={() => deleteRow(row.id)}
+                    className="w-full text-red-500 text-xs hover:underline mt-2"
+                  >
+                    Delete Row
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-8 text-sm text-gray-500 text-center">
+        Data is saved to your browser's LocalStorage.
+      </div>
     </div>
   );
 }
