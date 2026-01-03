@@ -39,21 +39,54 @@ export default function Dashboard() {
     }
   }, [rows, loading]);
 
+  // Tracking loading state for each row
+  const [generatingRows, setGeneratingRows] = useState<Set<string>>(new Set());
+
   // Handlers
   const handleUpdate = (id: string, field: keyof RowData, value: string) => {
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 
-  const handleGenerate = (id: string) => {
-    alert(`[Mock] Generating for ID: ${id}...\n(Gemini integration coming next)`);
-    // Mock result
-    handleUpdate(id, 'stock', 'ここにGeminiの生成結果が入ります。\n(Mock Result)');
+  const handleGenerate = async (id: string, prompt: string) => {
+    if (!prompt) {
+      alert("Please enter a prompt first.");
+      return;
+    }
+
+    // Set loading state for this row
+    setGeneratingRows(prev => new Set(prev).add(id));
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Generation failed');
+      }
+
+      // Update the row with the result
+      handleUpdate(id, 'stock', data.output);
+
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      // Clear loading state
+      setGeneratingRows(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   const handleSetToExt = (text: string) => {
-    // Idea: Copy to clipboard or send event
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard! (Extension integration coming next)');
+    alert('Copied to clipboard! \n\nNext Step:\n1. Open Threads Extension\n2. Paste into text box\n3. Click "Save Draft"');
   };
 
   const addNewRow = () => {
@@ -128,20 +161,25 @@ export default function Dashboard() {
                 {/* Actions */}
                 <td className="p-4 align-top space-y-2">
                   <button
-                    onClick={() => handleGenerate(row.id)}
-                    className="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm hover:bg-blue-700"
+                    onClick={() => handleGenerate(row.id, row.prompt)}
+                    disabled={generatingRows.has(row.id)}
+                    className={`w-full text-white px-3 py-2 rounded text-sm font-bold shadow-sm transition
+                      ${generatingRows.has(row.id)
+                        ? 'bg-blue-400 cursor-wait'
+                        : 'bg-blue-600 hover:bg-blue-700'}`
+                    }
                   >
-                    ✨ Generate
+                    {generatingRows.has(row.id) ? '🤖 Thinking...' : '✨ Generate'}
                   </button>
                   <button
                     onClick={() => handleSetToExt(row.stock)}
                     disabled={!row.stock}
                     className={`w-full px-3 py-2 rounded text-sm font-bold shadow-sm border ${!row.stock
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                       }`}
                   >
-                    💾 Set to Ext
+                    📋 Copy for Ext
                   </button>
                   <button
                     onClick={() => deleteRow(row.id)}
