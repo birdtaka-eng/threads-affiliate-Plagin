@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            padding: 12px;
+            background: #fff;
+            margin: 0;
+            color: #333;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .badge {
+            background: #000;
+            color: #fff;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .input-area {
+            margin-bottom: 16px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: monospace;
+            resize: vertical;
+            min-height: 50px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #0095f6;
+            box-shadow: 0 0 0 2px rgba(0, 149, 246, 0.1);
+        }
+
+        button#saveBtn {
+            background: #000;
+            color: #fff;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            white-space: nowrap;
+            height: fit-content;
+            align-self: flex-start;
+        }
+
+        button#saveBtn:hover {
+            background: #333;
+        }
+
+        .help-text {
+            font-size: 10px;
+            color: #999;
+            margin-top: 4px;
+            line-height: 1.3;
+        }
+
+        .queue-header {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #listContainer {
+            padding-bottom: 20px;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #ccc;
+            font-size: 12px;
+            padding: 40px 0;
+            border: 2px dashed #eee;
+            border-radius: 8px;
+            margin-top: 10px;
+            background: #fafafa;
+        }
+
+        .draft-item {
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .draft-item:hover {
+            border-color: #0095f6;
+            box-shadow: 0 2px 8px rgba(0, 149, 246, 0.15);
+        }
+
+        .draft-text {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #333;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .meta-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .time-tag {
+            font-size: 11px;
+            color: #e0245e;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: #fff5f8;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .cat-tag {
+            font-size: 10px;
+            color: #666;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+        }
+
+        .set-btn {
+            background: #0095f6;
+            color: #fff;
+            border: none;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .set-btn:hover {
+            background: #0081d6;
+        }
+
+        .del-btn {
+            background: #fff;
+            color: #999;
+            border: 1px solid #eee;
+            padding: 0 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            min-width: 32px;
+        }
+
+        .del-btn:hover {
+            color: #d00;
+            border-color: #d00;
+            background: #fff5f5;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ddd;
+            border-radius: 3px;
+        }
+    </style>
+    <script src="sidepanel.js" defer></script>
+</head>
+
+<body>
+    <div class="header">
+        <h2>Threads職人</h2>
+        <span class="badge">V2.4</span>
+    </div>
+
+    <div class="input-area">
+        <div class="input-row">
+            <textarea id="newDraft"
+                placeholder="JSONデータを貼り付けてください&#13;&#10;例: [{&quot;text&quot;:&quot;本文&quot;, &quot;scheduledTime&quot;:&quot;...&quot;}]"
+                rows="3"></textarea>
+            <button id="saveBtn">インポート</button>
+        </div>
+        <div class="help-text">
+            JSON形式の配列、またはオブジェクトを一括インポート可能です。
+        </div>
+    </div>
+
+    <div class="queue-header">
+        <span>投稿キュー</span>
+        <button id="clearAllBtn" style="border:none; background:none; color:#ccc; cursor:pointer;"
+            title="全削除">🗑️</button>
+    </div>
+    <div id="listContainer"></div>
+</body>
+
+</html>

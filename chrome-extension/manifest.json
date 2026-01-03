@@ -1,18 +1,22 @@
 {
     "manifest_version": 3,
-    "name": "Threads Posting Assistant",
-    "version": "2.0",
-    "description": "Save drafts and insert them into Threads with one click.",
+    "name": "Threads職人 サイドパネル",
+    "version": "2.4",
+    "description": "Threads投稿支援ツール (Side Panel版)",
     "permissions": [
         "storage",
         "activeTab",
-        "scripting"
+        "scripting",
+        "sidePanel"
     ],
     "host_permissions": [
         "https://www.threads.net/*"
     ],
     "action": {
-        "default_popup": "popup.html"
+        "default_title": "Threads職人を開く"
+    },
+    "side_panel": {
+        "default_path": "sidepanel.html"
     },
     "content_scripts": [
         {

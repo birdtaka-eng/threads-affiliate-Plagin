@@ -10,11 +10,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Save
     saveBtn.addEventListener('click', () => {
-        const text = newDraftInput.value.trim();
-        if (!text) return;
+        const inputVal = newDraftInput.value.trim();
+        if (!inputVal) return;
+
+        let text = inputVal;
+        let scheduledTime = null;
+
+        // JSON Parsing Logic
+        try {
+            if (inputVal.startsWith('{') && inputVal.includes('threads-shokunin-data')) {
+                const data = JSON.parse(inputVal);
+                text = data.text;
+                scheduledTime = data.scheduledTime;
+            }
+        } catch (e) {
+            // console.log("Not JSON, treating as plain text");
+        }
 
         getDrafts((drafts) => {
-            drafts.unshift({ id: Date.now(), text: text });
+            drafts.unshift({
+                id: Date.now(),
+                text: text,
+                scheduledTime: scheduledTime
+            });
             saveDrafts(drafts, () => {
                 newDraftInput.value = '';
                 renderList(drafts);
@@ -22,23 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- Storage ---
-    function getDrafts(cb) {
-        chrome.storage.local.get(['drafts'], (res) => cb(res.drafts || []));
-    }
-    function saveDrafts(data, cb) {
-        chrome.storage.local.set({ drafts: data }, cb);
-    }
-
-    // --- Render ---
-    function loadDrafts() {
-        getDrafts(renderList);
-    }
+    // ... (Storage logic remains same)
 
     function renderList(drafts) {
         listContainer.innerHTML = '';
         if (drafts.length === 0) {
-            listContainer.innerHTML = '<div class="empty-state">No drafts yet.</div>';
+            listContainer.innerHTML = '<div class="empty-state">No drafts. Paste JSON from Dashboard.</div>';
             return;
         }
 
@@ -53,20 +60,32 @@ document.addEventListener('DOMContentLoaded', () => {
             txt.className = 'draft-text';
             txt.textContent = draft.text;
 
+            // Show Time Tag if exists
+            if (draft.scheduledTime) {
+                const timeTag = document.createElement('div');
+                timeTag.style.fontSize = '11px';
+                timeTag.style.color = '#d00';
+                timeTag.style.fontWeight = 'bold';
+                timeTag.textContent = `📅 ${draft.scheduledTime}`;
+                li.appendChild(timeTag);
+            }
+
             const actions = document.createElement('div');
             actions.className = 'actions';
 
             const setBtn = document.createElement('button');
             setBtn.className = 'set-btn';
             setBtn.textContent = 'SET to Threads';
-            setBtn.onclick = () => sendToThreads(draft.text);
+            setBtn.onclick = () => sendToThreads(draft); // Send object
 
             const delBtn = document.createElement('button');
+            // ... (delBtn logic same)
             delBtn.className = 'del-btn';
-            delBtn.textContent = 'Delete';
+            delBtn.textContent = 'Del';
             delBtn.onclick = () => deleteDraft(draft.id);
 
             actions.appendChild(setBtn);
+            // ...
             actions.appendChild(delBtn);
 
             li.appendChild(txt);
@@ -77,6 +96,45 @@ document.addEventListener('DOMContentLoaded', () => {
         listContainer.appendChild(ul);
     }
 
+    // ... deleteDraft ...
+
+    // --- Core Logic ---
+    function sendToThreads(draft) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (!tabs[0] || !tabs[0].id) return;
+
+            // Send FULL draft object
+            const payload = {
+                action: "insertText",
+                text: draft.text,
+                scheduledTime: draft.scheduledTime
+            };
+
+            chrome.tabs.sendMessage(tabs[0].id, payload, (response) => {
+                // ... (Fallback logic same)
+                if (chrome.runtime.lastError) {
+                    chrome.scripting.executeScript({
+                        target: { tabId: tabs[0].id },
+                        files: ['content.js']
+                    }, () => {
+                        setTimeout(() => {
+                            chrome.tabs.sendMessage(tabs[0].id, payload);
+                        }, 200);
+                    });
+                }
+            });
+        });
+    }
+    // --- Storage Helpers ---
+    function getDrafts(cb) {
+        chrome.storage.local.get(['drafts'], (res) => cb(res.drafts || []));
+    }
+    function saveDrafts(data, cb) {
+        chrome.storage.local.set({ drafts: data }, cb);
+    }
+    function loadDrafts() {
+        getDrafts(renderList);
+    }
     function deleteDraft(id) {
         getDrafts((drafts) => {
             const updated = drafts.filter(d => d.id !== id);
@@ -84,29 +142,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Core Logic ---
-    function sendToThreads(text) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (!tabs[0] || !tabs[0].id) return;
-
-            // Send message to content.js
-            chrome.tabs.sendMessage(tabs[0].id, { action: "insertText", text: text }, (response) => {
-                // If content script is not ready (e.g. extension just reloaded but page wasn't),
-                // we might need to inject it physically via executeScript as fallback.
-                if (chrome.runtime.lastError) {
-                    // Fallback: Inject manually if message fails (Robustness!)
-                    console.log("Message failed, trying injection fallback...");
-                    chrome.scripting.executeScript({
-                        target: { tabId: tabs[0].id },
-                        files: ['content.js']
-                    }, () => {
-                        // Retry message after injection
-                        setTimeout(() => {
-                            chrome.tabs.sendMessage(tabs[0].id, { action: "insertText", text: text });
-                        }, 200);
-                    });
-                }
-            });
-        });
-    }
 });

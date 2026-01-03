@@ -107,33 +107,46 @@
       justify-content: flex-end;
     }
 
-    button.set-btn {
+    body {
+      width: 320px;
+      font-family: sans-serif;
+      padding: 10px;
+      background: #f8f9fa;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      border-bottom: 2px solid #333;
+      padding-bottom: 5px;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 15px;
+    }
+
+    input[type="text"] {
       flex: 1;
-      padding: 6px 12px;
-      border: none;
-      border-radius: 4px;
-      background: #0095f6;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    button.set-btn:hover {
-      background: #0081d6;
-    }
-
-    button.del-btn {
-      padding: 6px 12px;
+      padding: 5px;
       border: 1px solid #ddd;
-      background: #fff;
       border-radius: 4px;
-      color: #dc3545;
-      cursor: pointer;
     }
 
-    button.del-btn:hover {
-      background: #fff5f5;
-      border-color: #dc3545;
+    button#saveBtn {
+      background: #000;
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #listContainer {
+      max-height: 400px;
+      overflow-y: auto;
     }
 
     .empty-state {
@@ -142,21 +155,71 @@
       font-size: 13px;
       padding: 20px;
     }
+
+    .draft-item {
+      background: #fff;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .draft-text {
+      font-size: 13px;
+      color: #333;
+      white-space: pre-wrap;
+      margin-bottom: 8px;
+      max-height: 100px;
+      overflow: hidden;
+    }
+
+    .actions {
+      display: flex;
+      gap: 5px;
+    }
+
+    .set-btn {
+      flex: 1;
+      background: #0095f6;
+      color: #fff;
+      border: none;
+      padding: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 12px;
+    }
+
+    .set-btn:hover {
+      background: #007bb5;
+    }
+
+    .del-btn {
+      background: #fff;
+      color: #999;
+      border: 1px solid #ddd;
+      padding: 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .del-btn:hover {
+      color: #d00;
+      border-color: #d00;
+    }
   </style>
   <script src="popup.js" defer></script>
 </head>
 
 <body>
-  <header>
-    <h3>Threads Assistant</h3>
-  </header>
+  <h2>Threads Stock</h2>
 
   <div class="input-area">
-    <textarea id="newDraft" placeholder="Write your post draft here..."></textarea>
-    <button id="saveBtn">Save Draft</button>
+    <input type="text" id="newDraft" placeholder="Paste from Dashboard..." />
+    <button id="saveBtn">Save</button>
   </div>
 
-  <h4>Saved Drafts</h4>
   <div id="listContainer"></div>
 </body>
 
