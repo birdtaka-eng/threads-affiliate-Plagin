@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threads Shokunin - Dashboard</title>
+    <!-- Tailwind CSS (CDN for standalone preview) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .cursor-wait {
+            cursor: wait;
+        }
+
+        /* Custom Scrollbar for textareas */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen p-8 font-sans text-gray-800">
+
+    <header class="mb-8 flex items-center justify-between max-w-6xl mx-auto">
+        <h1 class="text-2xl font-bold flex items-center gap-2">
+            🧵 Threads Shokunin
+            <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">ver1.2 (GitHub Pages)</span>
+        </h1>
+        <button onclick="addNewRow()" class="bg-black text-white px-4 py-2 rounded shadow hover:bg-gray-800 transition">
+            + Add Category
+        </button>
+    </header>
+
+    <div class="max-w-6xl mx-auto overflow-x-auto bg-white shadow rounded-lg border border-gray-200">
+        <table class="w-full text-left border-collapse">
+            <thead class="bg-gray-100 border-b border-gray-200">
+                <tr>
+                    <th class="p-4 w-1/6 font-semibold">Category</th>
+                    <th class="p-4 w-1/3 font-semibold">Prompt (Input)</th>
+                    <th class="p-4 w-1/3 font-semibold">Stock (Output)</th>
+                    <th class="p-4 w-1/6 font-semibold">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody" class="divide-y divide-gray-100">
+                <!-- Javascript will inject rows here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- API Key Setting Area (Local Only) -->
+    <div class="max-w-6xl mx-auto mt-8 p-4 bg-white border border-gray-200 rounded-lg">
+        <h3 class="font-bold text-sm mb-2">⚙️ Settings (Local Browser Only)</h3>
+        <div class="flex gap-2">
+            <input type="password" id="apiKeyInput" placeholder="Paste Gemini API Key here (AIza...)"
+                class="flex-1 border p-2 rounded text-sm outline-none focus:border-blue-500">
+            <button onclick="saveApiKey()" class="bg-gray-200 px-4 py-2 rounded text-sm hover:bg-gray-300">Save
+                Key</button>
+            <button onclick="clearApiKey()" class="text-red-500 text-xs px-2 hover:underline">Clear</button>
+        </div>
+        <p class="text-xs text-gray-400 mt-1">Key is saved in your browser's LocalStorage. Never sent to our servers.
+        </p>
+    </div>
+
+    <div class="mt-8 text-sm text-gray-500 text-center">
+        Dashboard state is saved to <strong>LocalStorage</strong>.<br>
+        To use "Generate", please set your Gemini API Key above.
+    </div>
+
+    <!-- LOGIC -->
+    <script type="module">
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+        // --- Data & State ---
+        let rows = [];
+        let geminiKey = '';
+
+        // Initial Data
+        const INITIAL_ROWS = [
+            { id: '1', category: 'ギャグ', prompt: '面白いダジャレを考えて', stock: '' },
+            { id: '2', category: '技術解説', prompt: 'Next.jsのメリットを3行で', stock: '・SSRで高速表示\n・ファイルベースルーティング\n・フルスタック開発が可能' },
+        ];
+
+        // --- Initialization ---
+        window.onload = () => {
+            // Load Data
+            const saved = localStorage.getItem('shokunin_data');
+            rows = saved ? JSON.parse(saved) : INITIAL_ROWS;
+
+            // Load Key
+            geminiKey = localStorage.getItem('gemini_api_key') || '';
+            if (geminiKey) document.getElementById('apiKeyInput').value = '*'.repeat(20);
+
+            render();
+        };
+
+        // --- Global Functions (attached to window for HTML access) ---
+        window.saveApiKey = () => {
+            const val = document.getElementById('apiKeyInput').value;
+            if (val && !val.startsWith('***')) {
+                localStorage.setItem('gemini_api_key', val);
+                geminiKey = val;
+                alert('API Key Saved!');
+                document.getElementById('apiKeyInput').value = '*'.repeat(20);
+            }
+        };
+
+        window.clearApiKey = () => {
+            localStorage.removeItem('gemini_api_key');
+            geminiKey = '';
+            document.getElementById('apiKeyInput').value = '';
+            alert('API Key Cleared');
+        };
+
+        window.updateRow = (id, field, value) => {
+            const row = rows.find(r => r.id === id);
+            if (row) {
+                row[field] = value;
+                saveData();
+            }
+        };
+
+        window.addNewRow = () => {
+            rows.push({ id: Date.now().toString(), category: '', prompt: '', stock: '' });
+            saveData();
+            render();
+        };
+
+        window.deleteRow = (id) => {
+            if (confirm('Delete this row?')) {
+                rows = rows.filter(r => r.id !== id);
+                saveData();
+                render();
+            }
+        };
+
+        window.handleGenerate = async (id) => {
+            const row = rows.find(r => r.id === id);
+            if (!row.prompt) return alert("Please enter a prompt.");
+            if (!geminiKey) return alert("Please set your Gemini API Key in Settings below first.");
+
+            // UI Loading
+            const btn = document.getElementById(`btn-gen-${id}`);
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '🤖 Thinking...';
+            btn.disabled = true;
+            btn.className = "w-full bg-blue-400 text-white px-3 py-2 rounded text-sm font-bold shadow-sm cursor-wait";
+
+            try {
+                // Call Gemini via CDN SDK
+                const genAI = new GoogleGenerativeAI(geminiKey);
+                const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+                const result = await model.generateContent(row.prompt);
+                const response = await result.response;
+                const text = response.text();
+
+                // Update
+                row.stock = text;
+                saveData();
+
+                // Refresh UI (especially text area)
+                document.getElementById(`input-stock-${id}`).value = text;
+                render(); // To update disabled states
+
+            } catch (err) {
+                alert("Generation Failed: " + err.message);
+                btn.innerHTML = originalText;
+                btn.className = "w-full bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm hover:bg-blue-700 transition";
+                btn.disabled = false;
+            }
+        };
+
+        window.handleCopyToExt = (id) => {
+            const row = rows.find(r => r.id === id);
+            if (!row.stock) return;
+            navigator.clipboard.writeText(row.stock).then(() => {
+                alert('Copied! 📋\nPaste into Extension.');
+            });
+        };
+
+        // --- Internal Helpers ---
+        function saveData() {
+            localStorage.setItem('shokunin_data', JSON.stringify(rows));
+        }
+
+        function render() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            rows.forEach(row => {
+                // Safe HTML escaping
+                const safeCat = escapeHtml(row.category);
+                const safePrm = escapeHtml(row.prompt);
+                const safeStk = escapeHtml(row.stock);
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition border-b border-gray-100';
+
+                tr.innerHTML = `
+                    <td class="p-4 align-top">
+                        <input type="text" value="${safeCat}" 
+                            oninput="updateRow('${row.id}', 'category', this.value)"
+                            class="w-full border border-gray-300 rounded p-2 text-sm outline-none focus:border-blue-500"
+                            placeholder="Category">
+                    </td>
+                    <td class="p-4 align-top">
+                        <textarea oninput="updateRow('${row.id}', 'prompt', this.value)"
+                            class="w-full h-24 border border-gray-300 rounded p-2 text-sm outline-none focus:border-blue-500 resize-none"
+                            placeholder="Prompt...">${safePrm}</textarea>
+                    </td>
+                    <td class="p-4 align-top">
+                        <textarea id="input-stock-${row.id}" oninput="updateRow('${row.id}', 'stock', this.value)"
+                            class="w-full h-24 bg-slate-50 border border-gray-200 rounded p-2 text-sm text-gray-700 resize-none"
+                            placeholder="(Output)">${safeStk}</textarea>
+                    </td>
+                    <td class="p-4 align-top space-y-2">
+                        <button id="btn-gen-${row.id}" onclick="handleGenerate('${row.id}')"
+                            class="w-full bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm hover:bg-blue-700 transition">
+                            ✨ Generate
+                        </button>
+                        <button onclick="handleCopyToExt('${row.id}')" ${!row.stock ? 'disabled' : ''}
+                            class="w-full px-3 py-2 rounded text-sm font-bold shadow-sm border
+                            ${!row.stock ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50'}">
+                            📋 Copy
+                        </button>
+                        <button onclick="deleteRow('${row.id}')" class="w-full text-red-400 text-xs hover:text-red-600 mt-1">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+    </script>
+</body>
+
+</html>
