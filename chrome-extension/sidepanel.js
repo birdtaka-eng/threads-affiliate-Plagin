@@ -102,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             // メッセージ送信 (とにかく送ってみる)
+            console.log("[SidePanel] Sending to Threads:", payload.text);
             chrome.tabs.sendMessage(tab.id, payload, (response) => {
                 if (chrome.runtime.lastError) {
                     console.log("Content script not ready or error:", chrome.runtime.lastError.message);

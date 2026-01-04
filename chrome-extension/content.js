@@ -17,36 +17,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function handleInsertion(text, scheduledTime = null) {
-    console.log("[Threads職人] 処理開始 v2.5:", { text, scheduledTime });
+    console.log("[Threads職人] Received Text:", text);
 
     // 1. エディタを探してフォーカス
     const editor = await findAndFocusEditor();
     if (!editor) {
-        throw new Error("Editor not found. Please click 'Start a thread' first.");
+        throw new Error("Editor not found.");
     }
 
-    // 2. テキスト入力 (強力版)
-    // Lexicalエディタ等はexecCommand 'insertText' が最もネイティブに近い挙動をする
-    // まずはフォーカスを確実に
+    // 2. Format無用の強制注入 (Brute Force)
     editor.focus();
-    await sleep(100);
+    await sleep(50); // Small focus delay
 
-    // method A: execCommand
-    const success = document.execCommand('insertText', false, text);
+    // "とにかくブチ込む" -> execCommand
+    document.execCommand('insertText', false, text);
+    console.log("[Threads職人] Executed insertText");
 
-    // method B: テキストノード直接操作 + イベント発火 (Fallback)
-    if (!success) {
-        console.warn("[Threads職人] execCommand failed, trying manual injection");
-        editor.innerText = text; // 単純置換
-        // Inputイベント群をバブリングありで発火
-        editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-        editor.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    // 遅延させて確認（念のため）
-    await sleep(200);
-
-    // 3. 予約投稿の時間指定がある場合
+    // 3. 予約フロー (そのまま維持)
     if (scheduledTime) {
         await handleScheduling(scheduledTime);
     }
