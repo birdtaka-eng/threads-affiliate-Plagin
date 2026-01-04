@@ -1,5 +1,5 @@
 // background.js - Threads職人 Relay System
-// Version 3.1: Strict Permissions & URL Guards
+// Version 3.2: Explicit Tab ID Targeting
 
 // 1. Side Panel Open
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
@@ -10,7 +10,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 中継リクエスト: "relayInsertText"
     if (request.action === "relayInsertText") {
-        handleRelay(request.text)
+        // v3.2: TabIDが指定されていればそれを優先的に使う
+        handleRelay(request.text, request.targetTabId)
             .then(res => sendResponse(res))
             .catch(err => sendResponse({ success: false, error: err.message }));
 
@@ -18,34 +19,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-async function handleRelay(text) {
-    console.log("[Background] Relaying text:", text);
+async function handleRelay(text, specificTabId) {
+    console.log("[Background] Relaying text to TabID:", specificTabId);
 
-    // 1. Threads のタブを探す
-    const tabs = await chrome.tabs.query({ currentWindow: true, url: "*://*.threads.net/*" });
+    let targetId = specificTabId;
 
-    // (A) アクティブなタブがあればそれを優先
-    let target = tabs.find(t => t.active) || tabs[0];
-
-    if (!target) {
-        return { success: false, error: "No Threads tab found in this window." };
+    // もしIDが来てなければ（フォールバック）、従来どおり探す
+    if (!targetId) {
+        const tabs = await chrome.tabs.query({ currentWindow: true, url: "*://*.threads.net/*" });
+        const t = tabs.find(tab => tab.active) || tabs[0];
+        if (!t) return { success: false, error: "No Threads tab found (Auto-detect failed)." };
+        targetId = t.id;
     }
 
-    // ガード: URLが本当にThreadsか確認 (Chrome内部ページなどを除外)
-    if (!target.url || !target.url.includes("threads.net")) {
-        return { success: false, error: "Target tab is not Threads." };
+    // 念のため存在確認
+    try {
+        const tabCheck = await chrome.tabs.get(targetId);
+        console.log("[Background] Target Tab verified:", tabCheck.title);
+    } catch (e) {
+        return { success: false, error: "Target tab no longer exists: " + e.message };
     }
 
-    console.log("[Background] Target Tab:", target.id, target.title);
-
-    // 2. タブを強制的にアクティブにする
-    await chrome.tabs.update(target.id, { active: true });
+    // 1. タブを強制的にアクティブにする
+    await chrome.tabs.update(targetId, { active: true });
 
     await new Promise(r => setTimeout(r, 150));
 
-    // 3. Content Script にメッセージを送る
+    // 2. Content Script にメッセージを送る
     try {
-        await chrome.tabs.sendMessage(target.id, {
+        await chrome.tabs.sendMessage(targetId, {
             action: "insertText",
             text: text
         });
@@ -53,21 +55,16 @@ async function handleRelay(text) {
     } catch (e) {
         console.warn("[Background] Message failed. Attempting injection...", e);
 
-        // 念のため再チェック
-        if (!target.url.startsWith("http")) {
-            return { success: false, error: "Cannot inject into non-web page." };
-        }
-
         // Content Script がいない場合
         await chrome.scripting.executeScript({
-            target: { tabId: target.id },
+            target: { tabId: targetId },
             files: ['content.js']
         });
 
         await new Promise(r => setTimeout(r, 200));
 
         // 再試行
-        await chrome.tabs.sendMessage(target.id, {
+        await chrome.tabs.sendMessage(targetId, {
             action: "insertText",
             text: text
         });

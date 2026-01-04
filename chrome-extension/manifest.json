@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "Threads職人 サイドパネル",
-    "version": "3.1",
-    "description": "Threads投稿支援ツール (Side Panel版 v3.1)",
+    "version": "3.2",
+    "description": "Threads投稿支援ツール (Side Panel版 v3.2)",
     "permissions": [
         "storage",
         "activeTab",

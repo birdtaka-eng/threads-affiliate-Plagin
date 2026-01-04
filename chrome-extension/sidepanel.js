@@ -1,5 +1,5 @@
 // sidepanel.js - Threads職人 ロジック (Japanese)
-// Version 3.1: Relay with Pre-flight Check
+// Version 3.2: Explicit Tab ID Relay
 
 document.addEventListener('DOMContentLoaded', () => {
     const newDraftInput = document.getElementById('newDraft');
@@ -71,31 +71,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------------------------------------------------
-    // メッセージ送信ロジック (v3.1 Guarded Relay)
+    // メッセージ送信ロジック (v3.2 Explicit Targeting)
     // ---------------------------------------------------------
     function sendToThreads(draft) {
-        // v3.1: Pre-flight check
-        // バックグラウンドに投げる前に、念のため現在のアクティブタブを確認する
+        // v3.2: 確実に狙い撃つ
+        // SidePanel側で「今アクティブなタブ」のIDを確定させてから、
+        // Backgroundに「このIDのタブに送ってくれ」と依頼する。
+        // これで「どのウィンドウか分からない」問題を回避する。
+
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const currentTab = tabs[0];
 
-            // Threads以外のページ(拡張機能の設定ページなど)で実行していないかチェック
-            if (currentTab && currentTab.url && !currentTab.url.includes("threads.net")) {
-                // 明らかに違う場合
-                if (!confirm("現在開いているタブは Threads (threads.net) ではありません。\n強制的にバックグラウンドで探して送信しますか？")) {
+            if (!currentTab) {
+                alert("アクティブなタブが見つかりません。");
+                return;
+            }
+
+            // URLチェック (ガード)
+            if (currentTab.url && !currentTab.url.includes("threads.net")) {
+                if (!confirm("現在開いているタブは Threads (threads.net) ではありません。\n構わずこのタブに送信しますか？")) {
                     return;
                 }
             }
 
-            console.log("[SidePanel] Requesting relay to Background...");
+            console.log("[SidePanel] Targeting Tab ID:", currentTab.id);
 
+            // バックグラウンドに「ID指定」で依頼
             chrome.runtime.sendMessage({
                 action: "relayInsertText",
-                text: draft.text
+                text: draft.text,
+                targetTabId: currentTab.id // <--- ここでIDを指定してあげる
             }, (response) => {
                 if (chrome.runtime.lastError) {
                     console.error("[SidePanel] Relay failed:", chrome.runtime.lastError.message);
-                    alert("送信エラー: バックグラウンドへの接続に失敗しました。\n権限不足の可能性があります。拡張機能をリロードしてください。");
+                    alert("送信エラー: " + chrome.runtime.lastError.message);
                 } else if (response && response.success) {
                     console.log("[SidePanel] Relay success!");
                 } else {
