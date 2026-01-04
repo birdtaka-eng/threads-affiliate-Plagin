@@ -1,5 +1,5 @@
 // sidepanel.js - Threads職人 ロジック (Japanese)
-// Version 2.8: Robust Communication
+// Version 2.9: "Popup Style" Just-in-Time Active Tab Query
 
 document.addEventListener('DOMContentLoaded', () => {
     const newDraftInput = document.getElementById('newDraft');
@@ -40,13 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2. JSONパースの試行
             if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
                 const parsed = JSON.parse(cleaned);
-
                 let rawList = Array.isArray(parsed) ? parsed : [parsed];
 
                 newItems = rawList.map(item => ({
                     id: Date.now() + Math.random(),
                     text: item.text || item.body || item.content || "",
-                    scheduledTime: item.scheduledTime || null, // 保持はするが送信ロジックでは無視
+                    scheduledTime: item.scheduledTime || null,
                     category: item.category || ""
                 })).filter(i => i.text);
 
@@ -74,44 +73,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------------------------------------------------
-    // メッセージ送信ロジック (v2.8 Improved)
+    // メッセージ送信ロジック (v2.9 Popup Style)
     // ---------------------------------------------------------
     function sendToThreads(draft) {
-        // 1. 確実に Threads のタブを特定する
-        // active:true だけでなく、URLも条件に加えて検索する
-        chrome.tabs.query({ currentWindow: true, url: "*://www.threads.net/*" }, (tabs) => {
-            // Threadsタブ群の中で、activeなものがあればそれを優先。
-            // ユーザーがThreadsを見ながらサイドパネル操作している場合、該当するはず。
-            // もしActiveがなければ（例えばユーザーが別タブ見ながらの場合）、最初のThreadsタブを使う。
-            let targetTab = tabs.find(t => t.active) || tabs[0];
+        // 【v2.9の変更点】
+        // 「セット」ボタンが押された瞬間の「今、目の前にあるアクティブなタブ」を特定する。
+        // これが最もポップアップの挙動に近い。
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
 
-            if (!targetTab) {
-                alert("このウィンドウに Threads (threads.net) のタブが見つかりません。");
+            if (!tab) {
+                alert("アクティブなタブが見つかりません。");
                 return;
             }
 
-            console.log("[SidePanel] Target Tab found:", targetTab.id, targetTab.title);
+            // 念のため、明らかにThreadsじゃない場合は警告（誤爆防止）
+            // ポップアップ体験を重視するなら警告なしでも良いが、親切設計として残す
+            if (tab.url && !tab.url.includes("threads.net")) {
+                console.warn("[SidePanel] Active tab is not Threads:", tab.url);
+                // ただし、ブロックはせず「とにかく送る」方針ならここをコメントアウトだが、
+                // ユーザーは「目の前のタブを特定」と言っているので、違うサイトならユーザーのミス。
+                // 軽くアラートだけ出す。
+                if (!confirm("現在開いているタブはthreads.netではないようです。\n構わず送信しますか？")) {
+                    return;
+                }
+            }
+
+            console.log("[SidePanel] Sending to Active Tab:", tab.id, tab.title);
 
             const payload = {
                 action: "insertText",
                 text: draft.text
-                // scheduledTime は送信しない（自動化廃止）
             };
 
-            // 2. メッセージ送信 (再試行ロジック付き)
-            chrome.tabs.sendMessage(targetTab.id, payload, (response) => {
+            // メッセージ送信
+            chrome.tabs.sendMessage(tab.id, payload, (response) => {
                 const lastError = chrome.runtime.lastError;
                 if (lastError) {
-                    console.log("Injecting content script due to error:", lastError.message);
+                    console.log("Content Script not ready. Injecting...", lastError.message);
 
-                    // スクリプト注入
+                    // スクリプト注入 (Content Scriptが死んでいる場合用)
                     chrome.scripting.executeScript({
-                        target: { tabId: targetTab.id },
+                        target: { tabId: tab.id },
                         files: ['content.js']
                     }, () => {
-                        // 注入後に即再送信
+                        // 注入後に再送信
                         setTimeout(() => {
-                            chrome.tabs.sendMessage(targetTab.id, payload);
+                            chrome.tabs.sendMessage(tab.id, payload);
                         }, 200);
                     });
                 } else {
@@ -169,7 +177,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let metaHtml = '';
-            // 日時表示はあくまで「メモ」として残す
             if (draft.scheduledTime) {
                 const d = new Date(draft.scheduledTime);
                 const timeDisp = isNaN(d) ? draft.scheduledTime :
