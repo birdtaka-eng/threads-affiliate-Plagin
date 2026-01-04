@@ -1,5 +1,5 @@
 // sidepanel.js - Threads職人 ロジック (Japanese)
-// Version 3.0: Relay Strategy (SidePanel -> Background -> ContentScript)
+// Version 3.1: Relay with Pre-flight Check
 
 document.addEventListener('DOMContentLoaded', () => {
     const newDraftInput = document.getElementById('newDraft');
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 newItems = rawList.map(item => ({
                     id: Date.now() + Math.random(),
                     text: item.text || item.body || item.content || "",
-                    scheduledTime: item.scheduledTime || null, // 保持のみ
+                    scheduledTime: item.scheduledTime || null,
                     category: item.category || ""
                 })).filter(i => i.text);
 
@@ -71,27 +71,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------------------------------------------------
-    // メッセージ送信ロジック (v3.0 Relay)
+    // メッセージ送信ロジック (v3.1 Guarded Relay)
     // ---------------------------------------------------------
     function sendToThreads(draft) {
-        // v3.0: 中継作戦
-        // 直接タブを探すのではなく、バックグラウンドに「あとは頼んだ」と投げる
-        // これにより、タブのアクティブ化などの権限処理をバックグラウンドに委譲できる
-        console.log("[SidePanel] Requesting relay to Background...");
+        // v3.1: Pre-flight check
+        // バックグラウンドに投げる前に、念のため現在のアクティブタブを確認する
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const currentTab = tabs[0];
 
-        chrome.runtime.sendMessage({
-            action: "relayInsertText",
-            text: draft.text
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.error("[SidePanel] Relay failed:", chrome.runtime.lastError.message);
-                alert("送信エラー: バックグラウンドに接続できませんでした。拡張機能をリロードしてください。");
-            } else if (response && response.success) {
-                console.log("[SidePanel] Relay success!");
-            } else {
-                console.warn("[SidePanel] Relay returned error:", response ? response.error : "Unknown");
-                alert("送信失敗: " + (response ? response.error : "Unknown Error"));
+            // Threads以外のページ(拡張機能の設定ページなど)で実行していないかチェック
+            if (currentTab && currentTab.url && !currentTab.url.includes("threads.net")) {
+                // 明らかに違う場合
+                if (!confirm("現在開いているタブは Threads (threads.net) ではありません。\n強制的にバックグラウンドで探して送信しますか？")) {
+                    return;
+                }
             }
+
+            console.log("[SidePanel] Requesting relay to Background...");
+
+            chrome.runtime.sendMessage({
+                action: "relayInsertText",
+                text: draft.text
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error("[SidePanel] Relay failed:", chrome.runtime.lastError.message);
+                    alert("送信エラー: バックグラウンドへの接続に失敗しました。\n権限不足の可能性があります。拡張機能をリロードしてください。");
+                } else if (response && response.success) {
+                    console.log("[SidePanel] Relay success!");
+                } else {
+                    console.warn("[SidePanel] Relay returned error:", response ? response.error : "Unknown");
+                    alert("送信できませんでした: " + (response ? response.error : "Unknown Error"));
+                }
+            });
         });
     }
 

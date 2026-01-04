@@ -1,16 +1,17 @@
 {
     "manifest_version": 3,
     "name": "Threads職人 サイドパネル",
-    "version": "3.0",
-    "description": "Threads投稿支援ツール (Side Panel版 v3)",
+    "version": "3.1",
+    "description": "Threads投稿支援ツール (Side Panel版 v3.1)",
     "permissions": [
         "storage",
         "activeTab",
+        "tabs",
         "scripting",
         "sidePanel"
     ],
     "host_permissions": [
-        "https://www.threads.net/*"
+        "*://*.threads.net/*"
     ],
     "action": {
         "default_title": "Threads職人を開く"

@@ -1,5 +1,5 @@
 // background.js - Threads職人 Relay System
-// Version 3.0: バックグラウンド中継 & アクティブ化
+// Version 3.1: Strict Permissions & URL Guards
 
 // 1. Side Panel Open
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
@@ -21,8 +21,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function handleRelay(text) {
     console.log("[Background] Relaying text:", text);
 
-    // 1. 現在のウィンドウ内で Threads のタブを探す
-    const tabs = await chrome.tabs.query({ currentWindow: true, url: "*://www.threads.net/*" });
+    // 1. Threads のタブを探す
+    const tabs = await chrome.tabs.query({ currentWindow: true, url: "*://*.threads.net/*" });
 
     // (A) アクティブなタブがあればそれを優先
     let target = tabs.find(t => t.active) || tabs[0];
@@ -31,13 +31,16 @@ async function handleRelay(text) {
         return { success: false, error: "No Threads tab found in this window." };
     }
 
+    // ガード: URLが本当にThreadsか確認 (Chrome内部ページなどを除外)
+    if (!target.url || !target.url.includes("threads.net")) {
+        return { success: false, error: "Target tab is not Threads." };
+    }
+
     console.log("[Background] Target Tab:", target.id, target.title);
 
-    // 2. タブを強制的にアクティブにする (重要)
-    // これにより、フォーカスが確実にブラウザ画面に戻る
+    // 2. タブを強制的にアクティブにする
     await chrome.tabs.update(target.id, { active: true });
 
-    // 少し待つ (アクティブ化アニメーション等のため)
     await new Promise(r => setTimeout(r, 150));
 
     // 3. Content Script にメッセージを送る
@@ -50,7 +53,12 @@ async function handleRelay(text) {
     } catch (e) {
         console.warn("[Background] Message failed. Attempting injection...", e);
 
-        // Content Script がいない場合 (リロード直後など)
+        // 念のため再チェック
+        if (!target.url.startsWith("http")) {
+            return { success: false, error: "Cannot inject into non-web page." };
+        }
+
+        // Content Script がいない場合
         await chrome.scripting.executeScript({
             target: { tabId: target.id },
             files: ['content.js']
