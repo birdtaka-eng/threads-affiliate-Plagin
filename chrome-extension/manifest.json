@@ -1,26 +1,23 @@
 {
     "manifest_version": 3,
     "name": "Threads職人 サイドパネル",
-    "version": "3.2",
-    "description": "Threads投稿支援ツール (Side Panel版 v3.2)",
+    "version": "4.0",
+    "description": "Threads投稿支援ツール (Popup版 v4.0)",
     "permissions": [
         "storage",
         "activeTab",
         "tabs",
-        "scripting",
-        "sidePanel"
+        "scripting"
     ],
     "host_permissions": [
         "*://*.threads.net/*"
     ],
     "action": {
+        "default_popup": "popup.html",
         "default_title": "Threads職人を開く"
     },
     "background": {
         "service_worker": "background.js"
-    },
-    "side_panel": {
-        "default_path": "sidepanel.html"
     },
     "content_scripts": [
         {
