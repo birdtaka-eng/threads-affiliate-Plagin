@@ -1,5 +1,5 @@
 // popup.js - Threads職人 ロジック (Japanese)
-// Version 4.0: Popup Style ("Successful Logic" Restored)
+// Version 4.2: Clean Direct Injection (No Alerts)
 
 document.addEventListener('DOMContentLoaded', () => {
     const newDraftInput = document.getElementById('newDraft');
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 newItems = rawList.map(item => ({
                     id: Date.now() + Math.random(),
                     text: item.text || item.body || item.content || "",
-                    scheduledTime: item.scheduledTime || null, // 保持のみ
+                    scheduledTime: item.scheduledTime || null,
                     category: item.category || ""
                 })).filter(i => i.text);
 
@@ -71,28 +71,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------------------------------------------------
-    // メッセージ送信ロジック (v4.0 Pure Popup)
+    // メッセージ送信ロジック (v4.2 Clean)
     // ---------------------------------------------------------
     function sendToThreads(draft) {
-        // v4.0: 純粋なポップアップロジックへの回帰
-        // 「今開いているタブ＝Threads」という前提で即座に送るのが一番確実だった。
-        // ポップアップを開いた時点で、ユーザーはThreadsのタブを見ているはずだから。
+        // v4.2: ガード除去
+        // ユーザーが「Threadsを見ている」ことを信頼し、無条件で送信する。
+        // これで誤判定によるアラートは出ない。
 
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const currentTab = tabs[0];
 
             if (!currentTab) {
+                // ここだけは技術的に送れないのでアラート
                 alert("アクティブなタブが見つかりません。");
                 return;
-            }
-
-            // URLチェック (ガード)
-            // ポップアップの場合、ユーザーがThreads以外で開いてボタンを押す可能性もあるので、
-            // ここで弾くのが親切。
-            if (currentTab.url && !currentTab.url.includes("threads.net")) {
-                if (!confirm("現在開いているタブは Threads (threads.net) ではありません。\n構わずこのタブに送信しますか？")) {
-                    return;
-                }
             }
 
             console.log("[Popup] Sending to Tab ID:", currentTab.id);
@@ -102,14 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 text: draft.text
             };
 
-            // 直接送信 (中継なし)
             chrome.tabs.sendMessage(currentTab.id, payload, (response) => {
                 const lastError = chrome.runtime.lastError;
 
                 if (lastError) {
-                    console.log("Content script error:", lastError.message);
+                    console.log("Content script error (injecting...):", lastError.message);
 
-                    // スクリプト注入の試行
+                    // スクリプト注入の試行 (許可されている範囲で)
                     chrome.scripting.executeScript({
                         target: { tabId: currentTab.id },
                         files: ['content.js']
@@ -120,11 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 } else {
                     console.log("[Popup] Success!", response);
-                    // ポップアップは送信後に閉じるのが一般的だが、
-                    // 連続投稿したい場合もあるのでそのままにしておくか？
-                    // ユーザーの要望は「成功体験の復元」。
-                    // 「シュバッと入る」なら閉じる必要はないかも。
-                    // ひとまず閉じないでおく。
                 }
             });
         });
