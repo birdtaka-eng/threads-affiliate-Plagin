@@ -16,9 +16,6 @@
         "default_popup": "popup.html",
         "default_title": "Threads職人を開く"
     },
-    "background": {
-        "service_worker": "background.js"
-    },
     "content_scripts": [
         {
             "matches": [
