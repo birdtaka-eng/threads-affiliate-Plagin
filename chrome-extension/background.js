@@ -1,27 +1,68 @@
-// background.js - Side Panel & Sync Logic
+// background.js - Threads職人 Relay System
+// Version 3.0: バックグラウンド中継 & アクティブ化
 
-// 1. Enable Side Panel on Action Click
-// This is critical for the "Side Panel" experience.
+// 1. Side Panel Open
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => console.error(error));
 
-// 2. Cookie Sync Listener (Legacy but kept for manual sync if needed)
+// 2. Message Relay System (SidePanel -> Background -> ContentScript)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "syncCookies") {
-        const apiUrl = request.apiUrl;
-        chrome.tabs.query({ url: "*://*.threads.net/*" }, async (tabs) => {
-            const targetTab = tabs.length > 0 ? tabs[0] : null;
-            if (!targetTab) {
-                sendResponse({ success: false, error: "No Threads tab found." });
-                return;
-            }
 
-            // Sync Logic (same as before)
-            // ... (Omitting complex sync logic here to keep file clean, assuming manual sync is secondary now)
-            // If user needs full sync code again, I can restore it. 
-            // For now, returning simple success to avoid errors if button is clicked.
-            sendResponse({ success: true, message: "Sync feature is in maintenance. Please use Manual Copy." });
-        });
-        return true;
+    // 中継リクエスト: "relayInsertText"
+    if (request.action === "relayInsertText") {
+        handleRelay(request.text)
+            .then(res => sendResponse(res))
+            .catch(err => sendResponse({ success: false, error: err.message }));
+
+        return true; // Keep channel open
     }
 });
+
+async function handleRelay(text) {
+    console.log("[Background] Relaying text:", text);
+
+    // 1. 現在のウィンドウ内で Threads のタブを探す
+    const tabs = await chrome.tabs.query({ currentWindow: true, url: "*://www.threads.net/*" });
+
+    // (A) アクティブなタブがあればそれを優先
+    let target = tabs.find(t => t.active) || tabs[0];
+
+    if (!target) {
+        return { success: false, error: "No Threads tab found in this window." };
+    }
+
+    console.log("[Background] Target Tab:", target.id, target.title);
+
+    // 2. タブを強制的にアクティブにする (重要)
+    // これにより、フォーカスが確実にブラウザ画面に戻る
+    await chrome.tabs.update(target.id, { active: true });
+
+    // 少し待つ (アクティブ化アニメーション等のため)
+    await new Promise(r => setTimeout(r, 150));
+
+    // 3. Content Script にメッセージを送る
+    try {
+        await chrome.tabs.sendMessage(target.id, {
+            action: "insertText",
+            text: text
+        });
+        return { success: true };
+    } catch (e) {
+        console.warn("[Background] Message failed. Attempting injection...", e);
+
+        // Content Script がいない場合 (リロード直後など)
+        await chrome.scripting.executeScript({
+            target: { tabId: target.id },
+            files: ['content.js']
+        });
+
+        await new Promise(r => setTimeout(r, 200));
+
+        // 再試行
+        await chrome.tabs.sendMessage(target.id, {
+            action: "insertText",
+            text: text
+        });
+        return { success: true, recovered: true };
+    }
+}
