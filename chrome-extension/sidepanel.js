@@ -1,5 +1,5 @@
 // sidepanel.js - Threads職人 ロジック (Japanese)
-// Version 2.9: "Popup Style" Just-in-Time Active Tab Query
+// Version 3.0: Relay Strategy (SidePanel -> Background -> ContentScript)
 
 document.addEventListener('DOMContentLoaded', () => {
     const newDraftInput = document.getElementById('newDraft');
@@ -33,11 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let newItems = [];
 
         try {
-            // 1. マークダウンコードブロックの除去
             let cleaned = inputVal.replace(/^```json\s*/g, '').replace(/^```\s*/g, '').replace(/```$/g, '');
             cleaned = cleaned.trim();
 
-            // 2. JSONパースの試行
             if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
                 const parsed = JSON.parse(cleaned);
                 let rawList = Array.isArray(parsed) ? parsed : [parsed];
@@ -45,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 newItems = rawList.map(item => ({
                     id: Date.now() + Math.random(),
                     text: item.text || item.body || item.content || "",
-                    scheduledTime: item.scheduledTime || null,
+                    scheduledTime: item.scheduledTime || null, // 保持のみ
                     category: item.category || ""
                 })).filter(i => i.text);
 
@@ -73,59 +71,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ---------------------------------------------------------
-    // メッセージ送信ロジック (v2.9 Popup Style)
+    // メッセージ送信ロジック (v3.0 Relay)
     // ---------------------------------------------------------
     function sendToThreads(draft) {
-        // 【v2.9の変更点】
-        // 「セット」ボタンが押された瞬間の「今、目の前にあるアクティブなタブ」を特定する。
-        // これが最もポップアップの挙動に近い。
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const tab = tabs[0];
+        // v3.0: 中継作戦
+        // 直接タブを探すのではなく、バックグラウンドに「あとは頼んだ」と投げる
+        // これにより、タブのアクティブ化などの権限処理をバックグラウンドに委譲できる
+        console.log("[SidePanel] Requesting relay to Background...");
 
-            if (!tab) {
-                alert("アクティブなタブが見つかりません。");
-                return;
+        chrome.runtime.sendMessage({
+            action: "relayInsertText",
+            text: draft.text
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("[SidePanel] Relay failed:", chrome.runtime.lastError.message);
+                alert("送信エラー: バックグラウンドに接続できませんでした。拡張機能をリロードしてください。");
+            } else if (response && response.success) {
+                console.log("[SidePanel] Relay success!");
+            } else {
+                console.warn("[SidePanel] Relay returned error:", response ? response.error : "Unknown");
+                alert("送信失敗: " + (response ? response.error : "Unknown Error"));
             }
-
-            // 念のため、明らかにThreadsじゃない場合は警告（誤爆防止）
-            // ポップアップ体験を重視するなら警告なしでも良いが、親切設計として残す
-            if (tab.url && !tab.url.includes("threads.net")) {
-                console.warn("[SidePanel] Active tab is not Threads:", tab.url);
-                // ただし、ブロックはせず「とにかく送る」方針ならここをコメントアウトだが、
-                // ユーザーは「目の前のタブを特定」と言っているので、違うサイトならユーザーのミス。
-                // 軽くアラートだけ出す。
-                if (!confirm("現在開いているタブはthreads.netではないようです。\n構わず送信しますか？")) {
-                    return;
-                }
-            }
-
-            console.log("[SidePanel] Sending to Active Tab:", tab.id, tab.title);
-
-            const payload = {
-                action: "insertText",
-                text: draft.text
-            };
-
-            // メッセージ送信
-            chrome.tabs.sendMessage(tab.id, payload, (response) => {
-                const lastError = chrome.runtime.lastError;
-                if (lastError) {
-                    console.log("Content Script not ready. Injecting...", lastError.message);
-
-                    // スクリプト注入 (Content Scriptが死んでいる場合用)
-                    chrome.scripting.executeScript({
-                        target: { tabId: tab.id },
-                        files: ['content.js']
-                    }, () => {
-                        // 注入後に再送信
-                        setTimeout(() => {
-                            chrome.tabs.sendMessage(tab.id, payload);
-                        }, 200);
-                    });
-                } else {
-                    console.log("[SidePanel] Message sent successfully!", response);
-                }
-            });
         });
     }
 
