@@ -7,12 +7,10 @@ const SHEET_SINGLE = "単品投稿ファクトリー";
 const SHEET_DAILY_USEFUL = "日常有益投稿";
 const SHEET_LAB = "バズ研究所";
 const SHEET_DB = "テンプレートDB";
-const SHEET_SETTINGS = "設定"; // Added Settings sheet
+const SHEET_SETTINGS = "設定";
 const SHEET_STOCK = "投稿リスト";
 
-// Gemini API Key (本来はプロパティストア推奨だが、ユーザー環境に合わせて変数定義)
-// 注: ユーザーはスクリプトプロパティまたは直接コードにキーを設定する必要があります。
-// ここでは以前のコンテキストでキーがコード内にあった場合のプレースホルダーとします。
+// Gemini API Key
 const API_KEY = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY") || "YOUR_API_KEY_HERE";
 
 /**
@@ -20,23 +18,19 @@ const API_KEY = PropertiesService.getScriptProperties().getProperty("GEMINI_API_
  */
 function onOpen() {
     SpreadsheetApp.getUi().createMenu('無限放送局')
-        .addItem('【単品】AI記事生成 (1案執筆)', 'generateSinglePosts')
+        .addItem('【単品】AI記事生成 (1行1ネタ)', 'generateSinglePosts')
+        .addItem('【単品】まとめネタ作成 (選択合体)', 'generateSummaryPost') // Added
         .addItem('【単品】倉庫へ出荷', 'shipSingleToStock')
         .addSeparator()
         .addItem('【日常有益】AI記事生成', 'generateDailyUsefulPosts')
-        .addItem('【日常有益】投稿リストへ出荷', 'shipDailyToStock') // Renamed
+        .addItem('【日常有益】投稿リストへ出荷', 'shipDailyToStock')
         .addSeparator()
         .addItem('【研究所】スタイル分析 (DNA抽出)', 'runLabAnalysis')
-        .addSeparator()
-        .addItem('【番組表】今すぐ放送 (手動テスト)', 'forceBroadcastTest')
-        .addItem('【設定】自動運転ON (15分トリガー)', 'setupTrigger')
-        .addItem('【分析】投稿成績を更新 (全インサイト)', 'updateMetrics')
-        .addItem('【進化】表現力を進化させる (B6更新)', 'evolveStyle')
         .addToUi();
 
     SpreadsheetApp.getUi().createMenu('🤖 Threads職人')
         .addItem('【設定】APIキー登録', 'setupApiKey')
-        .addItem('【設定】単品シート修復', 'setupFactorySheet')
+        .addItem('【設定】単品シート修復 (新Ver)', 'setupFactorySheet') // Updated label
         .addItem('【設定】日常有益シート修復', 'setupDailyUsefulSheet')
         .addItem('【設定】番組表シート修復', 'setupScheduleSheet')
         .addItem('【開発用】DB構築 (魔法の杖)', 'setupTemplateDatabase')
@@ -88,7 +82,6 @@ function setupDailyUsefulSheet() {
     sheet.getRange("H1").setVerticalAlignment("middle");
 
     // 4. ヘッダー行 (3行目)
-    // C列にHumorを追加し、以降をシフト
     const headers = [
         ["No", "Type", "Humor (ユーモア)", "Topic (ネタ/メモ)", "Output (生成本文)", "Image URL (任意)", "Status", "Date"]
     ];
@@ -98,24 +91,18 @@ function setupDailyUsefulSheet() {
     sheet.getRange("A3:H3").setHorizontalAlignment("center");
 
     // 5. データバリデーション
-    // B列: Type
     const typeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['有益ネタ', '日常ネタ', 'リンク無し'], true)
-        .setAllowInvalid(false)
-        .build();
+        .requireValueInList(['有益ネタ', '日常ネタ', 'リンク無し'], true).build();
     sheet.getRange("B4:B100").setDataValidation(typeRule);
 
-    // C列: Humor (New)
     const humorRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['Lv1: 控えめ', 'Lv2: 標準', 'Lv3: 全力'], true)
-        .setAllowInvalid(false)
-        .build();
+        .requireValueInList(['Lv1: 控えめ', 'Lv2: 標準', 'Lv3: 全力'], true).build();
     sheet.getRange("C4:C100").setDataValidation(humorRule);
 
     // 6. 列幅調整
     sheet.setColumnWidth(1, 40);  // No
     sheet.setColumnWidth(2, 100); // Type
-    sheet.setColumnWidth(3, 100); // Humor (New)
+    sheet.setColumnWidth(3, 100); // Humor
     sheet.setColumnWidth(4, 300); // Topic
     sheet.setColumnWidth(5, 400); // Output
     sheet.setColumnWidth(6, 150); // Image
@@ -128,7 +115,7 @@ function setupDailyUsefulSheet() {
     sheet.getRange("C4").setValue("Lv2: 標準");
     sheet.getRange("D4").setValue("寝る前のスマホがやめられない時の対処法");
 
-    Browser.msgBox(`シート「${sheetName}」を修復しました。\n(C列にユーモア度設定を追加しました)`);
+    Browser.msgBox(`シート「${sheetName}」を修復しました。`);
 }
 
 /**
@@ -145,21 +132,16 @@ function setupApiKey() {
 }
 
 /**
- * APIキー取得ヘルパー (優先順: プロパティ > 設定シート > 直接入力)
+ * APIキー取得ヘルパー
  */
 function getGeminiApiKey() {
-    // 1. Script Properties
     let key = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
     if (key) return key;
 
-    // 2. Settings Sheet (Row 4 search from '設定' sheet)
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
     if (settingsSheet) {
-        // 行4のA-E列あたりを検索 (ユーザー情報: 4行目にある)
-        // 値がAIzaで始まるものを探す
         const lastCol = settingsSheet.getLastColumn();
-        // A4からE4くらいまでを取得
         const checkRange = settingsSheet.getRange(4, 1, 1, Math.min(lastCol, 10));
         const values = checkRange.getValues()[0];
 
@@ -169,7 +151,6 @@ function getGeminiApiKey() {
             }
         }
     }
-
     return null;
 }
 
@@ -177,45 +158,48 @@ function getGeminiApiKey() {
  * 【日常有益】AI記事生成
  */
 function generateDailyUsefulPosts() {
+    generatePostsCommon(SHEET_DAILY_USEFUL);
+}
+
+/**
+ * 【単品】AI記事生成 (旧 generateSinglePosts改修版)
+ */
+function generateSinglePosts() {
+    generatePostsCommon(SHEET_SINGLE);
+}
+
+/**
+ * 共通記事生成ロジック (Daily/Useful & Single Factory兼用)
+ */
+function generatePostsCommon(sheetName) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_DAILY_USEFUL);
+    const sheet = ss.getSheetByName(sheetName);
     const labSheet = ss.getSheetByName(SHEET_LAB);
     const dbSheet = ss.getSheetByName(SHEET_DB);
 
     if (!sheet) {
-        Browser.msgBox(`シート「${SHEET_DAILY_USEFUL}」が見つかりません。設定メニューから修復してください。`);
+        Browser.msgBox(`シート「${sheetName}」が見つかりません。設定メニューから修復してください。`);
         return;
     }
 
-    // API Key取得 (プロパティ or 設定シート)
     let apiKey = getGeminiApiKey();
-
     if (!apiKey) {
-        // キーがない場合、その場で尋ねる
-        const input = Browser.inputBox("APIキー未設定", "Gemini APIキーが見つかりません(設定シート4行目 or プロパティ)。\nキーを入力してください:", Browser.Buttons.OK_CANCEL);
-        if (input !== "cancel" && input !== "") {
-            apiKey = input;
-            PropertiesService.getScriptProperties().setProperty("GEMINI_API_KEY", apiKey);
-        } else {
-            Browser.msgBox("APIキーがないため中止しました。");
-            return;
-        }
+        Browser.msgBox("API Key Missing! Check Settings Sheet Row 4.");
+        return;
     }
 
     // 0. 設定読み込み (A1)
     const settings = sheet.getRange("A1").getValue();
-    const persona = "30代女性、共感を呼ぶインフルエンサー"; // 簡易ペルソナ
+    const persona = "30代女性、共感を呼ぶインフルエンサー";
     const globalRule = settings;
 
-    // 1. リソース取得 (DNA & Hooks)
+    // 1. リソース取得
     let dnaContext = "";
     if (labSheet && labSheet.getLastRow() > 1) {
         try {
             const dnaData = labSheet.getRange("B2:B5").getValues().flat().filter(String).join("\n");
             if (dnaData) dnaContext = `【バズりDNA (過去の成功パターン)】\n${dnaData}`;
-        } catch (e) {
-            console.log("DNA Fetch Error: " + e.message);
-        }
+        } catch (e) { }
     }
 
     let hookContext = "";
@@ -225,33 +209,75 @@ function generateDailyUsefulPosts() {
             if (hooks.length > 0) {
                 hookContext = `【使用可能なフック(書き出し)例】\n${hooks.join("\n")}`;
             }
-        } catch (e) {
-            console.log("Hook Fetch Error: " + e.message);
-        }
+        } catch (e) { }
     }
 
     // 2. ターゲット特定
     const lastRow = sheet.getLastRow();
-    if (lastRow < 4) return; // データなし
+    if (lastRow < 4) return;
+
+    // ヘッダー行調整: Singleシートは A=Select, B=No, C=Type, D=Humor, E=Topic, F=Output, G=Image, H=Status
+    // Dailyシートは A=No, B=Type, C=Humor, D=Topic, E=Output, F=Image, G=Status
+
+    // シートによって列インデックスが異なるため調整
+    // Single: Topic=E(5), Output=F(6), Status=H(8)
+    // Daily:  Topic=D(4), Output=E(5), Status=G(7)
+
+    // 今回、SingleシートもDailyシートと同じ構成にするか、あるいは少し変えるか。
+    // User要求: "シートの構成は日常有益のシートを流用する" 
+    // -> setupFactorySheetにて構成を合わせつつ、A列にSelect用チェックボックスを追加する形にしたほうが良い。
+    // 下記 setupFactorySheet を参照。
+
+    // setupFactorySheetでは:
+    // A: Select (Bool)
+    // B: No
+    // C: Type
+    // D: Humor
+    // E: Topic
+    // F: Output
+    // G: Image
+    // H: Status
+
+    // Dailyでは:
+    // A: No
+    // B: Type
+    // C: Humor
+    // D: Topic
+    // E: Output
+    // F: Image
+    // G: Status
+
+    // この関数は共通化したいが、列ズレがある。
+    // 引数でマッピングを切り替える。
+
+    let isSingleSheet = (sheetName === SHEET_SINGLE);
+    let colTopic = isSingleSheet ? 5 : 4; // E or D
+    let colOutput = isSingleSheet ? 6 : 5; // F or E
+    let colStatus = isSingleSheet ? 8 : 7; // H or G
+    let colType = isSingleSheet ? 3 : 2;   // C or B
+    let colHumor = isSingleSheet ? 4 : 3;  // D or C
+    let numCols = isSingleSheet ? 8 : 7;
 
     let targets = [];
-    const data = sheet.getRange(4, 1, lastRow - 3, 7).getValues(); // A4からG列まで取得 (Humor増えたため)
+    const data = sheet.getRange(4, 1, lastRow - 3, numCols).getValues();
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        const type = row[1];  // B: Type
-        const humor = row[2]; // C: Humor (New)
-        const topic = row[3]; // D: Topic
-        const output = row[4];// E: Output
+        const type = row[colType - 1];
+        const topic = row[colTopic - 1];
+        const output = row[colOutput - 1];
 
-        // Topicがあり、Outputがなく、Typeがある場合
-        if (topic && !output && type) {
-            targets.push(i); // 行インデックス(0始まり)を保存
+        // Topicあり、Outputなし
+        if (topic && !output) {
+            // 単品シートの場合は Type='まとめ' はスキップ (generateSummaryPostでやる)
+            if (isSingleSheet && type === 'まとめ') continue;
+
+            targets.push(i);
         }
     }
 
     if (targets.length === 0) {
-        Browser.msgBox("生成対象が見つかりませんでした。\nTopicを入力し、Outputを空にして再度実行してください。");
+        Browser.msgBox("生成対象が見つかりませんでした。");
         return;
     }
 
@@ -259,35 +285,26 @@ function generateDailyUsefulPosts() {
     let count = 0;
     for (const dataIndex of targets) {
         try {
-            // 実際の行番号(4始まり + index)
             const rowIndex = dataIndex + 4;
-            const type = data[dataIndex][1];
-            const humor = data[dataIndex][2];
-            const topic = data[dataIndex][3];
+            const type = data[dataIndex][colType - 1];
+            const humor = data[dataIndex][colHumor - 1];
+            const topic = data[dataIndex][colTopic - 1];
 
+            // プロンプト構築 (Dailyと同様)
             let typeInstruction = "";
-            if (type === '有益ネタ') {
-                typeInstruction = `【投稿タイプ: 有益ネタ】\n読者が「保存」したくなるような、具体的で役立つ情報を提示してください。`;
-            } else if (type === '日常ネタ') {
-                typeInstruction = `【投稿タイプ: 日常ネタ】\n親近感が湧くような、日々の気づきやエピソードを語ってください。`;
-            } else if (type === 'リンク無し') {
-                typeInstruction = `【投稿タイプ: リンク無し(写真メイン)】\n画像キャプションのような、短めで情緒的な文章にしてください。売り込みは厳禁です。`;
-            }
+            if (type === '有益ネタ') typeInstruction = `【投稿タイプ: 有益ネタ】\n読者が「保存」したくなるような、具体的で役立つ情報を提示してください。`;
+            else if (type === '日常ネタ') typeInstruction = `【投稿タイプ: 日常ネタ】\n親近感が湧くような、日々の気づきやエピソードを語ってください。`;
+            else if (type === 'リンク無し') typeInstruction = `【投稿タイプ: リンク無し(写真メイン)】\n画像キャプションのような、短めで情緒的な文章にしてください。`;
+            else typeInstruction = `【投稿タイプ: 単品ネタ】\nシンプルに魅力的な投稿を作成してください。`;
 
-            // ユーモアレベル判定
             let humorInstruction = "";
-            if (humor.includes("Lv1")) {
-                humorInstruction = `【ユーモア度: Lv1 控えめ】\n基本は真面目に、文末や例え話で少しだけ気の利いたウィットを入れる程度にしてください。知的さを保ってください。`;
-            } else if (humor.includes("Lv3")) {
-                humorInstruction = `【ユーモア度: Lv3 全力】\n**ユーモア全開で！** 自虐ネタ、鋭いツッコミ、または大げさな表現を使って、読み手を爆笑させることを目指してください。型破りな表現も歓迎です。`;
-            } else {
-                // Lv2 or Default
-                humorInstruction = `【ユーモア度: Lv2 標準】\n全体的に明るく楽しいトーンで。読者がフフッと笑えるような表現、親近感のある「あるある」を積極的に盛り込んでください。`;
-            }
+            if (humor && humor.includes("Lv1")) humorInstruction = `【ユーモア度: Lv1 控えめ】\n知的さを保ち、少しのウィットを入れる程度に。`;
+            else if (humor && humor.includes("Lv3")) humorInstruction = `【ユーモア度: Lv3 全力】\n**ユーモア全開で！** 自虐やツッコミ、大げさな表現で爆笑を狙ってください。`;
+            else humorInstruction = `【ユーモア度: Lv2 標準】\n明るく楽しいトーンで。フフッと笑える「あるある」を盛り込んでください。`;
 
             const prompt = `
 あなたはThreadsの人気インフルエンサーです。
-以下の「ネタ」から、指定されたタイプの投稿を作成してください。
+以下の「ネタ」から、投稿を作成してください。
 
 【入力ネタ】
 ${topic}
@@ -295,175 +312,286 @@ ${topic}
 【基本設定】
 ${persona}
 
-【全体ルール(UI設定)】
+【全体ルール】
 ${globalRule}
 
 ${typeInstruction}
-
 ${humorInstruction}
-
 ${dnaContext}
-
 ${hookContext}
 
 【指示】
-- バズりDNAのリズムを取り入れつつ、指定されたフック(またはそれに準ずる引きのある言葉)を使って書き出してください。
+- バズりDNAのリズムを取り入れつつ、引きのある言葉を使って書き出してください。
 - 30代女性に刺さる言葉選びを意識してください。
 - 改行を適度に入れ、読みやすくしてください。
-- **Threadsの特性上、ハッシュタグは不要です。絶対に出力しないでください。**
+- **Threadsの特性上、ハッシュタグは一切付けないでください。**
 - 出力は**投稿本文のみ**をプレーンテキストで返してください。(解説不要)
 `;
             let generatedText = callGemini(apiKey, prompt);
-
-            // 強制的にハッシュタグ除去 (プログラム側で保証)
             generatedText = generatedText.replace(/#\S+/g, '').trim();
 
-            // 書き込み (E列=5 に出力, G列=7 にStatus)
-            sheet.getRange(rowIndex, 5).setValue(generatedText);
-            sheet.getRange(rowIndex, 7).setValue("Generated");
+            sheet.getRange(rowIndex, colOutput).setValue(generatedText);
+            sheet.getRange(rowIndex, colStatus).setValue("Generated");
             count++;
 
-            // API制限考慮の待機
             Utilities.sleep(1000);
 
         } catch (e) {
             const rowIndex = dataIndex + 4;
-            sheet.getRange(rowIndex, 5).setValue("エラー: " + e.message); // E列にエラー
+            sheet.getRange(rowIndex, colOutput).setValue("エラー: " + e.message);
         }
     }
-    Browser.msgBox(`執筆完了！\n${count}件の投稿を作成しました。`);
+    Browser.msgBox(`${count}件の投稿を作成しました。`);
 }
 
 /**
- * 【日常有益】投稿リストへ出荷
- * 生成された投稿を「投稿リスト」シートに移動する
+ * 【単品】まとめネタ作成 (選択合体)
  */
-function shipDailyToStock() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_DAILY_USEFUL);
-
-    // 倉庫シート取得 (存在前提: "投稿リスト")
-    const stockSheet = ss.getSheetByName(SHEET_STOCK);
-    if (!stockSheet) {
-        Browser.msgBox(`シート「${SHEET_STOCK}」が見つかりません。作成してください。`);
-        return;
-    }
-
-    if (!sheet) return;
-
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 4) {
-        Browser.msgBox("出荷できるデータがありません。");
-        return;
-    }
-
-    // データ読み込み (A4:Hまで読む)
-    const range = sheet.getRange(4, 1, lastRow - 3, 8);
-    const values = range.getValues();
-
-    let shippedCount = 0;
-
-    for (let i = 0; i < values.length; i++) {
-        const row = values[i];
-
-        const type = row[1];  // B: Type
-        const humor = row[2]; // C: Humor (不要だが順序として存在)
-        const output = row[4];// E: Output (Shifted)
-        const imgUrl = row[5];// F: Image (Shifted)
-        const status = row[6];// G: Status (Shifted)
-
-        // 条件: Outputがあり、かつ Statusが "Generated" のもの
-        if (output && status === 'Generated') {
-            // 倉庫へ追加 (C列:カテゴリ, D列:文章)
-            stockSheet.appendRow([
-                "",     // A
-                "",     // B
-                type,   // C: Category (Type)
-                output, // D: Content
-                imgUrl, // E: Image URL (Backup)
-                "Shipped from Daily"
-            ]);
-
-            // 元シートのステータス更新 (G列)
-            sheet.getRange(4 + i, 7).setValue("Shipped");
-            shippedCount++;
-        }
-    }
-
-    if (shippedCount > 0) {
-        Browser.msgBox(`${shippedCount} 件の投稿を「${SHEET_STOCK}」へ移動しました！`);
-    } else {
-        Browser.msgBox("出荷可能な投稿(Status='Generated')が見つかりませんでした。");
-    }
-}
-
-/**
- * 【設定】単品シート修復 (簡易版)
- */
-function setupFactorySheet() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_SINGLE);
-    if (!sheet) {
-        sheet = ss.insertSheet(SHEET_SINGLE);
-    }
-
-    sheet.getRange("A1").setValue("Input Topic");
-    sheet.getRange("B1").setValue("Generated Output");
-    sheet.getRange("A1:B1").setFontWeight("bold");
-
-    Browser.msgBox(`シート「${SHEET_SINGLE}」を初期化しました。(簡易版)`);
-}
-
-/**
- * 【単品】AI記事生成
- */
-function generateSinglePosts() {
+function generateSummaryPost() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_SINGLE);
     if (!sheet) return;
 
-    // 簡易実装: A列にトピックがあればB列に生成
+    // API Key
+    let apiKey = getGeminiApiKey();
+    if (!apiKey) { Browser.msgBox("API Key Missing"); return; }
+
     const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return;
+    if (lastRow < 4) { Browser.msgBox("データがありません。"); return; }
 
-    // API Key取得 (単品版も同様に)
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) {
-        Browser.msgBox("API Key Missing (Check Settings Sheet Row 4 or Script Properties)");
-        return;
-    }
+    // データ取得 (A: Select, E: Topic, D: Humor)
+    // A: 1, D: 4, E: 5
+    const range = sheet.getRange(4, 1, lastRow - 3, 5);
+    const values = range.getValues();
 
-    for (let i = 2; i <= lastRow; i++) {
-        const topic = sheet.getRange(i, 1).getValue();
-        const output = sheet.getRange(i, 2).getValue();
+    let selectedTopics = [];
+    let selectedHumors = [];
 
-        if (topic && !output) {
-            try {
-                const prompt = `以下のトピックについて、Threads投稿を作成してください。\nハッシュタグは不要です。\nトピック: ${topic}`;
-                let text = callGemini(apiKey, prompt);
-
-                // ハッシュタグ除去
-                text = text.replace(/#\S+/g, '').trim();
-
-                sheet.getRange(i, 2).setValue(text);
-            } catch (e) {
-                sheet.getRange(i, 2).setValue("Error: " + e.message);
+    for (let i = 0; i < values.length; i++) {
+        if (values[i][0] === true) { // Checked
+            const topic = values[i][4]; // Col E (Topic)
+            const humor = values[i][3]; // Col D (Humor)
+            if (topic) {
+                selectedTopics.push(topic);
+                if (humor) selectedHumors.push(humor);
             }
         }
     }
+
+    if (selectedTopics.length < 2 || selectedTopics.length > 5) {
+        Browser.msgBox(`選択数は2～5個にしてください。\n現在の選択数: ${selectedTopics.length}`);
+        return;
+    }
+
+    // まとめ生成
+    const combinedTopic = selectedTopics.map((t, idx) => `(${idx + 1}) ${t}`).join("\n");
+
+    // ユーモア決定 (最初の選択 or Lv2)
+    const humorLevel = selectedHumors.length > 0 ? selectedHumors[0] : "Lv2: 標準";
+
+    // 設定読み込み (A1)
+    const settings = sheet.getRange("A1").getValue();
+    const persona = "30代女性、共感を呼ぶインフルエンサー";
+
+    // プロンプト
+    const prompt = `
+あなたはThreadsの人気インフルエンサーです。
+以下の複数のネタを**1つの「まとめ投稿」**として構成・執筆してください。
+
+【まとめ対象のネタ】
+${combinedTopic}
+
+【基本設定】
+${persona}
+
+【全体ルール】
+${settings}
+
+【ユーモア度: ${humorLevel}】
+適切なユーモア・ウィット・楽しさを一貫して持たせてください。
+
+【指示】
+- **「◯選」や「まとめ」形式**で、それぞれのネタを簡潔かつ魅力的に紹介してください。
+- 全体として一つの読み物になるように、導入と結びをつけてください。
+- リズム感を重視し、箇条書きなどを活用して見やすくしてください。
+- **Threadsの特性上、ハッシュタグは一切付けないでください。**
+- 出力は**投稿本文のみ**をプレーンテキストで返してください。
+`;
+
+    try {
+        let text = callGemini(apiKey, prompt);
+        text = text.replace(/#\S+/g, '').trim();
+
+        // 末尾に追加
+        sheet.appendRow([
+            false,           // A: Select
+            "",              // B: No
+            "まとめ",        // C: Type
+            humorLevel,      // D: Humor
+            combinedTopic,   // E: Topic (Combined)
+            text,            // F: Output
+            "",              // G: Image
+            "Generated"      // H: Status
+        ]);
+
+        Browser.msgBox("まとめ投稿を作成しました！\n最下行を確認してください。");
+
+    } catch (e) {
+        Browser.msgBox("エラー: " + e.message);
+    }
 }
+
+/**
+ * 【日常有益】投稿リストへ出荷
+ */
+function shipDailyToStock() {
+    shipCommon(SHEET_DAILY_USEFUL);
+}
+/**
+ * 【単品】倉庫へ出荷
+ */
+function shipSingleToStock() {
+    shipCommon(SHEET_SINGLE);
+}
+
+/**
+ * 共通出荷ロジック
+ */
+function shipCommon(sheetName) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    const stockSheet = ss.getSheetByName(SHEET_STOCK);
+
+    if (!stockSheet) { Browser.msgBox(`${SHEET_STOCK}が見つかりません。`); return; }
+    if (!sheet) return;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 4) { Browser.msgBox("データなし"); return; }
+
+    // 列ズレ判定
+    let isSingleSheet = (sheetName === SHEET_SINGLE);
+    let colType = isSingleSheet ? 3 : 2;   // C or B
+    let colOutput = isSingleSheet ? 6 : 5; // F or E
+    let colImg = isSingleSheet ? 7 : 6;    // G or F
+    let colStatus = isSingleSheet ? 8 : 7; // H or G
+    let numCols = isSingleSheet ? 8 : 7;
+
+    const range = sheet.getRange(4, 1, lastRow - 3, numCols);
+    const values = range.getValues();
+    let count = 0;
+
+    for (let i = 0; i < values.length; i++) {
+        const row = values[i];
+        const type = row[colType - 1];
+        const output = row[colOutput - 1];
+        const imgUrl = row[colImg - 1];
+        const status = row[colStatus - 1];
+
+        if (output && status === 'Generated') {
+            // 倉庫: A=Date, B=x, C=Cat, D=Content, E=Img
+            stockSheet.appendRow(["", "", type, output, imgUrl, `Shipped from ${isSingleSheet ? 'Single' : 'Daily'}`]);
+
+            // ステータス更新
+            sheet.getRange(4 + i, colStatus).setValue("Shipped");
+            count++;
+        }
+    }
+
+    if (count > 0) Browser.msgBox(`${count}件を出荷しました。`);
+    else Browser.msgBox("出荷対象(Status='Generated')がありません。");
+}
+
+/**
+ * 【設定】単品シート修復 (新Ver)
+ * 日常有益シートをベースに、A列に選択用チェックボックスを追加
+ */
+function setupFactorySheet() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetName = SHEET_SINGLE;
+    let sheet = ss.getSheetByName(sheetName);
+
+    if (!sheet) {
+        sheet = ss.insertSheet(sheetName);
+    }
+
+    // 1. クリーニング
+    sheet.getRange("A1:H1000").clear();
+    sheet.getRange("A1:H1000").clearDataValidations();
+    sheet.getRange("A1:H1000").clearFormat();
+
+    // 2. プロンプトエリア (A1:H1)
+    const promptRange = sheet.getRange("A1:H1");
+    promptRange.merge();
+
+    const defaultPrompt =
+        `- **ターゲット**: 30代前後の女性\n` +
+        `- **文字数**: 260文字以内\n` +
+        `- **機能**: 複数チェックして「まとめネタ作成」で合体投稿が可能。\n` +
+        `- **共通ルール**: 親近感がありつつ、ためになる情報や共感できる日常を発信。`;
+
+    promptRange.setValue(defaultPrompt);
+    promptRange.setBackground("#fff2cc"); // 薄い黄色 (Dailyと区別)
+    promptRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    promptRange.setVerticalAlignment("top");
+    promptRange.setFontSize(10);
+    sheet.setRowHeight(1, 100);
+
+    // 3. ヘッダー (3行目)
+    // A:Select, B:No, C:Type, D:Humor, E:Topic, F:Output, G:Img, H:Status
+    const headers = [
+        ["Select", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Output (生成本文)", "Image URL", "Status"]
+    ];
+    sheet.getRange("A3:H3").setValues(headers);
+    sheet.getRange("A3:H3").setBackground("#ffe599"); // 黄色系
+    sheet.getRange("A3:H3").setFontWeight("bold");
+    sheet.getRange("A3:H3").setHorizontalAlignment("center");
+
+    // 4. バリデーション
+    // A列: Checkbox
+    const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    sheet.getRange("A4:A100").setDataValidation(checkbox);
+
+    // C列: Type (単品/まとめ/有益... どちらでも使えるようにしておく)
+    const typeRule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['単品', 'まとめ', '有益ネタ', '日常ネタ'], true).build();
+    sheet.getRange("C4:C100").setDataValidation(typeRule);
+
+    // D列: Humor
+    const humorRule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['Lv1: 控えめ', 'Lv2: 標準', 'Lv3: 全力'], true).build();
+    sheet.getRange("D4:D100").setDataValidation(humorRule);
+
+    // 5. 幅調整
+    sheet.setColumnWidth(1, 50);  // Select
+    sheet.setColumnWidth(2, 40);  // No
+    sheet.setColumnWidth(3, 80);  // Type
+    sheet.setColumnWidth(4, 80);  // Humor
+    sheet.setColumnWidth(5, 300); // Topic
+    sheet.setColumnWidth(6, 400); // Output
+    sheet.setColumnWidth(7, 150); // Image
+    sheet.setColumnWidth(8, 80);  // Status
+
+    // 6. サンプル
+    sheet.getRange("A4").setValue(false);
+    sheet.getRange("B4").setValue(1);
+    sheet.getRange("C4").setValue("単品");
+    sheet.getRange("D4").setValue("Lv2: 標準");
+    sheet.getRange("E4").setValue("朝のコーヒーで目が覚めない問題");
+
+    Browser.msgBox(`シート「${sheetName}」を新Verに修復しました。`);
+}
+
 
 /**
  * Gemini API呼び出し
  */
 function callGemini(apiKey, prompt) {
-    const modelName = 'gemini-2.0-flash-exp'; // または gemini-1.5-pro / gemini-2.0-flash-thinking-exp
+    const modelName = 'gemini-2.0-flash-exp';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     const payload = {
         "contents": [{ "parts": [{ "text": prompt }] }],
         "generationConfig": { "temperature": 0.9, "maxOutputTokens": 2000 },
-        // 安全設定: ブロック解除(必要に応じて調整)
         "safetySettings": [
             { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE" },
             { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE" },
@@ -492,8 +620,7 @@ function callGemini(apiKey, prompt) {
     return json.candidates[0].content.parts[0].text;
 }
 
-// --- スタブ関数 (エラー回避用) ---
-function shipSingleToStock() { Browser.msgBox("未実装: shipSingleToStock"); }
+// --- スタブ関数 ---
 function runLabAnalysis() { Browser.msgBox("未実装: runLabAnalysis"); }
 function forceBroadcastTest() { Browser.msgBox("未実装: forceBroadcastTest"); }
 function setupTrigger() { Browser.msgBox("未実装: setupTrigger"); }
