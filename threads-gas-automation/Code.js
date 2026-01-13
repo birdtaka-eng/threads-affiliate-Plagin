@@ -216,13 +216,6 @@ function generatePostsCommon(sheetName) {
     const lastRow = sheet.getLastRow();
     if (lastRow < 4) return;
 
-    // ヘッダー行調整: Singleシートは A=Select, B=No, C=Type, D=Humor, E=Topic, F=Output, G=Image, H=Status
-    // Dailyシートは A=No, B=Type, C=Humor, D=Topic, E=Output, F=Image, G=Status
-
-    // シートによって列インデックスが異なるため調整
-    // Single: Topic=E(5), Output=F(6), Status=H(8)
-    // Daily:  Topic=D(4), Output=E(5), Status=G(7)
-
     let isSingleSheet = (sheetName === SHEET_SINGLE);
     let colTopic = isSingleSheet ? 5 : 4; // E or D
     let colOutput = isSingleSheet ? 6 : 5; // F or E
@@ -275,11 +268,8 @@ function generatePostsCommon(sheetName) {
             else if (humor && humor.includes("Lv3")) humorInstruction = `【ユーモア度: Lv3 全力】\n**ユーモア全開で！** 自虐やツッコミ、大げさな表現で爆笑を狙ってください。`;
             else humorInstruction = `【ユーモア度: Lv2 標準】\n明るく楽しいトーンで。フフッと笑える「あるある」を盛り込んでください。`;
 
-            // 単品投稿でも、有益ネタ等の指定があればそれを反映
-            if (type === 'まとめ') {
-                // Skip here (Safety check if logic changed)
-                continue;
-            }
+            // 単品投稿でも、有益ネタ等の指定があればそれを反映 (Typeがまとめ以外)
+            if (type === 'まとめ') continue;
 
             const prompt = `
 あなたはThreadsの人気インフルエンサーです。
@@ -338,71 +328,52 @@ function generateSummaryPost() {
     const lastRow = sheet.getLastRow();
     if (lastRow < 4) { Browser.msgBox("データがありません。"); return; }
 
-    // データ取得 (A: Select, C: Type, D: Humor, E: Topic)
-    // A=0, C=2, D=3, E=4
-    const range = sheet.getRange(4, 1, lastRow - 3, 5);
+    // データ取得 (A: Select, C: Type, D: Humor, E: Topic, F: Output)
+    // A=0, C=2, D=3, E=4, F=5
+    const range = sheet.getRange(4, 1, lastRow - 3, 6);
     const values = range.getValues();
 
-    let selectedTopics = [];
+    let selectedContents = [];
     let selectedHumors = [];
-    let selectedTypes = [];
 
     for (let i = 0; i < values.length; i++) {
         if (values[i][0] === true) { // Checked
-            const topic = values[i][4]; // Col E (Topic)
-            const humor = values[i][3]; // Col D (Humor)
-            const type = values[i][2];  // Col C (Type)
-            if (topic) {
-                selectedTopics.push(topic);
+            const output = values[i][5]; // Col F (Generated Output)
+            const topic = values[i][4];  // Col E (Topic)
+            const humor = values[i][3];  // Col D (Humor)
+
+            // 優先: Output (過去の投稿文), 無ければ Topic
+            const content = output ? output : topic;
+
+            if (content) {
+                selectedContents.push(content);
                 if (humor) selectedHumors.push(humor);
-                if (type) selectedTypes.push(type);
             }
         }
     }
 
-    if (selectedTopics.length < 2 || selectedTopics.length > 5) {
-        Browser.msgBox(`選択数は2～5個にしてください。\n現在の選択数: ${selectedTopics.length}`);
+    if (selectedContents.length < 2 || selectedContents.length > 5) {
+        Browser.msgBox(`選択数は2～5個にしてください。\n現在の選択数: ${selectedContents.length}`);
         return;
     }
 
     // まとめ生成
-    const combinedTopic = selectedTopics.map((t, idx) => `(${idx + 1}) ${t}`).join("\n");
+    const combinedContent = selectedContents.map((t, idx) => `【ネタ${idx + 1}】\n${t}`).join("\n\n");
 
     // ユーモア決定 (最初の選択 or Lv2)
     const humorLevel = selectedHumors.length > 0 ? selectedHumors[0] : "Lv2: 標準";
-
-    // カテゴリ決定 (最初の選択 or 多数決 or デフォルト)
-    // 基本は「有益ネタ」にするが、もし選択されたものが「日常ネタ」なら日常にする
-    let targetType = "有益ネタ"; // Default to Useful for composites
-    if (selectedTypes.length > 0) {
-        const firstType = selectedTypes[0];
-        // ユーザーが意図して指定したカテゴリ(有益/日常)があれば継承
-        if (['日常ネタ', '有益ネタ', 'リンク無し'].includes(firstType)) {
-            targetType = firstType;
-        }
-    }
 
     // 設定読み込み (A1)
     const settings = sheet.getRange("A1").getValue();
     const persona = "30代女性、共感を呼ぶインフルエンサー";
 
-    // カテゴリ別指示
-    let typeInstruction = "";
-    if (targetType === '有益ネタ') {
-        typeInstruction = `【投稿タイプ: 有益ネタまとめ】\n複数の情報を整理し、読者が「保存」したくなるような、役立つまとめ記事にしてください。`;
-    } else if (targetType === '日常ネタ') {
-        typeInstruction = `【投稿タイプ: 日常ネタまとめ】\n複数のエピソードを織り交ぜ、人柄が伝わるような読み応えのある記事にしてください。`;
-    } else {
-        typeInstruction = `【投稿タイプ: まとめ記事】\n複数のトピックを魅力的にまとめてください。`;
-    }
-
-    // プロンプト
+    // プロンプト (まとめ専用)
     const prompt = `
 あなたはThreadsの人気インフルエンサーです。
-以下の複数のネタを**1つの「まとめ投稿」**として構成・執筆してください。
+以下の「複数の投稿内容(またはネタ)」を素材として、**1つの「まとめ投稿」**を新規に書き下ろしてください。
 
-【まとめ対象のネタ】
-${combinedTopic}
+【素材リスト】
+${combinedContent}
 
 【基本設定】
 ${persona}
@@ -410,15 +381,16 @@ ${persona}
 【全体ルール】
 ${settings}
 
-${typeInstruction}
+【投稿タイプ: まとめ記事】
+- 複数の投稿のエッセンスを抽出し、「〇〇選」や「まとめ」の形式で再構成してください。
+- Readability(読みやすさ)を最優先し、箇条書きや番号付きリストを活用してください。
+- 元の文章をそのまま繋げるのではなく、**「まとめ記事」として成立するようにリライト**してください。
 
 【ユーモア度: ${humorLevel}】
 適切なユーモア・ウィット・楽しさを一貫して持たせてください。
 
 【指示】
-- **「◯選」や「まとめ」形式**で、それぞれのネタを簡潔かつ魅力的に紹介してください。
-- 全体として一つの読み物になるように、導入と結びをつけてください。
-- リズム感を重視し、箇条書きなどを活用して見やすくしてください。
+- タイトルや導入で「これだけは見て！」という引きを作ってください。
 - **Threadsの特性上、ハッシュタグは一切付けないでください。**
 - 出力は**投稿本文のみ**をプレーンテキストで返してください。
 `;
@@ -431,15 +403,15 @@ ${typeInstruction}
         sheet.appendRow([
             false,           // A: Select
             "",              // B: No
-            targetType,      // C: Type (Inherited)
+            "まとめ",        // C: Type (Fixed)
             humorLevel,      // D: Humor
-            combinedTopic,   // E: Topic (Combined)
+            "複数のネタを合体", // E: Topic (Memo)
             text,            // F: Output
             "",              // G: Image
             "Generated"      // H: Status
         ]);
 
-        Browser.msgBox(`カテゴリ「${targetType}」としてまとめ投稿を作成しました！\n最下行を確認してください。\n(C列でカテゴリ変更可能です)`);
+        Browser.msgBox("まとめ投稿を作成しました！\n最下行を確認してください。");
 
     } catch (e) {
         Browser.msgBox("エラー: " + e.message);
