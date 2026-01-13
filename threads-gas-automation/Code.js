@@ -223,33 +223,6 @@ function generatePostsCommon(sheetName) {
     // Single: Topic=E(5), Output=F(6), Status=H(8)
     // Daily:  Topic=D(4), Output=E(5), Status=G(7)
 
-    // 今回、SingleシートもDailyシートと同じ構成にするか、あるいは少し変えるか。
-    // User要求: "シートの構成は日常有益のシートを流用する" 
-    // -> setupFactorySheetにて構成を合わせつつ、A列にSelect用チェックボックスを追加する形にしたほうが良い。
-    // 下記 setupFactorySheet を参照。
-
-    // setupFactorySheetでは:
-    // A: Select (Bool)
-    // B: No
-    // C: Type
-    // D: Humor
-    // E: Topic
-    // F: Output
-    // G: Image
-    // H: Status
-
-    // Dailyでは:
-    // A: No
-    // B: Type
-    // C: Humor
-    // D: Topic
-    // E: Output
-    // F: Image
-    // G: Status
-
-    // この関数は共通化したいが、列ズレがある。
-    // 引数でマッピングを切り替える。
-
     let isSingleSheet = (sheetName === SHEET_SINGLE);
     let colTopic = isSingleSheet ? 5 : 4; // E or D
     let colOutput = isSingleSheet ? 6 : 5; // F or E
@@ -301,6 +274,12 @@ function generatePostsCommon(sheetName) {
             if (humor && humor.includes("Lv1")) humorInstruction = `【ユーモア度: Lv1 控えめ】\n知的さを保ち、少しのウィットを入れる程度に。`;
             else if (humor && humor.includes("Lv3")) humorInstruction = `【ユーモア度: Lv3 全力】\n**ユーモア全開で！** 自虐やツッコミ、大げさな表現で爆笑を狙ってください。`;
             else humorInstruction = `【ユーモア度: Lv2 標準】\n明るく楽しいトーンで。フフッと笑える「あるある」を盛り込んでください。`;
+
+            // 単品投稿でも、有益ネタ等の指定があればそれを反映
+            if (type === 'まとめ') {
+                // Skip here (Safety check if logic changed)
+                continue;
+            }
 
             const prompt = `
 あなたはThreadsの人気インフルエンサーです。
@@ -359,21 +338,24 @@ function generateSummaryPost() {
     const lastRow = sheet.getLastRow();
     if (lastRow < 4) { Browser.msgBox("データがありません。"); return; }
 
-    // データ取得 (A: Select, E: Topic, D: Humor)
-    // A: 1, D: 4, E: 5
+    // データ取得 (A: Select, C: Type, D: Humor, E: Topic)
+    // A=0, C=2, D=3, E=4
     const range = sheet.getRange(4, 1, lastRow - 3, 5);
     const values = range.getValues();
 
     let selectedTopics = [];
     let selectedHumors = [];
+    let selectedTypes = [];
 
     for (let i = 0; i < values.length; i++) {
         if (values[i][0] === true) { // Checked
             const topic = values[i][4]; // Col E (Topic)
             const humor = values[i][3]; // Col D (Humor)
+            const type = values[i][2];  // Col C (Type)
             if (topic) {
                 selectedTopics.push(topic);
                 if (humor) selectedHumors.push(humor);
+                if (type) selectedTypes.push(type);
             }
         }
     }
@@ -389,9 +371,30 @@ function generateSummaryPost() {
     // ユーモア決定 (最初の選択 or Lv2)
     const humorLevel = selectedHumors.length > 0 ? selectedHumors[0] : "Lv2: 標準";
 
+    // カテゴリ決定 (最初の選択 or 多数決 or デフォルト)
+    // 基本は「有益ネタ」にするが、もし選択されたものが「日常ネタ」なら日常にする
+    let targetType = "有益ネタ"; // Default to Useful for composites
+    if (selectedTypes.length > 0) {
+        const firstType = selectedTypes[0];
+        // ユーザーが意図して指定したカテゴリ(有益/日常)があれば継承
+        if (['日常ネタ', '有益ネタ', 'リンク無し'].includes(firstType)) {
+            targetType = firstType;
+        }
+    }
+
     // 設定読み込み (A1)
     const settings = sheet.getRange("A1").getValue();
     const persona = "30代女性、共感を呼ぶインフルエンサー";
+
+    // カテゴリ別指示
+    let typeInstruction = "";
+    if (targetType === '有益ネタ') {
+        typeInstruction = `【投稿タイプ: 有益ネタまとめ】\n複数の情報を整理し、読者が「保存」したくなるような、役立つまとめ記事にしてください。`;
+    } else if (targetType === '日常ネタ') {
+        typeInstruction = `【投稿タイプ: 日常ネタまとめ】\n複数のエピソードを織り交ぜ、人柄が伝わるような読み応えのある記事にしてください。`;
+    } else {
+        typeInstruction = `【投稿タイプ: まとめ記事】\n複数のトピックを魅力的にまとめてください。`;
+    }
 
     // プロンプト
     const prompt = `
@@ -406,6 +409,8 @@ ${persona}
 
 【全体ルール】
 ${settings}
+
+${typeInstruction}
 
 【ユーモア度: ${humorLevel}】
 適切なユーモア・ウィット・楽しさを一貫して持たせてください。
@@ -426,7 +431,7 @@ ${settings}
         sheet.appendRow([
             false,           // A: Select
             "",              // B: No
-            "まとめ",        // C: Type
+            targetType,      // C: Type (Inherited)
             humorLevel,      // D: Humor
             combinedTopic,   // E: Topic (Combined)
             text,            // F: Output
@@ -434,7 +439,7 @@ ${settings}
             "Generated"      // H: Status
         ]);
 
-        Browser.msgBox("まとめ投稿を作成しました！\n最下行を確認してください。");
+        Browser.msgBox(`カテゴリ「${targetType}」としてまとめ投稿を作成しました！\n最下行を確認してください。\n(C列でカテゴリ変更可能です)`);
 
     } catch (e) {
         Browser.msgBox("エラー: " + e.message);
@@ -551,7 +556,7 @@ function setupFactorySheet() {
     const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     sheet.getRange("A4:A100").setDataValidation(checkbox);
 
-    // C列: Type (単品/まとめ/有益... どちらでも使えるようにしておく)
+    // C列: Type
     const typeRule = SpreadsheetApp.newDataValidation()
         .requireValueInList(['単品', 'まとめ', '有益ネタ', '日常ネタ'], true).build();
     sheet.getRange("C4:C100").setDataValidation(typeRule);
@@ -574,7 +579,7 @@ function setupFactorySheet() {
     // 6. サンプル
     sheet.getRange("A4").setValue(false);
     sheet.getRange("B4").setValue(1);
-    sheet.getRange("C4").setValue("単品");
+    sheet.getRange("C4").setValue("有益ネタ");  // Default sample
     sheet.getRange("D4").setValue("Lv2: 標準");
     sheet.getRange("E4").setValue("朝のコーヒーで目が覚めない問題");
 
