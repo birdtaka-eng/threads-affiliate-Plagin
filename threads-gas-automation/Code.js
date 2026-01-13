@@ -310,10 +310,13 @@ ${hookContext}
 - バズりDNAのリズムを取り入れつつ、指定されたフック(またはそれに準ずる引きのある言葉)を使って書き出してください。
 - 30代女性に刺さる言葉選びを意識してください。
 - 改行を適度に入れ、読みやすくしてください。
-- **ハッシュタグは一切付けないでください。**
+- **Threadsの特性上、ハッシュタグは不要です。絶対に出力しないでください。**
 - 出力は**投稿本文のみ**をプレーンテキストで返してください。(解説不要)
 `;
-            const generatedText = callGemini(apiKey, prompt);
+            let generatedText = callGemini(apiKey, prompt);
+
+            // 強制的にハッシュタグ除去 (プログラム側で保証)
+            generatedText = generatedText.replace(/#\S+/g, '').trim();
 
             // 書き込み (E列=5 に出力, G列=7 にStatus)
             sheet.getRange(rowIndex, 5).setValue(generatedText);
@@ -437,7 +440,11 @@ function generateSinglePosts() {
         if (topic && !output) {
             try {
                 const prompt = `以下のトピックについて、Threads投稿を作成してください。\nハッシュタグは不要です。\nトピック: ${topic}`;
-                const text = callGemini(apiKey, prompt);
+                let text = callGemini(apiKey, prompt);
+
+                // ハッシュタグ除去
+                text = text.replace(/#\S+/g, '').trim();
+
                 sheet.getRange(i, 2).setValue(text);
             } catch (e) {
                 sheet.getRange(i, 2).setValue("Error: " + e.message);
