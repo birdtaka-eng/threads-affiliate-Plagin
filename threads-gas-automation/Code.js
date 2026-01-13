@@ -8,7 +8,7 @@ const SHEET_DAILY_USEFUL = "日常有益投稿";
 const SHEET_LAB = "バズ研究所";
 const SHEET_DB = "テンプレートDB";
 const SHEET_SETTINGS = "設定"; // Added Settings sheet
-const SHEET_STOCK = "投稿倉庫";
+const SHEET_STOCK = "投稿リスト";
 
 // Gemini API Key (本来はプロパティストア推奨だが、ユーザー環境に合わせて変数定義)
 // 注: ユーザーはスクリプトプロパティまたは直接コードにキーを設定する必要があります。
@@ -24,6 +24,7 @@ function onOpen() {
         .addItem('【単品】倉庫へ出荷', 'shipSingleToStock')
         .addSeparator()
         .addItem('【日常有益】AI記事生成', 'generateDailyUsefulPosts')
+        .addItem('【日常有益】倉庫へ出荷', 'shipDailyToStock') // Added
         .addSeparator()
         .addItem('【研究所】スタイル分析 (DNA抽出)', 'runLabAnalysis')
         .addSeparator()
@@ -300,6 +301,67 @@ ${hookContext}
         }
     }
     Browser.msgBox(`執筆完了！\n${count}件の投稿を作成しました。`);
+}
+
+/**
+ * 【日常有益】倉庫へ出荷
+ * 生成された投稿を「投稿リスト」シートに移動する
+ */
+function shipDailyToStock() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_DAILY_USEFUL);
+
+    // 倉庫シート取得 (存在前提: "投稿リスト")
+    const stockSheet = ss.getSheetByName(SHEET_STOCK);
+    if (!stockSheet) {
+        Browser.msgBox(`シート「${SHEET_STOCK}」が見つかりません。作成してください。`);
+        return;
+    }
+
+    if (!sheet) return;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 4) {
+        Browser.msgBox("出荷できるデータがありません。");
+        return;
+    }
+
+    // データ読み込み (A4:F)
+    const range = sheet.getRange(4, 1, lastRow - 3, 7); // G列(Date)まで読む
+    const values = range.getValues();
+
+    let shippedCount = 0;
+
+    for (let i = 0; i < values.length; i++) {
+        const row = values[i];
+        const output = row[3];
+        const imgUrl = row[4];
+        const status = row[5];
+        const type = row[1];
+
+        // 条件: Outputがあり、かつ Statusが "Generated" のもの
+        if (output && status === 'Generated') {
+            // 倉庫へ追加 (C列:カテゴリ, D列:文章)
+            stockSheet.appendRow([
+                "",     // A
+                "",     // B
+                type,   // C: Category (Type)
+                output, // D: Content
+                imgUrl, // E: Image URL (Backup)
+                "Shipped from Daily"
+            ]);
+
+            // 元シートのステータス更新
+            sheet.getRange(4 + i, 6).setValue("Shipped");
+            shippedCount++;
+        }
+    }
+
+    if (shippedCount > 0) {
+        Browser.msgBox(`${shippedCount} 件の投稿を「${SHEET_STOCK}」へ移動しました！`);
+    } else {
+        Browser.msgBox("出荷可能な投稿(Status='Generated')が見つかりませんでした。");
+    }
 }
 
 /**
