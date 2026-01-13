@@ -24,7 +24,7 @@ function onOpen() {
         .addItem('【単品】倉庫へ出荷', 'shipSingleToStock')
         .addSeparator()
         .addItem('【日常有益】AI記事生成', 'generateDailyUsefulPosts')
-        .addItem('【日常有益】倉庫へ出荷', 'shipDailyToStock') // Added
+        .addItem('【日常有益】投稿リストへ出荷', 'shipDailyToStock') // Renamed
         .addSeparator()
         .addItem('【研究所】スタイル分析 (DNA抽出)', 'runLabAnalysis')
         .addSeparator()
@@ -304,7 +304,7 @@ ${hookContext}
 }
 
 /**
- * 【日常有益】倉庫へ出荷
+ * 【日常有益】投稿リストへ出荷
  * 生成された投稿を「投稿リスト」シートに移動する
  */
 function shipDailyToStock() {
