@@ -57,16 +57,17 @@ function setupDailyUsefulSheet() {
     }
 
     // 1. 強力なクリーニング
-    sheet.getRange("A1:G1000").clear();
-    sheet.getRange("A1:G1000").clearDataValidations();
-    sheet.getRange("A1:G1000").clearFormat();
+    sheet.getRange("A1:H1000").clear(); // H列まで
+    sheet.getRange("A1:H1000").clearDataValidations();
+    sheet.getRange("A1:H1000").clearFormat();
 
-    // 2. プロンプトエリア (1行目: A1:F1結合)
-    const promptRange = sheet.getRange("A1:F1");
+    // 2. プロンプトエリア (1行目: A1:G1結合)
+    const promptRange = sheet.getRange("A1:G1"); // 幅を広げる
     promptRange.merge();
 
     const defaultPrompt =
         `- **ターゲット**: 30代前後の女性\n` +
+        `- **文字数**: 260文字以内\n` +
         `- **共通ルール**: 親近感がありつつ、ためになる情報や共感できる日常を発信。\n` +
         `- **有益ネタの場合**: 「へぇ〜」と思わせる知識やライフハック。聞いた話でもOK。\n` +
         `- **日常ネタの場合**: 人柄が伝わるエピソード。共感を呼ぶ書き方。\n` +
@@ -79,44 +80,55 @@ function setupDailyUsefulSheet() {
     promptRange.setFontSize(10);
     sheet.setRowHeight(1, 100);
 
-    // 3. コントロールボタンエリア (G1:H1)
-    // ※ GASではボタン描画は難しいので、セルに文字を入れておく
-    sheet.getRange("G1").setValue("📢 生成ボタンは\nメニューから実行");
-    sheet.getRange("G1").setBackground("#ea9999");
-    sheet.getRange("G1").setFontWeight("bold");
-    sheet.getRange("G1").setHorizontalAlignment("center");
-    sheet.getRange("G1").setVerticalAlignment("middle");
+    // 3. コントロールボタンエリア (H1:I1)
+    sheet.getRange("H1").setValue("📢 生成ボタンは\nメニューから実行");
+    sheet.getRange("H1").setBackground("#ea9999");
+    sheet.getRange("H1").setFontWeight("bold");
+    sheet.getRange("H1").setHorizontalAlignment("center");
+    sheet.getRange("H1").setVerticalAlignment("middle");
 
     // 4. ヘッダー行 (3行目)
+    // C列にHumorを追加し、以降をシフト
     const headers = [
-        ["No", "Type", "Topic (ネタ/メモ)", "Output (生成本文)", "Image URL (任意)", "Status", "Date"]
+        ["No", "Type", "Humor (ユーモア)", "Topic (ネタ/メモ)", "Output (生成本文)", "Image URL (任意)", "Status", "Date"]
     ];
-    sheet.getRange("A3:G3").setValues(headers);
-    sheet.getRange("A3:G3").setBackground("#cfe2f3");
-    sheet.getRange("A3:G3").setFontWeight("bold");
-    sheet.getRange("A3:G3").setHorizontalAlignment("center");
+    sheet.getRange("A3:H3").setValues(headers);
+    sheet.getRange("A3:H3").setBackground("#cfe2f3");
+    sheet.getRange("A3:H3").setFontWeight("bold");
+    sheet.getRange("A3:H3").setHorizontalAlignment("center");
 
-    // 5. データバリデーション (Type列: B列)
-    const rule = SpreadsheetApp.newDataValidation()
+    // 5. データバリデーション
+    // B列: Type
+    const typeRule = SpreadsheetApp.newDataValidation()
         .requireValueInList(['有益ネタ', '日常ネタ', 'リンク無し'], true)
         .setAllowInvalid(false)
         .build();
-    sheet.getRange("B4:B100").setDataValidation(rule);
+    sheet.getRange("B4:B100").setDataValidation(typeRule);
+
+    // C列: Humor (New)
+    const humorRule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['Lv1: 控えめ', 'Lv2: 標準', 'Lv3: 全力'], true)
+        .setAllowInvalid(false)
+        .build();
+    sheet.getRange("C4:C100").setDataValidation(humorRule);
 
     // 6. 列幅調整
     sheet.setColumnWidth(1, 40);  // No
     sheet.setColumnWidth(2, 100); // Type
-    sheet.setColumnWidth(3, 300); // Topic
-    sheet.setColumnWidth(4, 400); // Output
-    sheet.setColumnWidth(5, 150); // Image
-    sheet.setColumnWidth(6, 80);  // Status
+    sheet.setColumnWidth(3, 100); // Humor (New)
+    sheet.setColumnWidth(4, 300); // Topic
+    sheet.setColumnWidth(5, 400); // Output
+    sheet.setColumnWidth(6, 150); // Image
+    sheet.setColumnWidth(7, 80);  // Status
+    sheet.setColumnWidth(8, 80);  // Date
 
     // 7. サンプルデータ
     sheet.getRange("A4").setValue(1);
     sheet.getRange("B4").setValue("有益ネタ");
-    sheet.getRange("C4").setValue("寝る前のスマホがやめられない時の対処法");
+    sheet.getRange("C4").setValue("Lv2: 標準");
+    sheet.getRange("D4").setValue("寝る前のスマホがやめられない時の対処法");
 
-    Browser.msgBox(`シート「${sheetName}」を修復しました。`);
+    Browser.msgBox(`シート「${sheetName}」を修復しました。\n(C列にユーモア度設定を追加しました)`);
 }
 
 /**
@@ -223,14 +235,16 @@ function generateDailyUsefulPosts() {
     if (lastRow < 4) return; // データなし
 
     let targets = [];
-    const data = sheet.getRange(4, 1, lastRow - 3, 6).getValues(); // A4からF列まで取得
+    const data = sheet.getRange(4, 1, lastRow - 3, 7).getValues(); // A4からG列まで取得 (Humor増えたため)
 
     for (let i = 0; i < data.length; i++) {
         const row = data[i];
-        const type = row[1];  // B列
-        const topic = row[2]; // C列
-        const output = row[3];// D列
+        const type = row[1];  // B: Type
+        const humor = row[2]; // C: Humor (New)
+        const topic = row[3]; // D: Topic
+        const output = row[4];// E: Output
 
+        // Topicがあり、Outputがなく、Typeがある場合
         if (topic && !output && type) {
             targets.push(i); // 行インデックス(0始まり)を保存
         }
@@ -248,7 +262,8 @@ function generateDailyUsefulPosts() {
             // 実際の行番号(4始まり + index)
             const rowIndex = dataIndex + 4;
             const type = data[dataIndex][1];
-            const topic = data[dataIndex][2];
+            const humor = data[dataIndex][2];
+            const topic = data[dataIndex][3];
 
             let typeInstruction = "";
             if (type === '有益ネタ') {
@@ -257,6 +272,17 @@ function generateDailyUsefulPosts() {
                 typeInstruction = `【投稿タイプ: 日常ネタ】\n親近感が湧くような、日々の気づきやエピソードを語ってください。`;
             } else if (type === 'リンク無し') {
                 typeInstruction = `【投稿タイプ: リンク無し(写真メイン)】\n画像キャプションのような、短めで情緒的な文章にしてください。売り込みは厳禁です。`;
+            }
+
+            // ユーモアレベル判定
+            let humorInstruction = "";
+            if (humor.includes("Lv1")) {
+                humorInstruction = `【ユーモア度: Lv1 控えめ】\n基本は真面目に、文末や例え話で少しだけ気の利いたウィットを入れる程度にしてください。知的さを保ってください。`;
+            } else if (humor.includes("Lv3")) {
+                humorInstruction = `【ユーモア度: Lv3 全力】\n**ユーモア全開で！** 自虐ネタ、鋭いツッコミ、または大げさな表現を使って、読み手を爆笑させることを目指してください。型破りな表現も歓迎です。`;
+            } else {
+                // Lv2 or Default
+                humorInstruction = `【ユーモア度: Lv2 標準】\n全体的に明るく楽しいトーンで。読者がフフッと笑えるような表現、親近感のある「あるある」を積極的に盛り込んでください。`;
             }
 
             const prompt = `
@@ -274,6 +300,8 @@ ${globalRule}
 
 ${typeInstruction}
 
+${humorInstruction}
+
 ${dnaContext}
 
 ${hookContext}
@@ -287,9 +315,9 @@ ${hookContext}
 `;
             const generatedText = callGemini(apiKey, prompt);
 
-            // 書き込み
-            sheet.getRange(rowIndex, 4).setValue(generatedText);
-            sheet.getRange(rowIndex, 6).setValue("Generated"); // Status
+            // 書き込み (E列=5 に出力, G列=7 にStatus)
+            sheet.getRange(rowIndex, 5).setValue(generatedText);
+            sheet.getRange(rowIndex, 7).setValue("Generated");
             count++;
 
             // API制限考慮の待機
@@ -297,7 +325,7 @@ ${hookContext}
 
         } catch (e) {
             const rowIndex = dataIndex + 4;
-            sheet.getRange(rowIndex, 4).setValue("エラー: " + e.message);
+            sheet.getRange(rowIndex, 5).setValue("エラー: " + e.message); // E列にエラー
         }
     }
     Browser.msgBox(`執筆完了！\n${count}件の投稿を作成しました。`);
@@ -326,18 +354,20 @@ function shipDailyToStock() {
         return;
     }
 
-    // データ読み込み (A4:F)
-    const range = sheet.getRange(4, 1, lastRow - 3, 7); // G列(Date)まで読む
+    // データ読み込み (A4:Hまで読む)
+    const range = sheet.getRange(4, 1, lastRow - 3, 8);
     const values = range.getValues();
 
     let shippedCount = 0;
 
     for (let i = 0; i < values.length; i++) {
         const row = values[i];
-        const output = row[3];
-        const imgUrl = row[4];
-        const status = row[5];
-        const type = row[1];
+
+        const type = row[1];  // B: Type
+        const humor = row[2]; // C: Humor (不要だが順序として存在)
+        const output = row[4];// E: Output (Shifted)
+        const imgUrl = row[5];// F: Image (Shifted)
+        const status = row[6];// G: Status (Shifted)
 
         // 条件: Outputがあり、かつ Statusが "Generated" のもの
         if (output && status === 'Generated') {
@@ -351,8 +381,8 @@ function shipDailyToStock() {
                 "Shipped from Daily"
             ]);
 
-            // 元シートのステータス更新
-            sheet.getRange(4 + i, 6).setValue("Shipped");
+            // 元シートのステータス更新 (G列)
+            sheet.getRange(4 + i, 7).setValue("Shipped");
             shippedCount++;
         }
     }
