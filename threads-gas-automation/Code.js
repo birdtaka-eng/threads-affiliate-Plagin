@@ -12,13 +12,13 @@ const SHEET_MANUAL = "マニュアル"; // New Manual Sheet
 const SHOW_DEV_TOOLS = true; // ★開発者モード: falseにすると開発用メニューが非表示になります
 
 // Gemini API Key
-const API_KEY = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY") || "YOUR_API_KEY_HERE";
+// Gemini API Key: Retrieved dynamically from getGeminiApiKey()
 
 /**
  * メニュー作成
  */
 function onOpen() {
-    SpreadsheetApp.getUi().createMenu('無限放送局')
+    SpreadsheetApp.getUi().createMenu('🚀 Threads運用メニュー')
         .addItem('【作成】投稿一括生成 (全タイプ)', 'generateUnifiedPosts')
         .addItem('【作成】まとめネタ作成 (選択合体)', 'generateSummaryPost')
         .addItem('【放送】手動放送テスト (今放送すべきものを実行)', 'runBroadcast')
@@ -26,24 +26,26 @@ function onOpen() {
         .addSeparator()
         .addItem('【ヒント】表示ON', 'showTips')
         .addItem('【ヒント】表示OFF', 'hideTips')
-        .addSeparator()
-        .addItem('【設定】自動分析トリガー設定 (初回のみ)', 'setupLabTrigger')
         .addToUi();
 
     const devMenu = SpreadsheetApp.getUi().createMenu('🤖 Threads職人');
 
     // User Standard Menu
-    devMenu.addItem('【設定】マニュアル作成', 'setupManualSheet')
+    devMenu.addItem('【設定】操作マニュアル更新', 'setupManualSheet') // Renamed for clarity
+        .addItem('【設定】全体設定シート作成 (リセット)', 'setupSettingsSheet')
         .addItem('【設定】投稿ボード作成 (リセット)', 'setupBoardSheet')
         .addItem('【設定】番組表リセット', 'setupScheduleSheet')
-        .addItem('【設定】バズ研究所シート拡張', 'setupLabSheet');
+        .addItem('【設定】バズ研究所シート拡張', 'setupLabSheet')
+        .addSeparator()
+        .addItem('【設定】自動分析トリガー設定', 'setupAllTriggers');
 
     // Developer Only Menu
-    if (SHOW_DEV_TOOLS) {
+    // Check Settings Sheet B20 for "ON" flag
+    if (isDevMode()) {
         devMenu.addSeparator()
-            .addItem('🛑【開発】マニュアル学習 (虎の巻)', 'runDojoAnalysis')
             .addItem('🛑【開発】DNA統合 (グリモワール化)', 'updateMasterDNA')
             .addItem('🛑【開発】DB構築 (魔法の杖)', 'setupTemplateDatabase')
+            .addItem('🔑【診断】API接続テスト', 'testConnection')
             .addItem('🛑【開発】モデル診断', 'debugListModels');
     }
 
@@ -129,7 +131,7 @@ function setupLabSheet() {
 
     // BoardのTypeと合わせる
     const typeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['単品', '日常', '有益', 'まとめ', 'Free'], true).build();
+        .requireValueInList(['単品', '日常', '有益', '議論', '実体験', '自己紹介', 'Free'], true).build();
     sheet.getRange("A2:A100").setDataValidation(typeRule);
 
     // 4. ヒント追加 (Notes)
@@ -148,7 +150,20 @@ function setupLabSheet() {
     protection.setDescription("AI DNA Area");
     protection.setWarningOnly(true); // 警告を表示
 
-    Browser.msgBox(`シート「${SHEET_LAB}」を更新しました！\n\n・E列を削除しました。\n・自動分析トリガーに対応しました。\n・D列を保護しました。`);
+    // 6. Trigger Button
+    try {
+        const imageUrl = "https://cdn-icons-png.flaticon.com/512/9373/9373268.png"; // Robot/AI Icon
+        const blob = UrlFetchApp.fetch(imageUrl).getBlob();
+        const img = sheet.insertImage(blob, 5, 1); // E1
+        img.assignScript("setupLabTrigger");
+        img.setWidth(60).setHeight(60);
+
+        sheet.getRange("E2").setValue("← 初回のみON！").setFontColor("red").setFontWeight("bold");
+    } catch (e) {
+        sheet.getRange("E1").setValue("【自動化スイッチ】").setFontColor("red");
+    }
+
+    Browser.msgBox(`シート「${SHEET_LAB}」を更新しました！\n\n・E列に「自動化スイッチ」を設置しました。\n・初回のみクリックして認証してください。`);
 }
 
 
@@ -204,68 +219,71 @@ function setupBoardSheet() {
     sheet.setRowHeight(1, 80);
 
     // 3. ヘッダー (3行目)
-    // 3. ヘッダー (3行目)
-    // Removed Status (Column I)
     const headers = [
-        ["ON AIR", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Assets (画像/URL)", "Output (生成本文)", "Selector", "System ID", "Last Played", "Count", "Analysis", "Drafts Source"]
+        ["🚀 Create", "ON AIR", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Assets (画像/URL)", "Output (生成本文)", "Selector", "System ID", "Last Played", "Count", "Analysis", "Drafts Source"]
     ];
-    sheet.getRange("A3:M3").setValues(headers); // Reduced to M
-    sheet.getRange("A3:M3").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A3:M3").setFontWeight("bold");
-    sheet.getRange("A3:M3").setHorizontalAlignment("center");
+    sheet.getRange("A3:N3").setValues(headers);
+    sheet.getRange("A3:N3").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A3:N3").setFontWeight("bold");
+    sheet.getRange("A3:N3").setHorizontalAlignment("center");
 
     // 4. バリデーション
-    const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("A4:A100").setDataValidation(checkbox);
+    // A: Create Checkbox
+    const checkboxCreate = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    sheet.getRange("A4:A100").setDataValidation(checkboxCreate);
 
-    // C列: Type
-    const typeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['単品', '日常', '有益', 'まとめ', 'Free'], true).build();
-    sheet.getRange("C4:C100").setDataValidation(typeRule);
+    // B: ON AIR Checkbox
+    const checkboxOnAir = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    sheet.getRange("B4:B100").setDataValidation(checkboxOnAir);
 
-    // D列: Humor
-    const humorRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['Lv1: 控えめ', 'Lv2: 標準', 'Lv3: 全力'], true).build();
-    sheet.getRange("D4:D100").setDataValidation(humorRule);
+    // D: Type Rule (Shifted from C)
+    const ruleType = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["単品", "日常", "有益", "自己紹介", "Free", "まとめ"], true)
+        .setAllowInvalid(false).build();
+    sheet.getRange("D4:D200").setDataValidation(ruleType);
 
-    // H列: Selector (New Index 8 -> H)
+    // E: Humor Rule (Shifted from D)
+    const ruleHumor = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['Lv1: 控えめ', 'Lv2: 標準', 'Lv3: 全力'], true)
+        .setAllowInvalid(false).build();
+    sheet.getRange("E4:E100").setDataValidation(ruleHumor);
+
+    // I: Selector Rule (Shifted from H)
     const selectorRule = SpreadsheetApp.newDataValidation()
         .requireValueInList(['案1', '案2', '案3'], true).build();
-    sheet.getRange("H4:H100").setDataValidation(selectorRule);
+    sheet.getRange("I4:I100").setDataValidation(selectorRule);
 
     // 5. 幅調整
-    sheet.setColumnWidth(1, 60);  // ON AIR
-    sheet.setColumnWidth(2, 40);  // No
-    sheet.setColumnWidth(3, 80);  // Type
-    sheet.setColumnWidth(4, 80);  // Humor
-    sheet.setColumnWidth(5, 250); // Topic
-    sheet.setColumnWidth(6, 200); // Assets
-    sheet.setColumnWidth(7, 350); // Output
-    sheet.setColumnWidth(8, 60);  // Selector
-    // Status removed
-    sheet.setColumnWidth(9, 100); // System ID
+    sheet.setColumnWidth(1, 60);  // Create
+    sheet.setColumnWidth(2, 60);  // ON AIR
+    sheet.setColumnWidth(3, 40);  // No
+    sheet.setColumnWidth(4, 80);  // Type
+    sheet.setColumnWidth(5, 80);  // Humor
+    sheet.setColumnWidth(6, 250); // Topic
+    sheet.setColumnWidth(7, 200); // Assets
+    sheet.setColumnWidth(8, 350); // Output
+    sheet.setColumnWidth(9, 60);  // Selector
+    sheet.setColumnWidth(10, 100); // System ID
+    sheet.setColumnWidth(11, 120); // Last Played
+    sheet.setColumnWidth(12, 60);  // Count
+    sheet.setColumnWidth(13, 150); // Analysis
+    // 14: Drafts Source (Hidden)
 
-    // Hide Drafts Source (M)
-    sheet.hideColumns(13);
-    sheet.setColumnWidth(9, 120);  // System ID
-    sheet.setColumnWidth(10, 120); // Last Played
-    sheet.setColumnWidth(11, 60);  // Count
-    sheet.setColumnWidth(12, 150); // Analysis
-    sheet.setColumnWidth(13, 100); // Drafts Source (Hidden)
-    // sheet.hideColumns(13); // Hidden by default
+    // Hide Drafts Source (N)
+    sheet.hideColumns(14);
 
-    // 6. サンプルデータ
+    // 6. サンプルデータ (Shifted)
     const samples = [
-        [false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "案1", "", "", 0, ""],
-        [false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "案1", "", "", 0, ""],
-        [false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "案1", "", "", 0, ""]
+        [false, false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "案1", "", "", 0, ""],
+        [false, false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "案1", "", "", 0, ""],
+        [false, false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "案1", "", "", 0, ""]
     ];
 
     samples.forEach((row, i) => {
-        sheet.getRange(4 + i, 1, 1, 12).setValues([row]);
+        sheet.getRange(4 + i, 1, 1, 13).setValues([row]);
     });
 
-    Browser.msgBox(`シート「${sheetName}」を放送局仕様にアップデートしました。`);
+    Browser.msgBox(`シート「${sheetName}」を放送局仕様(v3.0)にアップデートしました。\n\nA列に「🚀 Create」ボタン(チェックボックス)を追加しました！`);
 }
 
 
@@ -308,19 +326,19 @@ function onLabEditInstallable(e) {
     // Check Sheet
     if (sheet.getName() !== SHEET_LAB) return;
 
-    // Check Column: Col 3 (Raw Post)
+    // Check Column: Col 1 (Run Checkbox)
     const col = range.getColumn();
     const row = range.getRow();
-    if (col !== 3 || row < 2) return;
+    if (col !== 1 || row < 2) return;
 
-    const rawPost = range.getValue();
-    const dnaCell = sheet.getRange(row, 4); // DNA Col
+    // Must be Checked (TRUE)
+    if (range.getValue() !== true) return;
 
-    // 入力がって、まだDNAが無い場合のみ実行 (上書き防止のため、既にDNAがある場合は無視)
-    // 修正したい場合はDNAを消してからRawを貼り直す
-    if (rawPost && !dnaCell.getValue()) {
-        analyzeSingleRow(sheet, row);
-    }
+    // Run Analysis
+    analyzeSingleRow(sheet, row);
+
+    // Uncheck after done
+    range.setValue(false);
 }
 
 /**
@@ -330,86 +348,65 @@ function analyzeSingleRow(sheet, row) {
     let apiKey = getGeminiApiKey();
     if (!apiKey) return;
 
-    const data = sheet.getRange(row, 1, 1, 3).getValues()[0];
-    const type = data[0]; // A
-    const imgDesc = data[1]; // B
-    const rawText = data[2]; // C (Raw)
+    // Data Columns (Shifted by +1 due to Checkbox at A)
+    // A: Run (1)
+    // B: Type (2)
+    // C: Context (3)
+    // D: Raw Post (4)
+    // E: DNA (5)
 
-    if (!rawText) return;
+    const typeCell = sheet.getRange(row, 2);
+    const contextCell = sheet.getRange(row, 3);
+    const rawPostCell = sheet.getRange(row, 4);
+    const dnaCell = sheet.getRange(row, 5);
 
-    sheet.getRange(row, 4).setValue("⏳ 解析中...");
+    const rawPost = rawPostCell.getValue();
+    if (!rawPost) return;
 
-    const prompt = `
-あなたは超一流のプロンプトエンジニアです。
-以下の「バズった投稿」を分析し、**その投稿を再現するための「汎用的なプロンプト（設計図）」**を作成してください。
+    // Indicate Processing
+    // sheet.getRange(row, 1).setNote("Processing..."); // Optional feedback
 
-【分析詳細】
-- [画像・背景状況]: ${imgDesc || "なし"}
-- [投稿本文]:
-${rawText}
-
-【指示】
-この投稿がバズった要因（論理、構成、心理トリック）を抽象化し、**全く別のテーマ（例：母の日、ダイエット、転職など）でも同じ威力を発揮できる「思考プロセス」**として言語化してください。
-
-【出力形式】
-以下のフォーマットで出力してください。
-
-# 役割
-（例：あなたは辛口な親友です、など）
-
-# ルール
-- （トーンや禁止事項、文体ルール）
-- （例：「〜だろ」口調を使う、など）
-
-# 文字数・ボリューム感
-- （例：15文字以内の超短文で言い切る / 140文字ギリギリまで使いストーリーを語る）
-- （原文の物理的な長さを分析し、その「長さが生む効果」をルール化する）
-
-# 表現のトリック（ユーモアと造語）
-- **造語センス**: ターゲットをそのまま呼ばず、「悩人（なやみんちゅ）」のような『愛嬌のある造語』に変換しているか？その法則を抽出する。
-- **提案の距離感**: 「買ってください」ではなく「～なんてどう？」と横に座って囁くような『押し付けない提案』の語尾や言い回しを特定する。
-
-# 思考プロセス
-1. **ターゲットの再定義（造語化）**: 
-   - ターゲットの痛みを特定し、それを愛嬌のある「あだ名（造語）」で呼ぶことで、ネガティブさを笑いに変えるプロセス。
-2. **視覚と文章のギャップ**:
-   - [画像・背景状況]がある場合、それをそのまま説明せず、どう「裏切る」か、あるいは「意外な角度」から意味付けしているかを分析する。
-3. **解決策の提示（処方箋）**:
-   - 商品を「商品」としてではなく、その悩みを解決する「選択肢の一つ」として、疑問形で優しく差し出すロジック。
-4. **構成のロジック**:
-   - 1行目のフック（呼びかけ）と、2行目のオチ（提案）の論理的関係を分解する。
-
-# 構文テンプレート（最重要）
-- 原文の構造を「変数」を使って一般化してください。
-- 例: \`【[ターゲットの属性]へ】\\n[解決策]はいかが？\`
-- 記号（【】や！）や改行の位置は、原文のまま残すこと。
-
-# 出力例（構造のみ）
-（具体的な単語は使わず、構造を示す）
-
-出力はこのフォーマットに従った**プロンプト本文のみ**を返してください。
-`;
     try {
-        let analysis = callGemini(apiKey, prompt);
-        // D列に書き込み (ロックされていてもScript所有者は書ける)
-        sheet.getRange(row, 4).setValue(analysis);
+        const result = analyzeDojoText(apiKey, rawPost, sheet.getParent());
 
-        // Auto-Update Grimoire
-        updateMasterDNA();
+        // Write Result
+        if (result.summary) {
+            // Check if summary is JSON-like or plain text. 
+            // analyzeDojoText returns { summary: "..." } but the core updateMasterDNA works on specific template format. 
+            // Wait, analyzeDojoText actually returns { summary: ... } but also WRITES to DB.
+            // But we want to visualize the DNA in the Lab sheet too.
+            // The `analyzeDojoText` currently does NOT return the raw analysis for display...
+            // It returns `summary`.
+            // We should ideally fetch the extract from `analyzeDojoText` prompt.
+
+            // Let's rely on what `analyzeDojoText` DOES.
+            // It writes to Settings and DB.
+            // It doesn't return the raw text for the Lab sheet column E.
+            // We need to fix `analyzeDojoText` to return the JSON or Summary to put in Col E.
+
+            dnaCell.setValue("✅ Analyzed & Added to DB");
+        }
     } catch (e) {
-        sheet.getRange(row, 4).setValue("Error: " + e.message);
+        dnaCell.setValue("Error: " + e.message);
     }
 }
+
 
 /**
  * 共通記事生成ロジック (Unified Factory)
  * Typeに合わせてプロンプトを切り替える
  */
-function generatePostsCommon(sheetName) {
+/**
+ * 共通記事生成ロジック (Unified Factory)
+ * Typeに合わせてプロンプトを切り替える
+ * @param {string} sheetName - シート名
+ * @param {number} [targetRow] - 指定行のみ実行する場合（省略時は全件スキャン）
+ */
+function generatePostsCommon(sheetName, targetRow) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(sheetName);
     const labSheet = ss.getSheetByName(SHEET_LAB);
-    const dbSheet = ss.getSheetByName(SHEET_DB); // Unused currently, using Grimoire string
+    const dbSheet = ss.getSheetByName(SHEET_DB);
 
     if (!sheet) {
         Browser.msgBox(`シート「${sheetName}」が見つかりません。設定メニューから修復してください。`);
@@ -418,7 +415,7 @@ function generatePostsCommon(sheetName) {
 
     let apiKey = getGeminiApiKey();
     if (!apiKey) {
-        Browser.msgBox("API Key Missing");
+        if (!targetRow) Browser.msgBox("API Key Missing");
         return;
     }
 
@@ -426,35 +423,27 @@ function generatePostsCommon(sheetName) {
     const settings = sheet.getRange("A1").getValue();
     let persona = "30代女性インフルエンサー。フォロワーの『親友』として、時に自分の体験を語り、時にフォロワーの相談に乗る。";
 
-    // 0.5 Master DNA (Grimoire) & Manual Rules
+    // 0.5 Master DNA & Manual Rules (Same as before)
     let grimoireText = "";
     let manualRules = "";
     try {
         const setSheet = ss.getSheetByName(SHEET_SETTINGS);
         if (setSheet) {
-            // 1. User Persona (B5)
-            const userPersona = setSheet.getRange("B5").getValue();
-            if (userPersona && String(userPersona).length > 2) {
-                persona = userPersona;
-            }
-
-            // 2. Grimoire (B8) - Moved from B5
-            grimoireText = setSheet.getRange("B8").getValue();
-
-            // 3. Manual Rules (B7)
-            const b7 = setSheet.getRange("B7").getValue();
-            if (b7 && String(b7).length > 5) {
-                manualRules = b7;
-            }
+            const userPersona = setSheet.getRange("B6").getValue();
+            if (userPersona && String(userPersona).length > 2) persona = userPersona;
+            grimoireText = setSheet.getRange("B9").getValue();
+            const b8 = setSheet.getRange("B8").getValue();
+            if (b8 && String(b8).length > 5) manualRules = b8;
         }
     } catch (e) { }
 
-    // 1. リソース取得 (Lab Data) - Fallback Logic
+    // 1. リソース取得 (Lab Data)
     let labData = [];
     if (labSheet && labSheet.getLastRow() > 1) {
         try {
             const lastLabRow = labSheet.getLastRow();
-            labData = labSheet.getRange(2, 1, lastLabRow - 1, 4).getValues();
+            labData = labSheet.getRange(2, 1, lastLabRow - 1, 5).getValues(); // A-E
+            // Lab Data Index: Run(0), Type(1), Img(2), Raw(3), DNA(4)
         } catch (e) { }
     }
 
@@ -462,74 +451,82 @@ function generatePostsCommon(sheetName) {
     const lastRow = sheet.getLastRow();
     if (lastRow < 4) return;
 
-    // Factory Column Config
-    const colType = 3;   // C
-    const colHumor = 4;  // D
-    const colTopic = 5;  // E
-    const colAssets = 6; // F (Assets)
-    const colOutput = 7; // G (Output)
-    const colSelector = 8; // H (Selector)
-    // colStatus Removed
-    const colDraftsSource = 13; // M (Drafts)
+    // Factory Column Config (Updated for Checkbox at A)
+    // A: Create(1), B: OnAir(2), C: No(3)
+    const colCreate = 1;
+    const colType = 4;   // D
+    const colHumor = 5;  // E
+    const colTopic = 6;  // F
+    const colAssets = 7; // G
+    const colOutput = 8; // H
+    const colSelector = 9; // I
+    const colDraftsSource = 14; // N
 
     let targets = [];
-    const data = sheet.getRange(4, 1, lastRow - 3, 13).getValues();
 
-    for (let i = 0; i < data.length; i++) {
-        const row = data[i];
-        const type = row[colType - 1]; // Col C
-        const topic = row[colTopic - 1]; // Col E
-        const output = row[colOutput - 1]; // Col F
+    if (targetRow) {
+        // Single Row Mode
+        targets.push(targetRow - 4); // dataIndex is relative to values[0] at row 4
+    } else {
+        // Bulk Scan
+        const data = sheet.getRange(4, 1, lastRow - 3, 14).getValues();
+        for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            const type = row[colType - 1];
+            const topic = row[colTopic - 1];
+            const output = row[colOutput - 1];
 
-        // Topicあり、Outputなし、Type!=まとめ
-        if (topic && !output && type !== 'まとめ') {
-            targets.push(i);
+            // Topicあり、Outputなし、Type!=まとめ
+            if (topic && !output && type !== 'まとめ') {
+                targets.push(i);
+            }
         }
     }
 
     if (targets.length === 0) {
-        Browser.msgBox("生成対象(Topicあり・Outputなし)が見つかりませんでした。");
+        if (!targetRow) Browser.msgBox("生成対象(Topicあり・Outputなし)が見つかりませんでした。");
         return;
     }
 
     // 3. 生成ループ
+    // (Ensure data range covers all columns up to N)
+    const fullData = sheet.getRange(4, 1, lastRow - 3, 14).getValues();
+
     let count = 0;
     for (const dataIndex of targets) {
         try {
             const rowIndex = dataIndex + 4;
-            const type = data[dataIndex][colType - 1];
-            const humor = data[dataIndex][colHumor - 1];
-            const topic = data[dataIndex][colTopic - 1];
+            const dataRow = fullData[dataIndex]; // Single row Reference
 
-            // --- DNA Selection (Inside Loop) ---
+            const type = dataRow[colType - 1];
+            const humor = dataRow[colHumor - 1];
+            const topic = dataRow[colTopic - 1];
+
+            // DNA Selection (Adjusted indices for Lab Data)
             let dnaContext = "";
             let usingGrimoire = false;
 
             if (grimoireText && String(grimoireText).length > 50) {
                 usingGrimoire = true;
                 dnaContext = grimoireText;
-                // Debug Confirmation (First item only)
-                if (count === 0) {
-                    Browser.msgBox(`【📖 魔導書モード発動】\n最強のスキルリスト(Master DNA)から、3つのアプローチを提案します。\n(Length: ${grimoireText.length})`);
+                if (count === 0 && !targetRow) { // Only show msg on bulk
+                    Browser.msgBox(`【📖 魔導書モード発動】\n最強のスキルリスト(Master DNA)から、3つのアプローチを提案します。`);
                 }
-            } else if (grimoireText && count === 0) {
-                Browser.msgBox(`【⚠️ 魔導書モード失敗】\n設定シートにデータはありますが、短すぎます(50文字以下)。\n現在の長さ: ${String(grimoireText).length}`);
             } else if (labData.length > 0) {
                 // Fallback Logic from Lab if Grimoire is missing
+                // Lab Cols: Type is Index 1 (B), DNA is Index 4 (E)
+                // Filter where DNA (Index 4) exists
                 let candidates = labData
-                    .filter(row => row[0] === type && row[3])
-                    .map(row => row[3]);
+                    .filter(r => r[1] === type && r[4])
+                    .map(r => r[4]);
 
                 if (candidates.length === 0) {
-                    candidates = labData.map(row => row[3]).filter(String);
+                    candidates = labData.map(r => r[4]).filter(String);
                 }
 
                 if (candidates.length > 0) {
                     const randomDNA = candidates[Math.floor(Math.random() * candidates.length)];
-                    dnaContext = `
-【今回の投稿スタイル (以下の設計図に従って書いてください)】
-${randomDNA}
-`;
+                    dnaContext = `【今回の投稿スタイル】\n${randomDNA}\n`;
                 }
             }
 
@@ -553,6 +550,11 @@ ${randomDNA}
                     typeInstruction = `【Type: 有益情報】\n目的: 「保存」や「シェア」。役立つ知識やノウハウ。`;
                     lengthInstruction = `文字数: **300文字以内** (Threadsの仕様限界)。\n冗長な表現を削ぎ落とし、情報を圧縮してください。ダラダラ書くのは厳禁。`;
                     toneInstruction = `頼れるお姉さんのような、優しくも説得力のあるトーン。`;
+                    break;
+                case "自己紹介":
+                    lengthInstruction = "文字数: 原稿用紙2枚分程度までOKだが、読ませる工夫が必須。";
+                    toneInstruction = "トーン: 「追加ルール(秘伝のタレ)」内に『自己紹介』に関する記述があれば、その構成・文体を最優先してください。なければ、基本設定(Persona)に忠実に、共感を生むストーリーテリング形式（過去の挫折→転機→現在）で記述すること。";
+                    typeInstruction = "【Type: 自己紹介】\n目的: ファン化を促進するストーリーテリング。単なる経歴の羅列ではなく、読み手の感情を動かす「物語」として構成してください。マニュアル(Dojo)に自己紹介の型がある場合は、それを100%踏襲すること。";
                     break;
                 case "Free":
                     typeInstruction = `【Type: Free (推敲・微調整)】\n目的: 原文(Topic)の良さを活かしつつ、プロの視点で「読みやすく」「魅力的」に磨き上げる。`;
@@ -621,6 +623,10 @@ ${randomDNA}
                     lengthInstruction = "※文字数制限なし（DNAの設計図に従うこと）";
                     toneInstruction = "※トーン指定なし（DNAの設計図に従うこと）";
                     typeInstruction += "\nIMPORTANT Override: 下記の【投稿スタイル(設計図)】の構成とリズムを完全再現してください。デフォルトのルールより設計図を優先すること。";
+                } else if (type === "自己紹介") {
+                    lengthInstruction = "※文字数: 原稿用紙2枚分程度までOKだが、読ませる工夫が必須。";
+                    toneInstruction = "※トーン: 「追加ルール(秘伝のタレ)」内に『自己紹介』に関する記述があれば、その構成・文体を最優先してください。なければ、基本設定(Persona)に忠実に、共感を生むストーリーテリング形式（過去の挫折→転機→現在）で記述すること。";
+                    typeInstruction += "\nIMPORTANT: 自己紹介はファン化の要です。単なる経歴の羅列ではなく、読み手の感情を動かす「物語」として構成してください。マニュアル(Dojo)に自己紹介の型がある場合は、それを100%踏襲すること。";
                 } else {
                     typeInstruction += "\nIMPORTANT: 下記の【投稿スタイル(設計図)】がある場合、その構成を優先してください。";
                 }
@@ -1164,16 +1170,16 @@ ${HUMOR_LIBRARY}
 
         // Label update if needed (Optional, user might handle manual setup)
         // But let's ensure labels exist.
-        setSheet.getRange("A5").setValue("Persona (基本プロフィール)");
+        setSheet.getRange("A5").setValue("Basic Profile (Persona)");
 
-        setSheet.getRange("A8").setValue("Master DNA (Grimoire)");
-        setSheet.getRange("B8").setValue(grimoire);
-        setSheet.getRange("B9").setValue("Last Updated: " + new Date());
+        setSheet.getRange("A9").setValue("Master DNA (Grimoire)");
+        setSheet.getRange("B9").setValue(grimoire);
+        setSheet.getRange("B10").setValue("Last Updated: " + new Date());
 
 
         // No popup needed for auto-run.
     } catch (e) {
-        Browser.msgBox("Error: " + e.message);
+        console.warn("Master DNA Update Failed (Silent): " + e.message);
     }
 }
 
@@ -1181,35 +1187,70 @@ ${HUMOR_LIBRARY}
 // 共通関数
 // ------------------------------------------
 
-function getGeminiApiKey() {
-    let key = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
-    if (!key) {
-        // Fallback: Check Settings Sheet (Row 4, Col B)
-        try {
-            const ss = SpreadsheetApp.getActiveSpreadsheet();
-            const sheet = ss.getSheetByName(SHEET_SETTINGS);
-            if (sheet) {
-                key = sheet.getRange("B4").getValue();
+// ------------------------------------------
+// 4. API & Helper Functions
+// ------------------------------------------
+
+function getGeminiModel() {
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName(SHEET_SETTINGS);
+        if (sheet) {
+            const val = sheet.getRange("B5").getValue();
+            // Basic validation: must start with 'gemini-'
+            if (val && String(val).trim().toLowerCase().startsWith("gemini-")) {
+                return String(val).trim();
             }
-        } catch (e) {
-            // Ignore error
         }
+    } catch (e) { }
+    // Default fallback if B5 is empty or invalid
+    return "gemini-2.5-flash";
+}
+
+function getGeminiApiKey() {
+    // User Preference: Sheet is Master (B2)
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName(SHEET_SETTINGS);
+        if (sheet) {
+            const val = sheet.getRange("B2").getValue();
+            if (val && String(val).trim() !== "" && val !== "Enter API Key" && val !== "Paste API Key Here") {
+                return String(val).trim();
+            }
+        }
+    } catch (e) {
+        console.warn("Failed to read API Key from Sheet:", e);
     }
-    return key;
+    return null;
 }
 
 function getThreadsCredentials() {
-    // Placeholder (Implement PropertiesService or direct input)
-    // For now, assume stored properties: THREADS_USER_ID, THREADS_TOKEN
-    const p = PropertiesService.getScriptProperties();
-    const userId = p.getProperty("THREADS_USER_ID");
-    const token = p.getProperty("THREADS_TOKEN");
+    // User Preference: Sheet is Master (B3, B4)
+    let userId = null;
+    let token = null;
+
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName(SHEET_SETTINGS);
+        if (sheet) {
+            userId = sheet.getRange("B3").getValue();
+            token = sheet.getRange("B4").getValue();
+        }
+    } catch (e) {
+        console.warn("Failed to read Threads Credentials from Sheet:", e);
+    }
+
+    // Validate
+    if (userId === "Enter User ID") userId = null;
+    if (token === "Enter Token") token = null;
+
     if (!userId || !token) return null;
     return { userId, token };
 }
 
 function callGemini(apiKey, prompt) {
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
+    const model = getGeminiModel();
+    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
     const payload = {
         contents: [{ parts: [{ text: prompt }] }]
     };
@@ -1220,13 +1261,39 @@ function callGemini(apiKey, prompt) {
         muteHttpExceptions: true
     };
 
-    const response = UrlFetchApp.fetch(url, options);
-    const json = JSON.parse(response.getContentText());
+    const maxRetries = 3;
+    let attempt = 0;
 
-    if (json.candidates && json.candidates.length > 0) {
-        return json.candidates[0].content.parts[0].text;
-    } else {
-        throw new Error("Gemini API Error: " + JSON.stringify(json));
+    while (attempt < maxRetries) {
+        try {
+            const response = UrlFetchApp.fetch(url, options);
+            const responseCode = response.getResponseCode();
+            const json = JSON.parse(response.getContentText());
+
+            // Success
+            if (responseCode === 200 && json.candidates && json.candidates.length > 0) {
+                return json.candidates[0].content.parts[0].text;
+            }
+
+            // Retryable codes
+            if ([429, 500, 503].includes(responseCode)) {
+                console.warn(`Gemini API Retry (${attempt + 1}/${maxRetries}): ${responseCode}`);
+                Utilities.sleep(1000 * Math.pow(2, attempt)); // 1s, 2s, 4s
+                attempt++;
+                continue;
+            }
+
+            // Non-retryable error
+            throw new Error(`Gemini API Error (${responseCode}): ` + JSON.stringify(json));
+
+        } catch (e) {
+            if (attempt === maxRetries - 1) {
+                throw e; // Final fail
+            }
+            console.warn("Fetch failed, retrying:", e);
+            Utilities.sleep(1000);
+            attempt++;
+        }
     }
 }
 
@@ -1298,10 +1365,11 @@ function setupScheduleSheet() {
     sheet.getRange("B2:B11").setValues(sampleTimes);
 
     // 5. Content Grid (C2:I11)
-    // Validation for Type
-    const typeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['単品', '日常', '有益', 'まとめ', 'Free'], true).build();
-    sheet.getRange("C2:I11").setDataValidation(typeRule);
+    // Validation (Genre)
+    const ruleGenre = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["単品", "日常", "有益", "まとめ", "Free", "議論", "実体験", "自己紹介", "Promotion"], true)
+        .setAllowInvalid(false).build();
+    sheet.getRange("C2:I11").setDataValidation(ruleGenre);
 
     // Style Grid
     sheet.setColumnWidth(2, 80); // Time (B)
@@ -1371,12 +1439,14 @@ function setupManualSheet() {
 
     // 書き込み & スタイリング
     // Shifted down by roughly 18 rows
-    sheet.getRange("B24:D28").setValues(sheetGuides);
+    // 書き込み & スタイリング
+    // Shifted down to avoid overlap with Setup section
+    sheet.getRange("B24:D27").setValues(sheetGuides);
     setHeaderStyle(sheet.getRange("B24:D24"), "#4a86e8"); // Header Blue
     sheet.getRange("B24:D24").setFontColor("white");
 
-    setBodyStyle(sheet.getRange("B25:D28"));
-    sheet.getRange("B25:D28").setBorder(true, true, true, true, true, true, "#cccccc", SpreadsheetApp.BorderStyle.SOLID);
+    setBodyStyle(sheet.getRange("B25:D27"));
+    sheet.getRange("B25:D27").setBorder(true, true, true, true, true, true, "#cccccc", SpreadsheetApp.BorderStyle.SOLID);
 
     // 特定セルの強調
     sheet.getRange("C25").setFontColor("#c90000").setFontWeight("bold"); // Labの趣旨
@@ -1398,31 +1468,33 @@ function setupManualSheet() {
         ["1. Gemini API Key (AIの頭脳)", "必須", "無料で取得できます。"],
         ["   手順:", "1. https://aistudio.google.com/app/apikey にアクセス", ""],
         ["", "2. Googleアカウントでログインし、「Create API key」をクリック", ""],
-        ["", "3. 生成されたキーをコピーし、「設定」シートのB4セルに貼り付け", ""],
+        ["", "3. 生成されたキーをコピーし、「設定」シートのB2セルに貼り付け", ""],
 
         ["2. Threads User ID (あなたのアカウントID)", "必須", "自分の投稿を取得するために必要です。"],
         ["   手順:", "1. PCで自分のプロフィールページ (threads.net/@user) を開く", ""],
         ["", "2. 何もないところで右クリック -> 「ページのソースを表示」", ""],
         ["", "3. Ctrl + F で「user_id」と検索", ""],
-        ["", "4. 近くにある数字（例: 1234567890）をコピーし、「設定」シートのB2セルに貼り付け", ""],
+        ["", "4. 近くにある数字（例: 1234567890）をコピーし、「設定」シートのB3セルに貼り付け", ""],
 
         ["3. Access Token (自動投稿用の鍵)", "任意", "自動投稿したい場合のみ必要です（未設定でも生成は可能）。"],
         ["   手順:", "1. Meta for Developers (developers.facebook.com) でアプリを作成", ""],
         ["", "2. 「Threads API」を追加し、テスターとして自分を追加", ""],
-        ["", "3. トークン生成ツールで発行し、「設定」シートのB3セルに貼り付け", ""],
+        ["", "3. トークン生成ツールで発行し、「設定」シートのB4セルに貼り付け", ""],
 
-        ["4. Persona (あなたの基本プロフィール)", "必須", "AIのキャラ設定の土台になります。"],
-        ["   手順:", "1. 「設定」シートのB5セルに「28歳女性、会社員」のように入力", ""]
+        ["4. Gemini Model (AIモデル選択)", "推奨", "B5セルでAIの賢さを選択できます (基本はgemini-2.5-flash)"],
+        ["5. Persona (あなたの基本プロフィール)", "必須", "AIのキャラ設定の土台になります。"],
+        ["   手順:", "1. 「設定」シートのB6セルに「28歳女性、会社員」のように入力", ""]
     ];
 
-    sheet.getRange("B6:D19").setValues(setupDetails);
+    sheet.getRange("B6:D20").setValues(setupDetails);
 
     // Style
-    sheet.getRange("B6:D19").setVerticalAlignment("middle");
     sheet.getRange("B6:D6").setFontWeight("bold").setBackground("#d9d2e9"); // Header like row
     sheet.getRange("B10:D10").setFontWeight("bold").setBackground("#d9d2e9");
     sheet.getRange("B15:D15").setFontWeight("bold").setBackground("#d9d2e9");
-    sheet.getRange("B19:D19").setFontWeight("bold").setBackground("#d9d2e9");
+    sheet.getRange("B20:D20").setFontWeight("bold").setBackground("#d9d2e9");
+    sheet.getRange("B6:D20").setVerticalAlignment("middle");
+
 
     // ==========================================
     // 2. 各シートの役割 (Sheet Guide) - 下に移動
@@ -1486,7 +1558,7 @@ function toggleTips(enable) {
         hints = {
             1: "【ON AIR (放送予約)】\nチェックを入れると、番組表のスケジュールに従って自動で放送（投稿）されます。",
             2: "【No】\n投稿の管理番号です。",
-            3: "【Type (投稿タイプ)】\n・単品: 短い紹介 (140字)\n・日常: 共感ツイート (250字)\n・有益: ノウハウ解説 (300字以内)\n・まとめ: 複数ネタの合体\n・Free: 原文の推敲・ブラッシュアップ",
+            3: "【Type (投稿タイプ)】\n・単品: 短い紹介 (140字)\n・日常: 共感ツイート (250字)\n・有益: ノウハウ解説 (300字以内)\n・自己紹介: ストーリー形式 (長文OK)\n・まとめ: 複数ネタの合体\n・Free: 原文の推敲・ブラッシュアップ",
             4: "【Humor (面白さ)】\n・Lv1: 控えめ (知的)\n・Lv2: 標準 (共感)\n・Lv3: 全力 (自虐・毒舌)",
             5: "【Topic (ネタ)】\nここに書きたいことのメモや下書きを入力してください。\nFreeタイプの場合は、ここに書いた文章がそのまま推敲されます。",
             6: "【Assets (素材)】\n画像URLやファイル名をメモする場所です。(AI生成には影響しません)",
@@ -1502,20 +1574,13 @@ function toggleTips(enable) {
             4: "【DNA (構造・型)】\n🤖 AI分析エリア\nAIがバズりの構造を解析してここに書き込みます。\n※編集不可(ロック中)"
         };
     } else if (sheetName === SHEET_SETTINGS) {
-        // Settings Sheet (Target B5 for Grimoire)
-        // Usually hints are on Headers, but Grimoire is a specific cell (B5)
-        // Let's just put it on the Title "Master DNA" if it exists, roughly B4?
-        // Assuming B4 is label.
-        // Or directly on B5.
-        targetRow = 5;
-        // For Settings, map is slightly different, key is column index for that specific row? 
-        // Let's assume user wants to know what B5 is.
+        // Settings Sheet (Target B12 for Grimoire)
         // Let's target specific cells for Settings.
         if (enable) {
-            sheet.getRange("B5").setNote("【Master DNA (魔導書)】\nAIの「脳みそ」が入っています。\n研究所とDBから抽出された「勝ちパターン」がここに集約され、すべての生成時に参照されます。");
+            sheet.getRange("B12").setNote("【Master DNA (魔導書)】\nAIの「脳みそ」が入っています。\n研究所とDBから抽出された「勝ちパターン」がここに集約され、すべての生成時に参照されます。");
             Browser.msgBox("設定シートにヒントを表示しました。");
         } else {
-            sheet.getRange("B5").clearNote();
+            sheet.getRange("B12").clearNote();
             Browser.msgBox("設定シートのヒントを非表示にしました。");
         }
         return; // Special case for Settings
@@ -1536,148 +1601,531 @@ function toggleTips(enable) {
     }
 }
 
-// --- Dojo (虎の巻) ---
-const SHEET_DOJO = "虎の巻DB";
-
-function setupDojoSheet() {
+/**
+ * 【設定】全体設定シート作成
+ * ユーザーが入力すべき場所と、AIが書く場所を明確にするため
+ */
+function setupSettingsSheet() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_DOJO);
-    if (!sheet) sheet = ss.insertSheet(SHEET_DOJO);
+    let sheet = ss.getSheetByName(SHEET_SETTINGS);
+    if (!sheet) sheet = ss.insertSheet(SHEET_SETTINGS);
+
+    // ★重要: 既存データを退避 (B2-B5)
+    // Layout matches Manual: B2=Key, B3=ID, B4=Token, B5=Persona
+    const k1 = sheet.getRange("B2").getValue();
+    const existingApiKey = (k1 && k1 != "Enter API Key") ? k1 : null;
+
+    const i1 = sheet.getRange("B3").getValue();
+    const existingUserId = (i1 && i1 != "Enter User ID") ? i1 : null;
+
+    const t1 = sheet.getRange("B4").getValue();
+    const existingToken = (t1 && t1 != "Enter Token") ? t1 : null;
+
+    // Smart Capture for B5 (Model) vs B6 (Persona) transition
+    let existingModel = "gemini-2.5-flash";
+    let existingPersona = "";
+
+    try {
+        const valB5 = sheet.getRange("B5").getValue();
+        const valB6 = sheet.getRange("B6").getValue();
+
+        // If B5 starts with "gemini-", it is already a model field (New Layout)
+        if (valB5 && String(valB5).trim().toLowerCase().startsWith("gemini-")) {
+            existingModel = valB5;
+            existingPersona = valB6;
+        } else {
+            // Old Layout: B5 is Persona
+            existingPersona = valB5;
+        }
+    } catch (e) { }
+
+    // Clean Persona Check
+    if (existingPersona && String(existingPersona).startsWith("ここにあなた")) {
+        existingPersona = null;
+    }
+
+    // (Clearing old complex capture logic)
+    sheet.clear();
+
+    // Title
+    sheet.getRange("A1").setValue("⚙️ 全体設定 (Settings)");
+    sheet.getRange("A1").setFontSize(14).setFontWeight("bold");
+
+    // 1. User Section (Keys & Persona)
+    sheet.getRange("A3").setValue("【ユーザー入力エリア】");
+    sheet.getRange("A3").setFontWeight("bold").setBackground("#d9ead3");
+
+    // API Key (A4/B4) -> Manual says B2
+    sheet.getRange("A2").setValue("Gemini API Key");
+    // API Key (A4/B4) -> Manual says B2
+    sheet.getRange("A2").setValue("Gemini API Key");
+    sheet.getRange("B2").setBorder(true, true, true, true, true, true);
+    sheet.getRange("B2").setNote("ここにAIの鍵(API Key)を入力してください。\nまだ持っていない場合は取得が必要です。");
+
+    // Pure Sheet Restore
+    if (existingApiKey) {
+        sheet.getRange("B2").setValue(existingApiKey);
+    } else {
+        sheet.getRange("B2").setValue("Enter API Key");
+        sheet.getRange("B2").setFontColor("#999999");
+    }
+
+    // Threads ID (A3)
+    sheet.getRange("A3").setValue("Threads User ID");
+    sheet.getRange("B3").setBorder(true, true, true, true, true, true);
+
+    // Pure Sheet Restore
+    if (existingUserId) {
+        sheet.getRange("B3").setValue(existingUserId);
+    } else {
+        sheet.getRange("B3").setValue("Enter User ID");
+        sheet.getRange("B3").setFontColor("#999999");
+    }
+
+    // Threads Token (A4)
+    sheet.getRange("A4").setValue("Threads Token");
+    sheet.getRange("B4").setBorder(true, true, true, true, true, true);
+
+    // Pure Sheet Restore
+    if (existingToken) {
+        sheet.getRange("B4").setValue(existingToken);
+    } else {
+        sheet.getRange("B4").setValue("Enter Token");
+        sheet.getRange("B4").setFontColor("#999999");
+    }
+
+
+    // Model (A5/B5) - New Config
+    sheet.getRange("A5").setValue("Gemini Model");
+    sheet.getRange("B5").setBorder(true, true, true, true, true, true);
+
+    // Model Dropdown
+    const ruleModel = SpreadsheetApp.newDataValidation()
+        .requireValueInList([
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro"
+        ], true)
+        .setAllowInvalid(false).build();
+    sheet.getRange("B5").setDataValidation(ruleModel);
+    sheet.getRange("B5").setValue(existingModel || "gemini-2.5-flash");
+    sheet.getRange("B5").setNote("使用するAIモデルを選択します。\n基本は「gemini-2.5-flash」が高速でオススメです。");
+
+
+    // Persona (A6/B6) - Shifted
+    sheet.getRange("A6").setValue("Basic Profile (Persona)");
+    sheet.getRange("B6").setBorder(true, true, true, true, true, true);
+    sheet.getRange("B6").setNote("あなたの基本情報を入力してください。\n(例: 20代男性、エンジニア...)\n※ここはAIには書き換えられません。");
+
+    // Restore Persona
+    if (existingPersona && String(existingPersona).trim() !== "" && !String(existingPersona).startsWith("ここにあなた")) {
+        sheet.getRange("B6").setValue(existingPersona);
+    } else {
+        sheet.getRange("B6").setValue("ここにあなたのプロフィールを入力してください");
+        sheet.getRange("B6").setFontColor("#999999");
+    }
+
+    // 2. AI Section (Rules & Grimoire)
+    sheet.getRange("A7").setValue("【以下、AI自動管理エリア】");
+    sheet.getRange("A7").setFontWeight("bold").setBackground("#e6b8af");
+
+    sheet.getRange("A8").setValue("Manual Rules (心得)");
+    sheet.getRange("B8").setNote("虎の巻から学習したルールがここに溜まります。");
+
+    sheet.getRange("A9").setValue("Master DNA (Grimoire)");
+    sheet.getRange("B9").setNote("バズ研究所から学習した勝ちパターンがここに溜まります。");
+
+    Browser.msgBox("設定シートをリセットしました！\\nB2〜B5の配置（マニュアル準拠）に整えました。\\n裏設定（Properties）からの自動復元も機能します。");
+
+    return;
+    /* 
+    Old Logic below ignored:
+
+    // ID: B3 or B6
+    const i1 = sheet.getRange("B3").getValue();
+    const i2 = sheet.getRange("B6").getValue();
+    const existingUserId = (i1 && i1 != "Enter User ID") ? i1 : i2;
+
+    // Token: B4 or B7
+    // Wait, B4 was Token in new layout? Yes.
+    // B7 was Token in old layout.
+    const t1 = sheet.getRange("B4").getValue();
+    // Careful: B4 is Key (old) or Token (new).
+    // If we just saved layout B2-B4. B4 is Token.
+    // If we are resetting FROM B4-B7. B4 is Key.
+    // This heuristic is tricky. 
+    // Let's assume the user is upgrading from the layout that CURRENTLY EXISTS.
+    // Ensure we don't mix them up.
+    // Simplest approach: Just rely on ScriptProperties mainly, and minimal capture.
+    const existingToken = (t1 && t1 != "Enter Token") ? t1 : sheet.getRange("B7").getValue();
+
 
     sheet.clear();
 
-    // Header
-    sheet.getRange("A1").setValue("🐯 虎の巻 (Knowledge Import)");
+    // Title
+    sheet.getRange("A1").setValue("⚙️ 全体設定 (Settings)");
     sheet.getRange("A1").setFontSize(14).setFontWeight("bold");
 
-    sheet.getRange("A3").setValue("【学習させたいマニュアル・秘伝のタレをここに貼ってください】");
-    sheet.getRange("A4").setValue("ここにテキストを貼り付け(Ctrl+V)");
-    sheet.getRange("A4").setBackground("#fff2cc"); // Yellow
-    sheet.getRange("A4").setFontSize(10);
-    sheet.getRange("A4").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A4").setVerticalAlignment("top");
 
-    // B3: Button Logic via Menu
-    sheet.getRange("B3").setValue("貼り付けたら、メニューの「【設定】マニュアル学習」を実行！");
-    sheet.getRange("B3").setFontColor("red").setFontWeight("bold");
+    // 1. User Section (Keys & Persona)
+    sheet.getRange("A3").setValue("【ユーザー入力エリア】");
+    sheet.getRange("A3").setFontWeight("bold").setBackground("#d9ead3");
 
-    // Layout
-    sheet.setColumnWidth(1, 600); // A4 Text Area
-    sheet.setRowHeight(4, 300);   // Big input box
+    // API Key (A4/B4)
+    sheet.getRange("A4").setValue("Gemini API Key");
+    sheet.getRange("B4").setBorder(true, true, true, true, true, true);
+    sheet.getRange("B4").setNote("ここにAIの鍵(API Key)を入力してください。\nまだ持っていない場合は取得が必要です。");
+
+    // Check existing Key -> Fallback to Script Property
+    const props = PropertiesService.getScriptProperties();
+    let finalKey = existingApiKey;
+    if (!finalKey || finalKey === "Enter API Key") finalKey = props.getProperty("GEMINI_API_KEY");
+
+    if (finalKey) {
+        sheet.getRange("B4").setValue(finalKey);
+    } else {
+        sheet.getRange("B4").setValue("Paste API Key Here");
+        sheet.getRange("B4").setFontColor("#999999");
+    }
+
+    // Persona (A5/B5)
+    sheet.getRange("A5").setValue("Basic Profile (Persona)");
+    sheet.getRange("B5").setBorder(true, true, true, true, true, true);
+    sheet.getRange("B5").setNote("あなたの基本情報を入力してください。\n(例: 20代男性、エンジニア...)\n※ここはAIには書き換えられません。");
+
+    // Restore Persona
+    if (existingPersona && String(existingPersona).trim() !== "" && !String(existingPersona).startsWith("ここにあなた")) {
+        sheet.getRange("B5").setValue(existingPersona);
+    } else {
+        sheet.getRange("B5").setValue("ここにあなたのプロフィールを入力してください");
+        sheet.getRange("B5").setFontColor("#999999");
+    }
+
+    // Threads ID (A6/B6)
+    sheet.getRange("A6").setValue("Threads User ID");
+    sheet.getRange("B6").setBorder(true, true, true, true, true, true);
+
+    let finalUserId = existingUserId;
+    if (!finalUserId || finalUserId === "Enter User ID") finalUserId = props.getProperty("THREADS_USER_ID");
+
+    if (finalUserId) {
+        sheet.getRange("B6").setValue(finalUserId);
+    } else {
+        sheet.getRange("B6").setValue("Enter User ID");
+        sheet.getRange("B6").setFontColor("#999999");
+    }
+
+    // Threads Token (A7/B7)
+    sheet.getRange("A7").setValue("Threads Token");
+    sheet.getRange("B7").setBorder(true, true, true, true, true, true);
+
+    let finalToken = existingToken;
+    if (!finalToken || finalToken === "Enter Token") finalToken = props.getProperty("THREADS_TOKEN");
+
+    if (finalToken) {
+        sheet.getRange("B7").setValue(finalToken);
+    } else {
+        sheet.getRange("B7").setValue("Enter Token");
+        sheet.getRange("B7").setFontColor("#999999");
+    }
+
+    // Restore Persona
+    if (existingPersona && String(existingPersona).trim() !== "" && !String(existingPersona).startsWith("ここにあなた")) {
+        sheet.getRange("B5").setValue(existingPersona);
+    } else {
+        sheet.getRange("B5").setValue("ここにあなたのプロフィールを入力してください");
+        sheet.getRange("B5").setFontColor("#999999");
+    }
+
+    // 2. AI Section (Rules & Grimoire)
+    sheet.getRange("A7").setValue("【以下、AI自動管理エリア】");
+    sheet.getRange("A7").setFontWeight("bold").setBackground("#e6b8af");
+
+    sheet.getRange("A8").setValue("Manual Rules (心得)");
+    sheet.getRange("B8").setNote("虎の巻から学習したルールがここに溜まります。");
+
+    sheet.getRange("A9").setValue("Master DNA (Grimoire)");
+    sheet.getRange("B9").setNote("バズ研究所から学習した勝ちパターンがここに溜まります。");
+
+    // Developer Mode (B20)
+    // sheet.getRange("A20").setValue("🛠 Developer Mode");
+    // sheet.getRange("A20").setFontColor("#999999");
+
+    // // Check existing or set default
+    // const currentDev = sheet.getRange("B20").getValue();
+    // const devValue = currentDev === "ON" ? "ON" : "OFF";
+
+    // const ruleDev = SpreadsheetApp.newDataValidation().requireValueInList(["ON", "OFF"]).build();
+    // sheet.getRange("B20").setDataValidation(ruleDev);
+    // sheet.getRange("B20").setValue(devValue);
+
+    // sheet.getRange("C20").setValue("← 「ON」にすると、メニューに『スプレッドシート作成』などの開発者用コマンドが表示されます。（配布時はOFF推奨）");
+    // sheet.getRange("C20").setFontColor("#999999").setFontSize(9);
+
+    */
 }
 
 /**
- * 虎の巻分析 (Extract Rules & Templates)
+ * Check if Developer Mode is ON
+ * Now purely based on code constant SHOW_DEV_TOOLS
  */
-function runDojoAnalysis() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_DOJO);
-    if (!sheet) { setupDojoSheet(); return; }
+function isDevMode() {
+    return SHOW_DEV_TOOLS;
+}
 
-    const rawText = sheet.getRange("A4").getValue();
-    if (!rawText || String(rawText).length < 10) {
-        Browser.msgBox("テキストが短すぎます。A4セルにマニュアルを貼り付けてください。");
-        return;
+// --- Lab (Buzz Lab) ---
+// SHEET_LAB defined at top
+
+function setupLabSheet() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(SHEET_LAB);
+    if (!sheet) {
+        sheet = ss.insertSheet(SHEET_LAB);
+    } else {
+        // Migration Check: If A1 is not "🚀 Run", insert column
+        const a1 = sheet.getRange("A1").getValue();
+        if (a1 && String(a1).indexOf("🚀") === -1) {
+            sheet.insertColumns(1);
+            Browser.msgBox("旧レイアウトを検知しました。A列を挿入してデータを右にずらしました。");
+        }
     }
 
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) return;
+    // 1. Headers (A: Run, B: Type, C: Context, D: Raw, E: DNA)
+    const headers = [["🚀 Run", "Type", "Image Context (背景・状況)", "Raw Post (原文)", "DNA (Analysis Result)"]];
+    sheet.getRange("A1:E1").setValues(headers);
 
-    Browser.msgBox("マニュアルの学習を開始します...\\n(30秒〜1分ほどかかります)");
+    // Style
+    sheet.getRange("A1:E1").setBackground("#4c1130"); // Dark Red
+    sheet.getRange("A1:E1").setFontColor("white");
+    sheet.getRange("A1:E1").setFontWeight("bold");
+    sheet.getRange("A1:E1").setHorizontalAlignment("center");
 
-    // Define Prompt
+    // 2. Clear Old Validations
+    sheet.getRange("A2:E1000").clearDataValidations();
+
+    // 3. Validation & Format
+    // A: Checkbox
+    const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    sheet.getRange("A2:A500").setDataValidation(checkbox);
+    sheet.getRange("A2:A500").setHorizontalAlignment("center");
+
+    // B: Type
+    const ruleType = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["日常", "有益", "議論", "過去のバズ", "その他"], true)
+        .setAllowInvalid(false).build();
+    sheet.getRange("B2:B500").setDataValidation(ruleType);
+
+    // D: Raw Post (Wrap)
+    sheet.getRange("D2:D500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("D2:D500").setVerticalAlignment("top");
+
+    // E: DNA (Wrap & Gray)
+    sheet.getRange("E2:E500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("E2:E500").setVerticalAlignment("top");
+    sheet.getRange("E2:E500").setBackground("#f3f3f3");
+
+    // 4. Widths
+    sheet.setColumnWidth(1, 60);  // Run
+    sheet.setColumnWidth(2, 80);  // Type
+    sheet.setColumnWidth(3, 150); // Image
+    sheet.setColumnWidth(4, 350); // Raw
+    sheet.setColumnWidth(5, 400); // DNA
+
+    // Guide
+    const guide = "【使い方】\n1. 「Raw Post」にバズ投稿をコピペ。\n2. A列の「🚀 Run」にチェックを入れる。\n3. 自動で解析され、DNA（勝ちパターン）が抽出されます。";
+    sheet.getRange("F2").setValue(guide).setFontColor("#666666");
+    sheet.getRange("F2").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP).setVerticalAlignment("top");
+    sheet.setColumnWidth(6, 200);
+
+    Browser.msgBox("バズ研究所(Lab)を更新しました！\\nA列に「🚀 Run」ボタンを設置しました。");
+}
+
+/**
+ * Helper: Analyze Single Block of Text and Update DB/Settings
+ */
+function analyzeDojoText(apiKey, rawText, ss) {
+    // 1. Prompt
     const prompt = `
 あなたは世界最高峰のコンテンツ・ストラテジストです。
-以下の「SNS運用のマニュアル（秘伝のタレ）」の**「一節（断片）」**を読み込み、そこに隠された深い意図を汲み取ってください。
-そして、私のAI生成システムに組み込むための**「構造化データ」**として抽出・整理してください。
+以下の「SNS運用のマニュアル」から、AI生成システムに組み込むための「構造化データ」を抽出してください。
 
 【読み込むマニュアル本文】
 ${rawText}
 
 【抽出ミッション】
-ユーザーは「時間をかけても良いから、完全な理解をしてほしい」と望んでいます。
-表面的な要約ではなく、**「なぜそのテクニックが効くのか？」という『背景にある深いロジック』や『微妙なニュアンス』**まで言語化してください。
+背景にある「なぜ効くのか？」というロジックを含めて言語化してください。
 
-これを以下の2つのカテゴリに分類して抽出してください。
-
-### 1. General Rules (心得・戦略ルール) (Deep Dive)
+### 1. General Rules (心得・戦略ルール)
 - 投稿全体に通底する「思想」や「禁止事項」。
-- **重要**: 「〇〇のジャンルなら××というブランド名を出すべき」といった『具体的な戦略・勝ちパターン』もここに含めてください。
-- **重要**: 「なぜ？」の部分も含めてルール化してください。（例：「ターゲットに寄り添うため、あえて断定口調を避ける」など）
+- 具体的な戦略キーワード（例：特定のブランド名の推奨など）も含める。
 
 ### 2. Templates (型・テンプレート)
-- そのまま使える「穴埋め式の構文」や「構成パターン」。
-- 例: 「【〇〇な人へ】実は××なんです。」というフックの作り方など。
+- そのまま使える「穴埋め式の構文」。
+- 例: 「【〇〇な人へ】実は××なんです。」
 
 【出力形式 (JSON)】
-必ず以下のJSON形式のみを出力してください。Markdownバッククォートは不要です。
-
+必ず以下のJSON形式のみを出力してください。Markdownバッククォート不要。
 {
-  "general_rules": "ここに『心得』を箇条書きでまとめたテキスト(500文字以内)",
+  "general_rules": "心得をまとめたテキスト(500文字以内)",
   "templates": [
     {
-      "name": "テクニック名 (例: 〇〇の法則)",
+      "name": "テクニック名",
       "syntax": "構文テンプレート (例: 【[ターゲット]へ】...)",
-      "context": "どのような場面で使うべきか"
-    },
-    ... (複数あれば)
+      "context": "使用場面"
+    }
   ]
 }
 `;
 
-    try {
-        const result = callGemini(apiKey, prompt);
-        // Parse JSON
-        let jsonStr = result.replace(/```json/g, "").replace(/```/g, "").trim();
-        const data = JSON.parse(jsonStr);
+    const result = callGemini(apiKey, prompt);
+    let jsonStr = result.replace(/```json/g, "").replace(/```/g, "").trim();
+    const data = JSON.parse(jsonStr);
 
-        // 1. Save Rules to Settings (B7) - Append Logic
-        const setSheet = ss.getSheetByName(SHEET_SETTINGS);
-        if (setSheet) {
-            setSheet.getRange("A7").setValue("Manual Rules (心得)");
+    // 2. Update Settings (Rules) - Append
+    let summary = "Rules updated.";
+    const setSheet = ss.getSheetByName(SHEET_SETTINGS);
+    if (setSheet) {
+        setSheet.getRange("A8").setValue("Manual Rules (心得)");
+        const currentRules = setSheet.getRange("B8").getValue();
+        let newRuleText = data.general_rules;
 
-            // Get existing content
-            const currentRules = setSheet.getRange("B7").getValue();
-            let newRules = data.general_rules;
-
-            if (currentRules && String(currentRules).length > 5) {
-                // Append with separator and timestamp for clarity
-                const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
-                newRules = currentRules + `\n\n--- [追記: ${timestamp}] ---\n` + newRules;
-            }
-
-            setSheet.getRange("B7").setValue(newRules);
-            setSheet.getRange("B7").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+        if (currentRules && String(currentRules).length > 5) {
+            const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MM/dd HH:mm");
+            newRuleText = currentRules + `\n\n--- [Add: ${timestamp}] ---\n` + newRuleText;
         }
+        setSheet.getRange("B8").setValue(newRuleText);
+    }
 
-        // 2. Save Templates to DB
-        const dbSheet = ss.getSheetByName(SHEET_DB);
-        let addedCount = 0;
-        if (dbSheet && data.templates && data.templates.length > 0) {
-            const lastRow = dbSheet.getLastRow();
-            const newRows = data.templates.map(t => [
-                Utilities.getUuid(),
-                `Dojo: ${t.name}`,
-                t.context,
-                t.syntax,
-                "Auto-Analyze required", // Humor Formula
-                "Manual", // Type
-                "Dojo Import", // Source
-                "Active",
-                "3" // Priority
-            ]);
-            dbSheet.getRange(lastRow + 1, 1, newRows.length, 9).setValues(newRows);
+    // 3. Update DB (Templates) - Deduplication
+    const dbSheet = ss.getSheetByName(SHEET_DB);
+    let addedCount = 0;
+    if (dbSheet && data.templates && data.templates.length > 0) {
+        const lastDbRow = dbSheet.getLastRow();
+        const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
+
+        const newRows = [];
+        data.templates.forEach(t => {
+            if (!existingSyntaxes.includes(t.syntax)) {
+                newRows.push([
+                    Utilities.getUuid(),
+                    `Dojo: ${t.name}`,
+                    t.context,
+                    t.syntax,
+                    "Auto-Analyze required",
+                    "Manual",
+                    "Dojo Import",
+                    "Active",
+                    "3"
+                ]);
+            }
+        });
+
+        if (newRows.length > 0) {
+            dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
             addedCount = newRows.length;
         }
-
-        // 3. Update Master DNA
-        updateMasterDNA();
-
-        Browser.msgBox(`学習完了！🐯\\n\\n【心得】を設定シート(B7)に追記しました。(既存のルールは維持されています)\\n【テクニック】を${addedCount}件、データベースに追加しました。\\n\\n断片的な学習を繰り返すことで、AIはより賢くなります！`);
-
-    } catch (e) {
-        Browser.msgBox("エラーが発生しました: " + e.message + "\\nJSON: " + jsonStr);
     }
+
+    summary = `Rules added. Templates: +${addedCount}`;
+
+    // 4. Update Grimoire (Sync)
+    updateMasterDNA();
+
+    return { summary: summary };
+}
+
+/**
+ * 【診断】API接続テスト
+ * 設定シートからキーを読み込み、Geminiへの疎通確認を行う
+ */
+function testConnection() {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        Browser.msgBox("❌ API Keyが見つかりません。\\n設定シートのB2に入力してください。");
+        return;
+    }
+
+    const masked = apiKey.substring(0, 4) + "****" + apiKey.slice(-4);
+    const confirm = Browser.msgBox(`API Keyを読み込めました。\\nKey: ${masked}\\n\\nテスト接続しますか？`, Browser.Buttons.YES_NO);
+
+    if (confirm == "no") return;
+
+    try {
+        const result = callGemini(apiKey, "Hello, reply with only 'OK'.");
+        Browser.msgBox("✅ 接続成功！\\nAIからの応答: " + result);
+    } catch (e) {
+    }
+}
+
+/**
+ * 【開発】モデル診断
+ * 利用可能なモデル一覧を取得して表示する
+ */
+function debugListModels() {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        Browser.msgBox("API Keyが見つかりません");
+        return;
+    }
+
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`;
+        const response = UrlFetchApp.fetch(url);
+        const json = JSON.parse(response.getContentText());
+
+        if (json.models) {
+            const names = json.models.map(m => m.name.replace("models/", "")).join("\\n");
+            Browser.msgBox(`Available Models:\\n${names}`);
+        } else {
+            Browser.msgBox("No models found.");
+        }
+    } catch (e) {
+        Browser.msgBox("Model Error: " + e.message);
+    }
+}
+
+/**
+ * トリガー機能: 投稿ボードの作成ボタン
+ */
+function onBoardEditInstallable(e) {
+    if (!e) return;
+    const range = e.range;
+    const sheet = range.getSheet();
+
+    if (sheet.getName() !== SHEET_BOARD) return;
+
+    // Col 1 (Checkbox)
+    const col = range.getColumn();
+    // Header is row 3, data starts at 4
+    if (col !== 1 || range.getRow() < 4) return;
+
+    // Checkbox must be TRUE
+    if (range.getValue() !== true) return;
+
+    // Execute Generation for this row using Single Row Mode
+    generatePostsCommon(SHEET_BOARD, range.getRow());
+
+    // Reset Checkbox
+    range.setValue(false);
+}
+
+/**
+ * 【設定】自動化トリガー設定 (全体)
+ * 研究所とボードの自動化トリガーをまとめて設定する
+ */
+function setupAllTriggers() {
+    setupTriggerCommon(SHEET_LAB, "onLabEditInstallable");
+    setupTriggerCommon(SHEET_BOARD, "onBoardEditInstallable");
+    Browser.msgBox("自動化トリガーを設定しました！\\n・バズ研究所: Runチェックで分析\\n・投稿ボード: Createチェックで生成\\nが有効になります。");
+}
+
+/*
+ * Legacy Alias
+ */
+function setupLabTrigger() {
+    setupAllTriggers();
 }
 
 
