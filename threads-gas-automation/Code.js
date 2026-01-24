@@ -1612,9 +1612,12 @@ function setupManualSheet() {
         ["", "4. 近くにある数字（例: 1234567890）をコピーし、「設定」シートのB3セルに貼り付け", ""],
 
         ["3. Access Token (自動投稿用の鍵)", "任意", "自動投稿したい場合のみ必要です（未設定でも生成は可能）。"],
-        ["   手順:", "1. Meta for Developers (developers.facebook.com) でアプリを作成", ""],
-        ["", "2. 「Threads API」を追加し、テスターとして自分を追加", ""],
-        ["", "3. トークン生成ツールで発行し、「設定」シートのB4セルに貼り付け", ""],
+        ["   手順A:", "1. Meta for Developers (developers.facebook.com) にアクセス", "Instagramアカウントでログイン"],
+        ["", "2. 「マイアプリ」>「アプリを作成」をクリック", "タイプ:「ユースケース」>「その他」>「Threads API」を選択"],
+        ["   手順B:", "3. 左メニュー「Threads」>「User Token Generator」を探す", "※まだ押さない"],
+        ["", "4. 下部の「Threads Testers」で「テスターを追加」をクリック", "自分のInstagram IDを入力して追加"],
+        ["   手順C:", "5. Instagramの「設定」>「アプリとウェブサイト」>「テスターの招待」を開く", "招待を「承認」する (ここが最難関！忘れないで)"],
+        ["   手順D:", "6. Developersに戻り、「User Token Generator」で「Generate Token」をクリック", "表示された長い文字列をコピーし、設定シートB4へ"],
 
         ["4. Gemini Model (AIモデル選択)", "推奨", "B5セルでAIの賢さを選択できます (基本はgemini-2.5-flash)"],
         ["5. Persona (あなたの基本プロフィール)", "必須", "AIのキャラ設定の土台になります。"],
