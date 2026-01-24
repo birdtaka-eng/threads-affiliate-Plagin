@@ -1696,7 +1696,7 @@ function toggleTips(enable) {
 
     // シートごとのヒント定義
     if (sheetName === SHEET_BOARD) {
-        targetRow = 3;
+        targetRow = 1; // Header is at Row 1 (v3+)
         hints = {
             1: "【ON AIR (放送予約)】\nチェックを入れると、番組表のスケジュールに従って自動で放送（投稿）されます。",
             2: "【No】\n投稿の管理番号です。",
