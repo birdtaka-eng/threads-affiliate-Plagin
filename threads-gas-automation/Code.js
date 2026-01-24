@@ -660,23 +660,24 @@ function generatePostsCommon(sheetName, targetRow) {
                     "---案3: [スキル名]---\\n(選択したスキルの構文をトレースして執筆)\\n" +
                     "※普通の文章は禁止です。必ず「魔導書のスキル」の構造をトレースしてください。\\n" +
                     "※選定理由や解説は一切出力しないでください。投稿内容のみを出力すること。";
-            } else if (dnaContext) {
-                if (type === "単品") {
-                    lengthInstruction = "※文字数制限なし（DNAの設計図に従うこと）";
-                    toneInstruction = "※トーン指定なし（DNAの設計図に従うこと）";
-                    typeInstruction += "\nIMPORTANT Override: 下記の【投稿スタイル(設計図)】の構成とリズムを完全再現してください。デフォルトのルールより設計図を優先すること。";
-                } else if (type === "自己紹介") {
-                    lengthInstruction = "※文字数: 原稿用紙2枚分程度までOKだが、読ませる工夫が必須。";
-                    toneInstruction = "※トーン: 「追加ルール(秘伝のタレ)」内に『自己紹介』に関する記述があれば、その構成・文体を最優先してください。なければ、基本設定(Persona)に忠実に、共感を生むストーリーテリング形式（過去の挫折→転機→現在）で記述すること。";
-                    typeInstruction += "\nIMPORTANT: 自己紹介はファン化の要です。単なる経歴の羅列ではなく、読み手の感情を動かす「物語」として構成してください。マニュアル(Dojo)に自己紹介の型がある場合は、それを100%踏襲すること。";
-                } else {
-                    typeInstruction += "\nIMPORTANT: 下記の【投稿スタイル(設計図)】がある場合、その構成を優先してください。";
+            } else {
+                if (dnaContext) {
+                    if (type === "単品") {
+                        lengthInstruction = "※文字数制限なし（DNAの設計図に従うこと）";
+                        toneInstruction = "※トーン指定なし（DNAの設計図に従うこと）";
+                        typeInstruction += "\nIMPORTANT Override: 下記の【投稿スタイル(設計図)】の構成とリズムを完全再現してください。デフォルトのルールより設計図を優先すること。";
+                    } else if (type === "自己紹介") {
+                        lengthInstruction = "※文字数: 原稿用紙2枚分程度までOKだが、読ませる工夫が必須。";
+                        toneInstruction = "※トーン: 「追加ルール(秘伝のタレ)」内に『自己紹介』に関する記述があれば、その構成・文体を最優先してください。なければ、基本設定(Persona)に忠実に、共感を生むストーリーテリング形式（過去の挫折→転機→現在）で記述すること。";
+                        typeInstruction += "\nIMPORTANT: 自己紹介はファン化の要です。単なる経歴の羅列ではなく、読み手の感情を動かす「物語」として構成してください。マニュアル(Dojo)に自己紹介の型がある場合は、それを100%踏襲すること。";
+                    } else {
+                        typeInstruction += "\nIMPORTANT: 下記の【投稿スタイル(設計図)】がある場合、その構成を優先してください。";
+                    }
                 }
-            }
 
 
-            // Add Standard Format Instruction to Force Separate Outputs
-            formatInstruction = `
+                // Add Standard Format Instruction to Force Separate Outputs
+                formatInstruction = `
 【出力形式 (区切り文字を使用)】
 以下の「///」を区切り文字として、3つの案を出力してください。
 ///案1
@@ -686,7 +687,7 @@ function generatePostsCommon(sheetName, targetRow) {
 ///案3
 (案3の本文)
 `;
-        }
+            }
 
             const prompt = `
 あなたはThreadsの人気インフルエンサーです。
@@ -739,42 +740,42 @@ ${manualRules ? "参考にしているマニュアルからの重要心得:\n" +
 - 出力は**投稿本文のみ** (解説不要)。
 `;
 
-        let generatedText = callGemini(apiKey, prompt);
-        generatedText = generatedText.replace(/#\S+/g, '').trim();
+            let generatedText = callGemini(apiKey, prompt);
+            generatedText = generatedText.replace(/#\S+/g, '').trim();
 
-        // Backup raw text
-        sheet.getRange(rowIndex, colDraftsSource).setValue(generatedText);
+            // Backup raw text
+            sheet.getRange(rowIndex, colDraftsSource).setValue(generatedText);
 
-        // Parsing
-        let drafts = ["", "", ""];
-        const parts = generatedText.split("///");
-        let dIndex = 0;
-        for (let p of parts) {
-            let clean = p.replace(/^案\d+\s*/, "").trim();
-            if (clean) {
-                if (dIndex < 3) drafts[dIndex] = clean;
-                dIndex++;
+            // Parsing
+            let drafts = ["", "", ""];
+            const parts = generatedText.split("///");
+            let dIndex = 0;
+            for (let p of parts) {
+                let clean = p.replace(/^案\d+\s*/, "").trim();
+                if (clean) {
+                    if (dIndex < 3) drafts[dIndex] = clean;
+                    dIndex++;
+                }
             }
+
+            // Write to Columns O, P, Q
+            sheet.getRange(rowIndex, colDraft1).setValue(drafts[0]);
+            sheet.getRange(rowIndex, colDraft2).setValue(drafts[1]);
+            sheet.getRange(rowIndex, colDraft3).setValue(drafts[2]);
+
+            // Set Selector to "案1" and Copy Draft 1 to Output
+            sheet.getRange(rowIndex, colSelector).setValue("案1");
+            sheet.getRange(rowIndex, colOutput).setValue(drafts[0]);
+
+            count++;
+            Utilities.sleep(1000);
+
+        } catch (e) {
+            const rowIndex = dataIndex + 4;
+            sheet.getRange(rowIndex, colOutput).setValue("エラー: " + e.message);
         }
-
-        // Write to Columns O, P, Q
-        sheet.getRange(rowIndex, colDraft1).setValue(drafts[0]);
-        sheet.getRange(rowIndex, colDraft2).setValue(drafts[1]);
-        sheet.getRange(rowIndex, colDraft3).setValue(drafts[2]);
-
-        // Set Selector to "案1" and Copy Draft 1 to Output
-        sheet.getRange(rowIndex, colSelector).setValue("案1");
-        sheet.getRange(rowIndex, colOutput).setValue(drafts[0]);
-
-        count++;
-        Utilities.sleep(1000);
-
-    } catch (e) {
-        const rowIndex = dataIndex + 4;
-        sheet.getRange(rowIndex, colOutput).setValue("エラー: " + e.message);
     }
-}
-Browser.msgBox(`${count}件の投稿を作成しました！`);
+    Browser.msgBox(`${count}件の投稿を作成しました！`);
 }
 
 
