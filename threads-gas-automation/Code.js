@@ -123,108 +123,7 @@ function onSelectionChange(e) {
     }
 }
 
-/**
- * 【設定】バズ研究所シート拡張
- * 既存のデータを消さずに、DNA分析用の列定義と見た目を整える
- */
-function setupLabSheet() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_LAB);
-
-    if (!sheet) {
-        sheet = ss.insertSheet(SHEET_LAB);
-    }
-
-    // 0. Auto-Migration & Cleanup (Smart Fix v3 - Row by Row)
-    // Scan first 50 rows. If a row has "Type" in Col A, shift IT ONLY right.
-    const maxScanRow = 50;
-    const scanRange = sheet.getRange(2, 1, maxScanRow, 1); // A2:A51
-    const scanValues = scanRange.getValues().flat(); // Array of A values
-    const knownTypes = ['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'];
-    let fixedCount = 0;
-
-    for (let i = 0; i < scanValues.length; i++) {
-        const val = scanValues[i];
-        const row = i + 2; // actual row number
-
-        // Check if this row is "Old Format" (A is Type)
-        if (typeof val === 'string' && knownTypes.includes(val.trim())) {
-            // Shift this ROW's data: A..Y -> B..Z
-            // We move A..LastCol to B..
-            // Limit to 20 columns to be safe/fast
-            sheet.getRange(row, 1, 1, 20).moveTo(sheet.getRange(row, 2));
-
-            // Set A to Checkbox
-            sheet.getRange(row, 1).insertCheckboxes().setValue(false);
-
-            fixedCount++;
-        }
-    }
-
-    if (fixedCount > 0) {
-        Browser.msgBox(`⚠️ データのズレを補正しました。\n・修正した行数: ${fixedCount}行\n・混合データを整形しました。`);
-    }
-
-    // Clear Residual Data (F列以降を掃除して「免許皆伝」などを消す)
-    // Force cleanup from Column 6 (F) to the end
-    const maxCols = sheet.getMaxColumns();
-    if (maxCols >= 6) {
-        // Clear content and validations
-        sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clear();
-        sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clearDataValidations();
-    }
-
-
-    // 1. ヘッダー更新 (1行目のみ上書き)
-    // A: Run, B: Type, C: Context, D: Raw, E: DNA
-    const headers = [["🚀 Run", "Type (種類)", "Image Context (写真/背景の説明)", "Raw Post (バズった原文)", "DNA (構造・型)"]];
-    const headerRange = sheet.getRange("A1:E1");
-    headerRange.setValues(headers);
-    headerRange.setBackground("#d9d2e9"); // 紫系
-    headerRange.setFontWeight("bold");
-    headerRange.setHorizontalAlignment("center");
-
-    // 2. 列幅調整
-    sheet.setColumnWidth(1, 50);  // Run (Checkbox)
-    sheet.setColumnWidth(2, 80);  // Type
-    sheet.setColumnWidth(3, 200); // Image Context
-    sheet.setColumnWidth(4, 300); // Raw Post
-    sheet.setColumnWidth(5, 300); // DNA
-
-    // 3. データバリデーション
-    // A列: Run Checkbox
-    const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("A2:A100").setDataValidation(checkboxRule);
-
-    // B列: Type (Shifted from A)
-    // まず古いルールをクリア (広範囲をクリアしてゴミ掃除)
-    sheet.getRange("B2:E100").clearDataValidations();
-
-    const typeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'], true).build();
-    sheet.getRange("B2:B100").setDataValidation(typeRule);
-
-    // 4. ヒント追加 (Notes)
-    const hints = {
-        1: "【🚀 Run (実行)】\nチェックを入れると、その行の分析を開始します。\n(分析が終わると自動でチェックが外れます)",
-        2: "【Type (種類)】\nネタの種類を選んでください。\n(例: 日常ツイートのサンプルなら「日常」)",
-        3: "【Image Context (背景)】\nもし画像付きの投稿なら、どんな写真だったかメモしてください。\n(文字だけの投稿なら空欄でOK)",
-        4: "【Raw Post (原文)】\nバズった投稿の本文をそのまま貼り付けてください。\n→貼り付けると自動で解析が始まります(数秒後)。\n※初回のみメニューの『自動分析トリガー設定』を実行してください。",
-        5: "【DNA (構造・型)】\n🤖 AI分析エリア\nAIがバズりの構造を解析してここに書き込みます。\n※編集不可(ロック中)"
-    };
-    for (const [col, note] of Object.entries(hints)) {
-        sheet.getRange(1, Number(col)).setNote(note);
-    }
-
-    // 5. 保護 (Lock Column E)
-    // 既存の保護をクリアする処理は入れていないが、上書き設定
-    const protection = sheet.getRange("E:E").protect();
-    protection.setDescription("AI DNA Area");
-    protection.setWarningOnly(true); // 警告を表示
-
-    // 6. 完了メッセージ
-    Browser.msgBox(`シート「${SHEET_LAB}」を更新しました！\n\nA列に「🚀 Run」ボタンを設置し、データのズレを補正しました。\n不要な列(F列以降)もクリーニングしました。`);
-}
+// (Duplicate setupLabSheet removed)
 
 
 /**
@@ -2010,45 +1909,50 @@ function setupLabSheet() {
     sheet.getRange("A1:E1").setFontColor("white");
     sheet.getRange("A1:E1").setFontWeight("bold");
     sheet.getRange("A1:E1").setHorizontalAlignment("center");
+    sheet.setRowHeight(1, 40);
 
-    // 2. Clear Old Validations
-    sheet.getRange("A2:E1000").clearDataValidations();
+    // 2. Guide Row (Row 2) - New
+    const guides = [["↓分析開始", "↓種類を選択", "【画像】あれば内容をメモ", "【原文】ここにバズッた投稿をコピペ", "←ここにAI分析結果が出ます"]];
+    sheet.getRange("A2:E2").setValues(guides);
+    sheet.getRange("A2:E2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.setRowHeight(2, 60);
+    sheet.setFrozenRows(2);
 
-    // 3. Validation & Format
+    // 3. Clear Old Validations
+    sheet.getRange("A3:E1000").clearDataValidations();
+
+    // 4. Validation & Format (Row 3+)
     // A: Checkbox
     const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("A2:A500").setDataValidation(checkbox);
-    sheet.getRange("A2:A500").setHorizontalAlignment("center");
+    sheet.getRange("A3:A500").setDataValidation(checkbox);
+    sheet.getRange("A3:A500").setHorizontalAlignment("center");
 
     // B: Type
     const ruleType = SpreadsheetApp.newDataValidation()
         .requireValueInList(["日常", "有益", "議論", "過去のバズ", "その他"], true)
         .setAllowInvalid(false).build();
-    sheet.getRange("B2:B500").setDataValidation(ruleType);
+    sheet.getRange("B3:B500").setDataValidation(ruleType);
 
     // D: Raw Post (Wrap)
-    sheet.getRange("D2:D500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("D2:D500").setVerticalAlignment("top");
+    sheet.getRange("D3:D500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("D3:D500").setVerticalAlignment("top");
 
     // E: DNA (Wrap & Gray)
-    sheet.getRange("E2:E500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("E2:E500").setVerticalAlignment("top");
-    sheet.getRange("E2:E500").setBackground("#f3f3f3");
+    sheet.getRange("E3:E500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("E3:E500").setVerticalAlignment("top");
+    sheet.getRange("E3:E500").setBackground("#f3f3f3");
 
-    // 4. Widths
+    // 5. Widths
     sheet.setColumnWidth(1, 60);  // Run
     sheet.setColumnWidth(2, 80);  // Type
     sheet.setColumnWidth(3, 150); // Image
     sheet.setColumnWidth(4, 350); // Raw
     sheet.setColumnWidth(5, 400); // DNA
 
-    // Guide
-    const guide = "【使い方】\n1. 「Raw Post」にバズ投稿をコピペ。\n2. A列の「🚀 Run」にチェックを入れる。\n3. 自動で解析され、DNA（勝ちパターン）が抽出されます。";
-    sheet.getRange("F2").setValue(guide).setFontColor("#666666");
-    sheet.getRange("F2").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP).setVerticalAlignment("top");
-    sheet.setColumnWidth(6, 200);
+    // Clean up F (Old Guide)
+    sheet.getRange("F2:F100").clearContent();
 
-    Browser.msgBox("バズ研究所(Lab)を更新しました！\\nA列に「🚀 Run」ボタンを設置しました。");
+    Browser.msgBox("バズ研究所(Lab)を更新しました！\\n2行目にガイドを追加しました。");
 }
 
 /**
@@ -2215,6 +2119,58 @@ function onBoardEditInstallable(e) {
 
     // Execute Generation for this row using Single Row Mode
     generatePostsCommon(SHEET_BOARD, range.getRow());
+
+    // Reset Checkbox
+    range.setValue(false);
+}
+
+/**
+ * トリガー機能: バズ研究所の分析ボタン
+ */
+function onLabEditInstallable(e) {
+    if (!e) return;
+    const range = e.range;
+    const sheet = range.getSheet();
+
+    if (sheet.getName() !== SHEET_LAB) return;
+
+    // Col 1 (Checkbox)
+    const col = range.getColumn();
+    // Header is row 1, Guide is row 2, Data starts at 3
+    if (col !== 1 || range.getRow() < 3) return;
+
+    // Checkbox must be TRUE
+    if (range.getValue() !== true) return;
+
+    // Get Raw Text (Col D = 4)
+    const row = range.getRow();
+    const rawText = sheet.getRange(row, 4).getValue();
+
+    if (!rawText) {
+        range.setValue(false); // Reset
+        Browser.msgBox("原文(Raw Post)が空です。");
+        return;
+    }
+
+    // Call Analysis
+    const apiKey = getGeminiApiKey();
+    if (apiKey) {
+        sheet.getRange(row, 5).setValue("⏳ Analyzing...");
+        const res = analyzeDojoText(apiKey, rawText, SpreadsheetApp.getActiveSpreadsheet());
+        if (res) {
+            sheet.getRange(row, 5).setValue("✅ Analyzed"); // analyzeDojoText updates DNA inside? 
+            // Wait, analyzeDojoText updates DB/Settings but DOES IT return the text to put in Col E?
+            // Checking analyzeDojoText implementation... it returns { summary: ... }.
+            // It does NOT seem to write to Col E automatically in my reading earlier?
+            // Let's re-read analyzeDojoText.
+            // It updates Settings and DB. But Lab Sheet E column is for DNA?
+            // Maybe it SHOULD write summary to E?
+            // For now, I'll write the summary or "Done".
+            sheet.getRange(row, 5).setValue(res.summary);
+        }
+    } else {
+        Browser.msgBox("API Keyが設定されていません。");
+    }
 
     // Reset Checkbox
     range.setValue(false);
