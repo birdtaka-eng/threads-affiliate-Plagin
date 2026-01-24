@@ -116,7 +116,7 @@ function setupLabSheet() {
     const maxScanRow = 50;
     const scanRange = sheet.getRange(2, 1, maxScanRow, 1); // A2:A51
     const scanValues = scanRange.getValues().flat(); // Array of A values
-    const knownTypes = ['単品', '日常', '有益', '議論', '実体験', '自己紹介', 'Free'];
+    const knownTypes = ['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'];
     let fixedCount = 0;
 
     for (let i = 0; i < scanValues.length; i++) {
@@ -177,7 +177,7 @@ function setupLabSheet() {
     sheet.getRange("B2:E100").clearDataValidations();
 
     const typeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['単品', '日常', '有益', '議論', '実体験', '自己紹介', 'Free'], true).build();
+        .requireValueInList(['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'], true).build();
     sheet.getRange("B2:B100").setDataValidation(typeRule);
 
     // 4. ヒント追加 (Notes)
