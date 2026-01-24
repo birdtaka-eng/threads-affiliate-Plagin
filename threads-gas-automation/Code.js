@@ -26,6 +26,8 @@ function onOpen() {
         .addSeparator()
         .addItem('【ヒント】表示ON', 'showTips')
         .addItem('【ヒント】表示OFF', 'hideTips')
+        .addSeparator()
+        .addItem('👁️ ドラフトビューワーを開く', 'showSidebar')
         .addToUi();
 
     const devMenu = SpreadsheetApp.getUi().createMenu('🤖 Threads職人');
