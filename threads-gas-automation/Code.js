@@ -1990,79 +1990,84 @@ function isDevMode() {
 function setupLabSheet() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_LAB);
+
     if (!sheet) {
         sheet = ss.insertSheet(SHEET_LAB);
     } else {
         // Migration Check: If A1 is not "🚀 Run", insert column
         const a1 = sheet.getRange("A1").getValue();
         if (a1 && String(a1).indexOf("🚀") === -1) {
-            // 1. Headers
-            const headers = [["🚀 Run", "Type", "Image Context (背景・状況)", "Raw Post (原文)", "DNA (Analysis Result)"]];
-            sheet.getRange("A1:E1").setValues(headers);
-
-            // Style
-            sheet.getRange("A1:E1").setBackground("#4c1130"); // Dark Red
-            sheet.getRange("A1:E1").setFontColor("white");
-            sheet.getRange("A1:E1").setFontWeight("bold");
-            sheet.getRange("A1:E1").setHorizontalAlignment("center");
-            sheet.setRowHeight(1, 40);
-
-            // 2. Guide Row (Check & Insert)
-            const checkA2 = sheet.getRange("A2").getValue();
-            // If A2 doesn't start with down arrow, assumption: it's data or empty. Insert row.
-            if (!String(checkA2).includes("↓")) {
-                sheet.insertRows(2);
-            }
-
-            const guides = [["↓分析開始", "↓種類を選択", "【画像】あれば内容をメモ", "【原文】ここにバズッた投稿をコピペ", "←ここにAI分析結果が出ます"]];
-            sheet.getRange("A2:E2").setValues(guides);
-            sheet.getRange("A2:E2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-            sheet.setRowHeight(2, 60);
-            sheet.setFrozenRows(2);
-
-            // 3. Clear Old Validations (Safe Clear)
-            sheet.getRange("A2:E1000").clearDataValidations();
-
-            // 4. Validation & Format (Start from Row 3)
-            // A: Checkbox
-            const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-            sheet.getRange("A3:A500").setDataValidation(checkbox);
-            sheet.getRange("A3:A500").setHorizontalAlignment("center");
-
-            // B: Type
-            const ruleType = SpreadsheetApp.newDataValidation()
-                .requireValueInList(["日常", "有益", "議論", "過去のバズ", "その他"], true)
-                .setAllowInvalid(false).build();
-            sheet.getRange("B3:B500").setDataValidation(ruleType);
-
-            // D: Raw Post
-            sheet.getRange("D3:D500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-            sheet.getRange("D3:D500").setVerticalAlignment("top");
-
-            // E: DNA
-            sheet.getRange("E3:E500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-            sheet.getRange("E3:E500").setVerticalAlignment("top");
-            sheet.getRange("E3:E500").setBackground("#f3f3f3");
-
-            // 5. Widths
-            sheet.setColumnWidth(1, 60);  // Run
-            sheet.setColumnWidth(2, 80);  // Type
-            sheet.setColumnWidth(3, 150); // Image
-            sheet.setColumnWidth(4, 350); // Raw
-            sheet.setColumnWidth(5, 400); // DNA
-
-            // Clean up F (Old Guide)
-            sheet.getRange("F2:F100").clearContent();
-
-            Browser.msgBox("バズ研究所(Lab)を更新しました！\\n2行目にガイドを追加しました。");
+            sheet.insertColumns(1);
+            Browser.msgBox("旧レイアウトを検知しました。A列を挿入してデータを右にずらしました。");
         }
+    }
 
-        /**
-         * Helper: Analyze Single Block of Text and Update DB/Settings
-         */
-        function analyzeDojoText(apiKey, rawText, ss) {
-            // 1. Prompt
-            const prompt = `
+    // 1. Headers
+    const headers = [["🚀 Run", "Type", "Image Context (背景・状況)", "Raw Post (原文)", "DNA (Analysis Result)"]];
+    sheet.getRange("A1:E1").setValues(headers);
+
+    // Style
+    sheet.getRange("A1:E1").setBackground("#4c1130"); // Dark Red
+    sheet.getRange("A1:E1").setFontColor("white");
+    sheet.getRange("A1:E1").setFontWeight("bold");
+    sheet.getRange("A1:E1").setHorizontalAlignment("center");
+    sheet.setRowHeight(1, 40);
+
+    // 2. Guide Row (Check & Insert)
+    const checkA2 = sheet.getRange("A2").getValue();
+    // If A2 doesn't start with down arrow, assumption: it's data or empty. Insert row.
+    if (!String(checkA2).includes("↓")) {
+        sheet.insertRows(2);
+    }
+
+    const guides = [["↓分析開始", "↓種類を選択", "【画像】あれば内容をメモ", "【原文】ここにバズッた投稿をコピペ", "←ここにAI分析結果が出ます"]];
+    sheet.getRange("A2:E2").setValues(guides);
+    sheet.getRange("A2:E2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.setRowHeight(2, 60);
+    sheet.setFrozenRows(2);
+
+    // 3. Clear Old Validations (Safe Clear)
+    sheet.getRange("A2:E1000").clearDataValidations();
+
+    // 4. Validation & Format (Start from Row 3)
+    // A: Checkbox
+    const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    sheet.getRange("A3:A500").setDataValidation(checkbox);
+    sheet.getRange("A3:A500").setHorizontalAlignment("center");
+
+    // B: Type
+    const ruleType = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["日常", "有益", "議論", "過去のバズ", "その他"], true)
+        .setAllowInvalid(false).build();
+    sheet.getRange("B3:B500").setDataValidation(ruleType);
+
+    // D: Raw Post
+    sheet.getRange("D3:D500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("D3:D500").setVerticalAlignment("top");
+
+    // E: DNA
+    sheet.getRange("E3:E500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("E3:E500").setVerticalAlignment("top");
+    sheet.getRange("E3:E500").setBackground("#f3f3f3");
+
+    // 5. Widths
+    sheet.setColumnWidth(1, 60);  // Run
+    sheet.setColumnWidth(2, 80);  // Type
+    sheet.setColumnWidth(3, 150); // Image
+    sheet.setColumnWidth(4, 350); // Raw
+    sheet.setColumnWidth(5, 400); // DNA
+
+    // Clean up F (Old Guide)
+    sheet.getRange("F2:F100").clearContent();
+
+    Browser.msgBox("バズ研究所(Lab)を更新しました！\\n2行目にガイドを追加しました。");
+}
+/**
+ * Helper: Analyze Single Block of Text and Update DB/Settings
+ */
+function analyzeDojoText(apiKey, rawText, ss) {
+    // 1. Prompt
+    const prompt = `
 あなたは世界最高峰のコンテンツ・ストラテジストです。
 以下の「SNS運用のマニュアル」から、AI生成システムに組み込むための「構造化データ」を抽出してください。
 
@@ -2094,154 +2099,154 @@ ${rawText}
 }
 `;
 
-            const result = callGemini(apiKey, prompt);
-            let jsonStr = result.replace(/```json/g, "").replace(/```/g, "").trim();
-            const data = JSON.parse(jsonStr);
+    const result = callGemini(apiKey, prompt);
+    let jsonStr = result.replace(/```json/g, "").replace(/```/g, "").trim();
+    const data = JSON.parse(jsonStr);
 
-            // 2. Update Settings (Rules) - Append
-            let summary = "Rules updated.";
-            const setSheet = ss.getSheetByName(SHEET_SETTINGS);
-            if (setSheet) {
-                setSheet.getRange("A8").setValue("Manual Rules (心得)");
-                const currentRules = setSheet.getRange("B8").getValue();
-                let newRuleText = data.general_rules;
+    // 2. Update Settings (Rules) - Append
+    let summary = "Rules updated.";
+    const setSheet = ss.getSheetByName(SHEET_SETTINGS);
+    if (setSheet) {
+        setSheet.getRange("A8").setValue("Manual Rules (心得)");
+        const currentRules = setSheet.getRange("B8").getValue();
+        let newRuleText = data.general_rules;
 
-                if (currentRules && String(currentRules).length > 5) {
-                    const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MM/dd HH:mm");
-                    newRuleText = currentRules + `\n\n--- [Add: ${timestamp}] ---\n` + newRuleText;
-                }
-                setSheet.getRange("B8").setValue(newRuleText);
-            }
-
-            // 3. Update DB (Templates) - Deduplication
-            const dbSheet = ss.getSheetByName(SHEET_DB);
-            let addedCount = 0;
-            if (dbSheet && data.templates && data.templates.length > 0) {
-                const lastDbRow = dbSheet.getLastRow();
-                const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
-
-                const newRows = [];
-                data.templates.forEach(t => {
-                    if (!existingSyntaxes.includes(t.syntax)) {
-                        newRows.push([
-                            Utilities.getUuid(),
-                            `Dojo: ${t.name}`,
-                            t.context,
-                            t.syntax,
-                            "Auto-Analyze required",
-                            "Manual",
-                            "Dojo Import",
-                            "Active",
-                            "3"
-                        ]);
-                    }
-                });
-
-                if (newRows.length > 0) {
-                    dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
-                    addedCount = newRows.length;
-                }
-            }
-
-            summary = `Rules added. Templates: +${addedCount}`;
-
-            // 4. Update Grimoire (Sync)
-            updateMasterDNA();
-
-            return { summary: summary };
+        if (currentRules && String(currentRules).length > 5) {
+            const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MM/dd HH:mm");
+            newRuleText = currentRules + `\n\n--- [Add: ${timestamp}] ---\n` + newRuleText;
         }
+        setSheet.getRange("B8").setValue(newRuleText);
+    }
 
-        /**
-         * 【診断】API接続テスト
-         * 設定シートからキーを読み込み、Geminiへの疎通確認を行う
-         */
-        function testConnection() {
-            const apiKey = getGeminiApiKey();
-            if (!apiKey) {
-                Browser.msgBox("❌ API Keyが見つかりません。\\n設定シートのB2に入力してください。");
-                return;
+    // 3. Update DB (Templates) - Deduplication
+    const dbSheet = ss.getSheetByName(SHEET_DB);
+    let addedCount = 0;
+    if (dbSheet && data.templates && data.templates.length > 0) {
+        const lastDbRow = dbSheet.getLastRow();
+        const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
+
+        const newRows = [];
+        data.templates.forEach(t => {
+            if (!existingSyntaxes.includes(t.syntax)) {
+                newRows.push([
+                    Utilities.getUuid(),
+                    `Dojo: ${t.name}`,
+                    t.context,
+                    t.syntax,
+                    "Auto-Analyze required",
+                    "Manual",
+                    "Dojo Import",
+                    "Active",
+                    "3"
+                ]);
             }
+        });
 
-            const masked = apiKey.substring(0, 4) + "****" + apiKey.slice(-4);
-            const confirm = Browser.msgBox(`API Keyを読み込めました。\\nKey: ${masked}\\n\\nテスト接続しますか？`, Browser.Buttons.YES_NO);
-
-            if (confirm == "no") return;
-
-            try {
-                const result = callGemini(apiKey, "Hello, reply with only 'OK'.");
-                Browser.msgBox("✅ 接続成功！\\nAIからの応答: " + result);
-            } catch (e) {
-            }
+        if (newRows.length > 0) {
+            dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
+            addedCount = newRows.length;
         }
+    }
 
-        /**
-         * 【開発】モデル診断
-         * 利用可能なモデル一覧を取得して表示する
-         */
-        function debugListModels() {
-            const apiKey = getGeminiApiKey();
-            if (!apiKey) {
-                Browser.msgBox("API Keyが見つかりません");
-                return;
-            }
+    summary = `Rules added. Templates: +${addedCount}`;
 
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`;
-                const response = UrlFetchApp.fetch(url);
-                const json = JSON.parse(response.getContentText());
+    // 4. Update Grimoire (Sync)
+    updateMasterDNA();
 
-                if (json.models) {
-                    const names = json.models.map(m => m.name.replace("models/", "")).join("\\n");
-                    Browser.msgBox(`Available Models:\\n${names}`);
-                } else {
-                    Browser.msgBox("No models found.");
-                }
-            } catch (e) {
-                Browser.msgBox("Model Error: " + e.message);
-            }
+    return { summary: summary };
+}
+
+/**
+ * 【診断】API接続テスト
+ * 設定シートからキーを読み込み、Geminiへの疎通確認を行う
+ */
+function testConnection() {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        Browser.msgBox("❌ API Keyが見つかりません。\\n設定シートのB2に入力してください。");
+        return;
+    }
+
+    const masked = apiKey.substring(0, 4) + "****" + apiKey.slice(-4);
+    const confirm = Browser.msgBox(`API Keyを読み込めました。\\nKey: ${masked}\\n\\nテスト接続しますか？`, Browser.Buttons.YES_NO);
+
+    if (confirm == "no") return;
+
+    try {
+        const result = callGemini(apiKey, "Hello, reply with only 'OK'.");
+        Browser.msgBox("✅ 接続成功！\\nAIからの応答: " + result);
+    } catch (e) {
+    }
+}
+
+/**
+ * 【開発】モデル診断
+ * 利用可能なモデル一覧を取得して表示する
+ */
+function debugListModels() {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        Browser.msgBox("API Keyが見つかりません");
+        return;
+    }
+
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`;
+        const response = UrlFetchApp.fetch(url);
+        const json = JSON.parse(response.getContentText());
+
+        if (json.models) {
+            const names = json.models.map(m => m.name.replace("models/", "")).join("\\n");
+            Browser.msgBox(`Available Models:\\n${names}`);
+        } else {
+            Browser.msgBox("No models found.");
         }
+    } catch (e) {
+        Browser.msgBox("Model Error: " + e.message);
+    }
+}
 
-        /**
-         * トリガー機能: 投稿ボードの作成ボタン
-         */
-        function onBoardEditInstallable(e) {
-            if (!e) return;
-            const range = e.range;
-            const sheet = range.getSheet();
+/**
+ * トリガー機能: 投稿ボードの作成ボタン
+ */
+function onBoardEditInstallable(e) {
+    if (!e) return;
+    const range = e.range;
+    const sheet = range.getSheet();
 
-            if (sheet.getName() !== SHEET_BOARD) return;
+    if (sheet.getName() !== SHEET_BOARD) return;
 
-            // Col 1 (Checkbox)
-            const col = range.getColumn();
-            // Header is row 3, data starts at 4
-            if (col !== 1 || range.getRow() < 4) return;
+    // Col 1 (Checkbox)
+    const col = range.getColumn();
+    // Header is row 3, data starts at 4
+    if (col !== 1 || range.getRow() < 4) return;
 
-            // Checkbox must be TRUE
-            if (range.getValue() !== true) return;
+    // Checkbox must be TRUE
+    if (range.getValue() !== true) return;
 
-            // Execute Generation for this row using Single Row Mode
-            generatePostsCommon(SHEET_BOARD, range.getRow());
+    // Execute Generation for this row using Single Row Mode
+    generatePostsCommon(SHEET_BOARD, range.getRow());
 
-            // Reset Checkbox
-            range.setValue(false);
-        }
+    // Reset Checkbox
+    range.setValue(false);
+}
 
-        /**
-         * 【設定】自動化トリガー設定 (全体)
-         * 研究所とボードの自動化トリガーをまとめて設定する
-         */
-        function setupAllTriggers() {
-            setupTriggerCommon(SHEET_LAB, "onLabEditInstallable");
-            setupTriggerCommon(SHEET_BOARD, "onBoardEditInstallable");
-            Browser.msgBox("自動化トリガーを設定しました！\\n・バズ研究所: Runチェックで分析\\n・投稿ボード: Createチェックで生成\\nが有効になります。");
-        }
+/**
+ * 【設定】自動化トリガー設定 (全体)
+ * 研究所とボードの自動化トリガーをまとめて設定する
+ */
+function setupAllTriggers() {
+    setupTriggerCommon(SHEET_LAB, "onLabEditInstallable");
+    setupTriggerCommon(SHEET_BOARD, "onBoardEditInstallable");
+    Browser.msgBox("自動化トリガーを設定しました！\\n・バズ研究所: Runチェックで分析\\n・投稿ボード: Createチェックで生成\\nが有効になります。");
+}
 
-        /*
-         * Legacy Alias
-         */
-        function setupLabTrigger() {
-            setupAllTriggers();
-        }
+/*
+ * Legacy Alias
+ */
+function setupLabTrigger() {
+    setupAllTriggers();
+}
 
 
 
