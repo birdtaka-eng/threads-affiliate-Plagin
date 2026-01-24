@@ -1247,6 +1247,33 @@ ${HUMOR_LIBRARY}
 // 共通関数
 // ------------------------------------------
 
+
+// ------------------------------------------
+// Sidebar Functions
+// ------------------------------------------
+
+function showSidebar() {
+    const html = HtmlService.createHtmlOutputFromFile('sidebar')
+        .setTitle('Draft Viewer (編集可能)')
+        .setWidth(300);
+    SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function getSidebarContent() {
+    const range = SpreadsheetApp.getActiveRange();
+    if (!range) return "";
+    return range.getValue();
+}
+
+function updateSidebarContent(content) {
+    const range = SpreadsheetApp.getActiveRange();
+    if (!range) throw new Error("No cell selected");
+    // Optional: Check if we are in the allowed sheet?
+    // For specific requirement, user just wants to scroll Output.
+    // Allowing edit anywhere is fine for "Viewer/Editor".
+    range.setValue(content);
+}
+
 // ------------------------------------------
 // 4. API & Helper Functions
 // ------------------------------------------

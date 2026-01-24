@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <style>
+        body {
+            padding: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        textarea {
+            width: 100%;
+            height: 400px;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+
+        .status {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+            text-align: right;
+        }
+
+        .controls {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        button {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #1557b0;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: default;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="controls">
+        <strong>Active Cell Content</strong>
+        <button id="saveBtn" onclick="saveContent()" disabled>Update Cell</button>
+    </div>
+    <textarea id="editor" placeholder="Select a cell to view/edit..."></textarea>
+    <div class="status" id="status">Waiting for selection...</div>
+
+    <script>
+        let currentContent = "";
+        let isEditing = false;
+
+        // Poll for changes every 1 second
+        setInterval(pollActiveCell, 1000);
+
+        function pollActiveCell() {
+            // Don't overwrite if user is actively editing and hasn't saved, 
+            // BUT for a simple viewer, usually we want to see what's selected.
+            // Let's only update if the textarea is not focused OR if we decide to force sync.
+            // For this version (Viewer priority), we sync unless dirty.
+
+            const editor = document.getElementById('editor');
+
+            // If user has modified text, don't overwrite
+            if (editor.value !== currentContent && document.activeElement === editor) {
+                return;
+            }
+
+            google.script.run.withSuccessHandler(updateUI).getSidebarContent();
+        }
+
+        function updateUI(content) {
+            const editor = document.getElementById('editor');
+            const status = document.getElementById('status');
+            const saveBtn = document.getElementById('saveBtn');
+
+            // If content changed externally (cell selection changed)
+            if (content !== currentContent) {
+                // Only update if we are not "dirty" (handled above, but double check)
+                // If the user changed selection, we SHOULD update even if dirty? 
+                // Standard Sidebar behavior: Selection change wins.
+                editor.value = content;
+                currentContent = content;
+                status.textContent = "Synced: " + new Date().toLocaleTimeString();
+                saveBtn.disabled = true;
+            }
+        }
+
+        // Enable save button on input
+        document.getElementById('editor').addEventListener('input', function () {
+            const saveBtn = document.getElementById('saveBtn');
+            const status = document.getElementById('status');
+            if (this.value !== currentContent) {
+                saveBtn.disabled = false;
+                status.textContent = "Edited (Unsaved)";
+            } else {
+                saveBtn.disabled = true;
+                status.textContent = "Synced";
+            }
+        });
+
+        function saveContent() {
+            const editor = document.getElementById('editor');
+            const newContent = editor.value;
+            const status = document.getElementById('status');
+            const saveBtn = document.getElementById('saveBtn');
+
+            status.textContent = "Saving...";
+            saveBtn.disabled = true;
+
+            google.script.run.withSuccessHandler(function () {
+                currentContent = newContent;
+                status.textContent = "Saved to Cell!";
+                setTimeout(() => status.textContent = "Synced", 2000);
+            }).withFailureHandler(function (e) {
+                status.textContent = "Error: " + e.message;
+                saveBtn.disabled = false;
+            }).updateSidebarContent(newContent);
+        }
+    </script>
+</body>
+
+</html>
