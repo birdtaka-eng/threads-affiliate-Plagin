@@ -360,16 +360,29 @@ function setupBoardSheet() {
     // Hide Draft Columns (O, P, Q) - Keep data but hide from view
     sheet.hideColumns(15, 3);
 
-    // 6. サンプルデータ (Shifted)
+    // 6. Init Instruction Row (Row 4) & Samples (Row 5+)
+    // Instruction Row (Gray, Italic)
+    sheet.getRange("A4:Q4").setBackground("#f3f3f3").setFontColor("#888888").setFontStyle("italic");
+    sheet.getRange("A4").insertCheckboxes(); // Keep checkbox but maybe disable? User can uncheck.
+
+    const instructions = [
+        false, false, 0, "（タイプを選択）", "（ユーモア）",
+        "【ネタ】ここに書きたいことを入力\n（例：今日は疲れた...）",
+        "【画像】URLやメモ",
+        "←ここにAIが書いた文章が出ます",
+        "すべて", "", "", 0, "", ""
+    ];
+    // Write instructions to A4:N4 (drafts hidden)
+    sheet.getRange("A4:N4").setValues([instructions]);
+
+    // Samples start from Row 5
     const samples = [
-        [false, false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "案1", "", "", 0, "", "", "案1のサンプル", "案2のサンプル", "案3のサンプル"],
-        [false, false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "案1", "", "", 0, "", "", "案1のサンプル", "案2のサンプル", "案3のサンプル"],
-        [false, false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "案1", "", "", 0, "", "", "案1のサンプル", "案2のサンプル", "案3のサンプル"]
+        [false, false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "すべて", "", "", 0, "", ""],
+        [false, false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "すべて", "", "", 0, "", ""],
+        [false, false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "すべて", "", "", 0, "", ""]
     ];
 
-    samples.forEach((row, i) => {
-        sheet.getRange(4 + i, 1, 1, 17).setValues([row]);
-    });
+    sheet.getRange(5, 1, samples.length, 14).setValues(samples); // Write to A5:N7
 
     Browser.msgBox(`シート「${sheetName}」を放送局仕様(v3.0)にアップデートしました。\n\nA列に「🚀 Create」ボタン(チェックボックス)を追加しました！`);
 }
@@ -537,7 +550,7 @@ function generatePostsCommon(sheetName, targetRow) {
 
     // 2. ターゲット特定
     const lastRow = sheet.getLastRow();
-    if (lastRow < 4) return;
+    if (lastRow < 5) return; // Must have at least Row 5 (First Data Row)
 
     // Factory Column Config (Updated for Checkbox at A)
     // A: Create(1), B: OnAir(2), C: No(3)
@@ -557,36 +570,42 @@ function generatePostsCommon(sheetName, targetRow) {
 
     if (targetRow) {
         // Single Row Mode
-        targets.push(targetRow - 4); // dataIndex is relative to values[0] at row 4
+        if (targetRow < 5) return; // Skip Instruction Row
+        targets.push(targetRow - 5); // dataIndex is relative to values[0] at row 5
     } else {
         // Bulk Scan
-        const data = sheet.getRange(4, 1, lastRow - 3, 14).getValues();
+        // Scan from Row 5 to End
+        const data = sheet.getRange(5, 1, lastRow - 4, 14).getValues();
         for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const type = row[colType - 1];
+            const row = data[i]; // row from Row 5
+            const createCheck = row[colCreate - 1]; // Col A
             const topic = row[colTopic - 1];
             const output = row[colOutput - 1];
 
-            // Topicあり、Outputなし、Type!=まとめ
-            if (topic && !output && type !== 'まとめ') {
+            // Condition: Checkbox=TRUE OR (Topic exists & Output empty & Type!=Summary)
+            // Prioritize Checkbox if checked
+            if (createCheck === true) {
+                targets.push(i);
+            } else if (topic && !output && row[colType - 1] !== 'まとめ') {
+                // Auto-detect mode (Legacy behavior, maybe disable? Keep for safety)
                 targets.push(i);
             }
         }
     }
 
     if (targets.length === 0) {
-        if (!targetRow) Browser.msgBox("生成対象(Topicあり・Outputなし)が見つかりませんでした。");
+        if (!targetRow) Browser.msgBox("生成対象(CreateチェックON または Topicあり・Outputなし)が見つかりませんでした。");
         return;
     }
 
     // 3. 生成ループ
-    // (Ensure data range covers all columns up to N)
-    const fullData = sheet.getRange(4, 1, lastRow - 3, 14).getValues();
+    // Start from Row 5
+    const fullData = sheet.getRange(5, 1, lastRow - 4, 14).getValues();
 
     let count = 0;
     for (const dataIndex of targets) {
         try {
-            const rowIndex = dataIndex + 4;
+            const rowIndex = dataIndex + 5; // Absolute Row Index
             const dataRow = fullData[dataIndex]; // Single row Reference
 
             const type = dataRow[colType - 1];
