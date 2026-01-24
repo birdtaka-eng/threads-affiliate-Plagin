@@ -1613,7 +1613,8 @@ function setupManualSheet() {
 
         ["3. Access Token (自動投稿用の鍵)", "任意", "自動投稿したい場合のみ必要です（未設定でも生成は可能）。"],
         ["   手順:", "取得手順が複雑なため、以下のnote記事を参照して取得してください（画像付きで分かりやすいです）。", ""],
-        ["   Link:", "https://note.com/resisan80/n/nabd605a1be83", ""],
+        ["   Link 1:", "https://note.com/resisan80/n/nabd605a1be83", "初心者向け解説"],
+        ["   Link 2:", "https://note.com/hottarita/n/nb82e3a0afe35", "API取得方法 (別記事)"],
         ["", "発行されたトークンを、「設定」シートのB4セルに貼り付けてください。", ""],
 
         ["4. Gemini Model (AIモデル選択)", "推奨", "B5セルでAIの賢さを選択できます (基本はgemini-2.5-flash)"],
@@ -1621,18 +1622,14 @@ function setupManualSheet() {
         ["   手順:", "1. 「設定」シートのB6セルに「28歳女性、会社員」のように入力", ""]
     ];
 
-    // Data has 15 rows (indices 0 to 14).
-    // Target Range B6:D20 is 15 rows.
-    // Wait, let's count exactly.
-    // 0:Key, 1:Step1, 2:Step2, 3:Step3 (4 rows)
-    // 4:ThreadID, 5:Step1, 6:Step2, 7:Step3, 8:Step4 (5 rows)
-    // 9:Token, 10:Step, 11:Link, 12:Final (4 rows)
-    // 13:Model (1 row)
-    // 14:Persona, 15:Step1 (2 rows)
-    // Total = 4+5+4+1+2 = 16 rows.
-    // Range B6:D20 is 15 rows (6 to 20 inclusive).
-    // Need B6:D21.
-    sheet.getRange("B6:D21").setValues(setupDetails);
+    // Data has 16 rows? Let's verify.
+    // 0:Key, 1:Step, 2:Link1, 3:Link2, 4:Final (5 rows)
+    // 4+5 = 9 rows so far for Key 1 & 2.
+    // 9 + 5 (Access Token) = 14 rows.
+    // 14 + 1 (Model) = 15 rows.
+    // 15 + 2 (Persona) = 17 rows total.
+    // Target Range B6:D22 (17 rows).
+    sheet.getRange("B6:D22").setValues(setupDetails);
 
     // Style
     sheet.getRange("B6:D6").setFontWeight("bold").setBackground("#d9d2e9"); // Header like row
