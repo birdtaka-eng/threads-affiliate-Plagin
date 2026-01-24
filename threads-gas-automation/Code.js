@@ -789,6 +789,10 @@ ${manualRules ? "参考にしているマニュアルからの重要心得:\n" +
 - 出力は**投稿本文のみ** (解説不要)。
 `;
 
+            // Loading Indicator
+            sheet.getRange(rowIndex, colOutput).setValue("⏳ AI執筆中... (3案を作成しています)");
+            SpreadsheetApp.flush(); // Force UI update
+
             let generatedText = callGemini(apiKey, prompt);
             generatedText = generatedText.replace(/#\S+/g, '').trim();
 
