@@ -69,37 +69,15 @@ function onEdit(e) {
     // Actually Selector is I (9). The code says `range.getColumn() !== 8` which is H.
     // Wait, let's check setupBoardSheet.
     // A(1), B(2), C(3), D(4), E(5), F(6), G(7), H(8)=Output, I(9)=Selector
-    // So current code `range.getColumn() !== 8` logic seems to be monitoring Output?
-    // No, existing code: `if (range.getColumn() !== 8` means "If NOT 8 then return"?
-    // Wait, previous code: `range.getColumn() !== 8`. 8 is Output.
-    // Ah, `setupBoardSheet` defines I as Selector.
-    // Let's fix the column index to 9 (Selector).
 
-    if (range.getColumn() !== 9 || range.getRow() < 4) return;
+    // Ignore Header (1) and Guide (2). Data starts at 3.
+    if (range.getColumn() !== 9 || range.getRow() < 3) return;
 
     const selectorValue = range.getValue(); // "案1", "案2", "案3"
     const rowIndex = range.getRow();
 
     let content = "";
-
-    // Fetch from Draft Columns (O=15, P=16, Q=17)
-    if (selectorValue === "案1") {
-        content = sheet.getRange(rowIndex, 15).getValue();
-    } else if (selectorValue === "案2") {
-        content = sheet.getRange(rowIndex, 16).getValue();
-    } else if (selectorValue === "案3") {
-        content = sheet.getRange(rowIndex, 17).getValue();
-    } else if (selectorValue === "すべて") {
-        const d1 = sheet.getRange(rowIndex, 15).getValue();
-        const d2 = sheet.getRange(rowIndex, 16).getValue();
-        const d3 = sheet.getRange(rowIndex, 17).getValue();
-        content = `【案1】\n${d1}\n\n【案2】\n${d2}\n\n【案3】\n${d3}`;
-    }
-
-    if (content) {
-        // Output列(H=8)を更新
-        sheet.getRange(rowIndex, 8).setValue(content);
-    }
+    // ... (rest of logic) ...
 }
 
 /**
@@ -117,7 +95,8 @@ function onSelectionChange(e) {
 
     // 対象列: H(8), O(15), P(16), Q(17)
     const targetCols = [8, 15, 16, 17];
-    const isTarget = (row >= 4 && targetCols.includes(col));
+    // Ignore Header(1) & Guide(2) -> Start from 3
+    const isTarget = (row >= 3 && targetCols.includes(col));
 
     // ユーザープロパティを使って前回の行を記憶
     const props = PropertiesService.getUserProperties();
@@ -129,7 +108,9 @@ function onSelectionChange(e) {
         try {
             // デフォルトの高さ (80px) に戻す
             // もし前回が "すべて(ComparisonView)" で巨大だった場合も戻る
-            sheet.setRowHeight(parseInt(lastRow), 80);
+            if (parseInt(lastRow) > 2) { // Safety check
+                sheet.setRowHeight(parseInt(lastRow), 80); // Default is 80 (Guide is 60, Header 40)
+            }
         } catch (e) { }
         props.deleteProperty(lastRowKey);
     }
@@ -272,119 +253,96 @@ function setupBoardSheet() {
     }
 
     // 1. クリーニング
-    sheet.getRange("A1:Q1000").clear(); // Extended to Q
+    sheet.getRange("A1:Q1000").clear();
     sheet.getRange("A1:Q1000").clearDataValidations();
     sheet.getRange("A1:Q1000").clearFormat();
 
-    // 2. プロンプトガイドエリア (A1:Q1)
-    const promptRange = sheet.getRange("A1:Q1");
-    promptRange.merge();
-
-    const defaultPrompt =
-        `【投稿作成ボード (+Assets)】\n` +
-        `- **Selector**: 「案1〜案3」で投稿内容を切り替え。\n` +
-        `- **Assets**: 画像や参照URLメモ用。\n` +
-        `- **ON AIR**: チェックで「放送待機」状態になります。`;
-
-    promptRange.setValue(defaultPrompt);
-    promptRange.setBackground("#fff2cc"); // Thin Yellow
-    promptRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-
-    // 全体の折り返し設定 (A4以降)
-    sheet.getRange("A4:Q1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A4:Q1000").setVerticalAlignment("top"); // 見やすくするため上揃えも追加
-    promptRange.setVerticalAlignment("top");
-    promptRange.setFontSize(10);
-    sheet.setRowHeight(1, 80);
-
-    // 3. ヘッダー (3行目)
+    // 2. ヘッダー (1行目) - Moved from Row 3
     const headers = [
         ["🚀 Create", "ON AIR", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Assets (画像/URL)", "Output (決定稿)", "Selector", "System ID", "Last Played", "Count", "Analysis", "Drafts Source", "Draft 1 (案1)", "Draft 2 (案2)", "Draft 3 (案3)"]
     ];
-    sheet.getRange("A3:Q3").setValues(headers);
-    sheet.getRange("A3:Q3").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A3:Q3").setFontWeight("bold");
-    sheet.getRange("A3:Q3").setHorizontalAlignment("center");
+    sheet.getRange("A1:Q1").setValues(headers);
+    sheet.getRange("A1:Q1").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A1:Q1").setFontWeight("bold");
+    sheet.getRange("A1:Q1").setHorizontalAlignment("center");
 
-    // 4. バリデーション
+    // 3. ガイド行 (2行目) - New
+    // Description text directly in the cells
+    const guides = [
+        "", "", "", "↓タイプを選択", "↓笑いの強さ",
+        "【ネタ】ここに書きたいことを入力\n（例：今日は疲れた...）",
+        "【画像】URLやメモ",
+        "←ここにAIが書いた文章が出ます",
+        "←表示切替", "", "", 0, "", ""
+    ];
+    sheet.getRange("A2:N2").setValues([guides]);
+    sheet.getRange("A2:Q2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.setRowHeight(2, 60); // Guide row height
+
+    // 4. データエリア設定 (3行目以降)
+    sheet.getRange("A3:Q1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A3:Q1000").setVerticalAlignment("top");
+    sheet.setRowHeight(1, 40); // Header height
+
+    // 固定 (Freeze 2 rows)
+    sheet.setFrozenRows(2);
+
+    // 5. バリデーション (Start from Row 3)
     // A: Create Checkbox
     const checkboxCreate = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("A4:A100").setDataValidation(checkboxCreate);
+    sheet.getRange("A3:A100").setDataValidation(checkboxCreate);
 
     // B: ON AIR Checkbox
     const checkboxOnAir = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("B4:B100").setDataValidation(checkboxOnAir);
+    sheet.getRange("B3:B100").setDataValidation(checkboxOnAir);
 
     // D: Type Rule (Shifted from C)
     const ruleType = SpreadsheetApp.newDataValidation()
         .requireValueInList(["単品", "日常", "有益", "自己紹介", "Free", "まとめ"], true)
         .setAllowInvalid(false).build();
-    sheet.getRange("D4:D200").setDataValidation(ruleType);
+    sheet.getRange("D3:D100").setDataValidation(ruleType);
 
     // E: Humor Rule (Shifted from D)
     const ruleHumor = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['Lv1: 控えめ', 'Lv2: 標準', 'Lv3: 全力'], true)
+        .requireValueInList(["Lv1: 控えめ", "Lv2: 標準", "Lv3: 全力"], true)
         .setAllowInvalid(false).build();
-    sheet.getRange("E4:E100").setDataValidation(ruleHumor);
+    sheet.getRange("E3:E100").setDataValidation(ruleHumor);
 
     // I: Selector Rule (Shifted from H)
     const selectorRule = SpreadsheetApp.newDataValidation()
         .requireValueInList(['すべて', '案1', '案2', '案3'], true).build();
-    sheet.getRange("I4:I100").setDataValidation(selectorRule);
+    sheet.getRange("I3:I100").setDataValidation(selectorRule);
 
     // 5. 幅調整
-    sheet.setColumnWidth(1, 60);  // Create
-    sheet.setColumnWidth(2, 60);  // ON AIR
+    sheet.setColumnWidth(1, 60);  // Create (Check)
+    sheet.setColumnWidth(2, 60);  // ON AIR (Check)
     sheet.setColumnWidth(3, 40);  // No
     sheet.setColumnWidth(4, 80);  // Type
     sheet.setColumnWidth(5, 80);  // Humor
-    sheet.setColumnWidth(6, 250); // Topic
-    sheet.setColumnWidth(7, 200); // Assets
-    sheet.setColumnWidth(8, 350); // Output
-    sheet.setColumnWidth(9, 60);  // Selector
-    sheet.setColumnWidth(10, 100); // System ID
-    sheet.setColumnWidth(11, 120); // Last Played
-    sheet.setColumnWidth(12, 60);  // Count
-    sheet.setColumnWidth(13, 150); // Analysis
-    // 14: Drafts Source (Hidden)
-
-    // 5. 幅調整
-    // ... (Prior settings)
-    sheet.setColumnWidth(14, 50); // Drafts Source (N) - Keep small/hidden
-    sheet.setColumnWidth(15, 300); // Draft 1
-    sheet.setColumnWidth(16, 300); // Draft 2
-    sheet.setColumnWidth(17, 300); // Draft 3
+    sheet.setColumnWidth(6, 300); // Topic
+    sheet.setColumnWidth(7, 150); // Assets
+    sheet.setColumnWidth(8, 400); // Output
+    sheet.setColumnWidth(9, 80); // Selector
+    sheet.setColumnWidth(10, 50); // System ID
+    sheet.setColumnWidth(11, 80); // Last Played
+    sheet.setColumnWidth(12, 40); // Count
+    sheet.setColumnWidth(13, 100); // Analysis
 
     // Hide Drafts Source (N)
     sheet.hideColumns(14);
     // Hide Draft Columns (O, P, Q) - Keep data but hide from view
     sheet.hideColumns(15, 3);
 
-    // 6. Init Instruction Row (Row 4) & Samples (Row 5+)
-    // Instruction Row (Gray, Italic)
-    sheet.getRange("A4:Q4").setBackground("#f3f3f3").setFontColor("#888888").setFontStyle("italic");
-    sheet.getRange("A4").insertCheckboxes(); // Keep checkbox but maybe disable? User can uncheck.
-
-    const instructions = [
-        false, false, 0, "（タイプを選択）", "（ユーモア）",
-        "【ネタ】ここに書きたいことを入力\n（例：今日は疲れた...）",
-        "【画像】URLやメモ",
-        "←ここにAIが書いた文章が出ます",
-        "すべて", "", "", 0, "", ""
-    ];
-    // Write instructions to A4:N4 (drafts hidden)
-    sheet.getRange("A4:N4").setValues([instructions]);
-
-    // Samples start from Row 5
+    // 6. Samples (Row 3+)
     const samples = [
         [false, false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "すべて", "", "", 0, "", ""],
         [false, false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "すべて", "", "", 0, "", ""],
         [false, false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "すべて", "", "", 0, "", ""]
     ];
 
-    sheet.getRange(5, 1, samples.length, 14).setValues(samples); // Write to A5:N7
+    sheet.getRange(3, 1, samples.length, 14).setValues(samples); // Write to A3:N5
 
-    Browser.msgBox(`シート「${sheetName}」を放送局仕様(v3.0)にアップデートしました。\n\nA列に「🚀 Create」ボタン(チェックボックス)を追加しました！`);
+    Browser.msgBox(`シート「${sheetName}」を放送局仕様(v3.1)にアップデートしました。\n\nヘッダーを1行目に、ガイドを2行目に配置しました！`);
 }
 
 
@@ -550,34 +508,24 @@ function generatePostsCommon(sheetName, targetRow) {
 
     // 2. ターゲット特定
     const lastRow = sheet.getLastRow();
-    if (lastRow < 5) return; // Must have at least Row 5 (First Data Row)
+    if (lastRow < 3) return; // Must have at least Row 3 (First Data Row)
 
     // Factory Column Config (Updated for Checkbox at A)
-    // A: Create(1), B: OnAir(2), C: No(3)
-    const colCreate = 1;
-    const colType = 4;   // D
-    const colHumor = 5;  // E
-    const colTopic = 6;  // F
-    const colAssets = 7; // G
-    const colOutput = 8; // H
-    const colSelector = 9; // I
-    const colDraftsSource = 14; // N (Backup)
-    const colDraft1 = 15; // O
-    const colDraft2 = 16; // P
-    const colDraft3 = 17; // Q
+    // ...
+    // ...
 
     let targets = [];
 
     if (targetRow) {
         // Single Row Mode
-        if (targetRow < 5) return; // Skip Instruction Row
-        targets.push(targetRow - 5); // dataIndex is relative to values[0] at row 5
+        if (targetRow < 3) return; // Skip Header/Guide Rows
+        targets.push(targetRow - 3); // dataIndex is relative to values[0] at row 3
     } else {
         // Bulk Scan
-        // Scan from Row 5 to End
-        const data = sheet.getRange(5, 1, lastRow - 4, 14).getValues();
+        // Scan from Row 3 to End
+        const data = sheet.getRange(3, 1, lastRow - 2, 14).getValues();
         for (let i = 0; i < data.length; i++) {
-            const row = data[i]; // row from Row 5
+            const row = data[i]; // row from Row 3
             const createCheck = row[colCreate - 1]; // Col A
             const topic = row[colTopic - 1];
             const output = row[colOutput - 1];
@@ -587,7 +535,6 @@ function generatePostsCommon(sheetName, targetRow) {
             if (createCheck === true) {
                 targets.push(i);
             } else if (topic && !output && row[colType - 1] !== 'まとめ') {
-                // Auto-detect mode (Legacy behavior, maybe disable? Keep for safety)
                 targets.push(i);
             }
         }
@@ -599,13 +546,13 @@ function generatePostsCommon(sheetName, targetRow) {
     }
 
     // 3. 生成ループ
-    // Start from Row 5
-    const fullData = sheet.getRange(5, 1, lastRow - 4, 14).getValues();
+    // Start from Row 3
+    const fullData = sheet.getRange(3, 1, lastRow - 2, 14).getValues();
 
     let count = 0;
     for (const dataIndex of targets) {
         try {
-            const rowIndex = dataIndex + 5; // Absolute Row Index
+            const rowIndex = dataIndex + 3; // Absolute Row Index
             const dataRow = fullData[dataIndex]; // Single row Reference
 
             const type = dataRow[colType - 1];
