@@ -273,7 +273,7 @@ function setupBoardSheet() {
         "【ネタ】ここに書きたいことを入力\n（例：今日は疲れた...）",
         "【画像】URLやメモ",
         "←文章が３案出ますので、Selectorで一つを選びます",
-        "←文章を選びます", "管理ID(自動)", "最終放送日時", "放送回数", "Analysis", "Drafts"
+        "←文章を選びます", "投稿ID", "投稿日時", "反響(いいね/保存)", "Analysis", "Drafts"
     ];
     sheet.getRange("A2:N2").setValues([guides]);
     sheet.getRange("A2:Q2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
