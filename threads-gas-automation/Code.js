@@ -357,6 +357,8 @@ function setupBoardSheet() {
 
     // Hide Drafts Source (N)
     sheet.hideColumns(14);
+    // Hide Draft Columns (O, P, Q) - Keep data but hide from view
+    sheet.hideColumns(15, 3);
 
     // 6. サンプルデータ (Shifted)
     const samples = [
