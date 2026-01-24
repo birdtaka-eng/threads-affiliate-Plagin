@@ -2018,10 +2018,12 @@ function setupLabSheet() {
     // If A2 doesn't start with down arrow, assumption: it's data or empty. Insert row.
     if (!String(checkA2).includes("↓")) {
         sheet.insertRows(2);
+        // ★Force Clear New Row 2 Immediately to prevent inheritance issues
+        sheet.getRange("2:2").clearDataValidations();
     }
 
-    // ★CRITICAL FIX: Clear Validations FIRST before writing guide text used to fail.
-    sheet.getRange("A2:E1000").clearDataValidations();
+    // Double safety: Clear range before writing
+    sheet.getRange("A2:E2").clearDataValidations();
 
     const guides = [["↓分析開始", "↓種類を選択", "【画像】あれば内容をメモ", "【原文】ここにバズッた投稿をコピペ", "←ここにAI分析結果が出ます"]];
     sheet.getRange("A2:E2").setValues(guides);
