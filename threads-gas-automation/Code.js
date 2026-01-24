@@ -2064,6 +2064,24 @@ function setupLabSheet() {
     sheet.setRowHeight(3, 60);
     sheet.setFrozenRows(3);
 
+    // ★ Cleanup Duplicates (Row 4+)
+    // If previous runs pushed old headers down, they might be at Row 4, 5, etc.
+    // Check Row 4 repeatedly.
+    for (let i = 0; i < 5; i++) { // Max check 5 rows to prevent infinite loop
+        const valA4 = sheet.getRange("A4").getValue();
+        const valB4 = sheet.getRange("B4").getValue();
+        const strA4 = String(valA4);
+        const strB4 = String(valB4);
+
+        // Detection: "🚀" in A, or "Type" in B, or "↓" in A/B
+        if (strA4.includes("🚀") || strB4.includes("Type") || strA4.includes("↓") || strB4.includes("↓")) {
+            sheet.deleteRow(4);
+        } else {
+            // Looks like data, stop cleaning
+            break;
+        }
+    }
+
     // 4. Clear Old Validations (Safe Clear)
     sheet.getRange("A4:E1000").clearDataValidations();
 
