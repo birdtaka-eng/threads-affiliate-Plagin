@@ -111,59 +111,95 @@ function setupLabSheet() {
         sheet = ss.insertSheet(SHEET_LAB);
     }
 
+    // 0. Auto-Migration & Cleanup (Smart Fix v3 - Row by Row)
+    // Scan first 50 rows. If a row has "Type" in Col A, shift IT ONLY right.
+    const maxScanRow = 50;
+    const scanRange = sheet.getRange(2, 1, maxScanRow, 1); // A2:A51
+    const scanValues = scanRange.getValues().flat(); // Array of A values
+    const knownTypes = ['単品', '日常', '有益', '議論', '実体験', '自己紹介', 'Free'];
+    let fixedCount = 0;
+
+    for (let i = 0; i < scanValues.length; i++) {
+        const val = scanValues[i];
+        const row = i + 2; // actual row number
+
+        // Check if this row is "Old Format" (A is Type)
+        if (typeof val === 'string' && knownTypes.includes(val.trim())) {
+            // Shift this ROW's data: A..Y -> B..Z
+            // We move A..LastCol to B..
+            // Limit to 20 columns to be safe/fast
+            sheet.getRange(row, 1, 1, 20).moveTo(sheet.getRange(row, 2));
+
+            // Set A to Checkbox
+            sheet.getRange(row, 1).insertCheckboxes().setValue(false);
+
+            fixedCount++;
+        }
+    }
+
+    if (fixedCount > 0) {
+        Browser.msgBox(`⚠️ データのズレを補正しました。\n・修正した行数: ${fixedCount}行\n・混合データを整形しました。`);
+    }
+
+    // Clear Residual Data (F列以降を掃除して「免許皆伝」などを消す)
+    // Force cleanup from Column 6 (F) to the end
+    const maxCols = sheet.getMaxColumns();
+    if (maxCols >= 6) {
+        // Clear content and validations
+        sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clear();
+        sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clearDataValidations();
+    }
+
+
     // 1. ヘッダー更新 (1行目のみ上書き)
-    const headers = [["Type (種類)", "Image Context (写真/背景の説明)", "Raw Post (バズった原文)", "DNA (構造・型)"]];
-    sheet.getRange("A1:D1").setValues(headers);
-    sheet.getRange("A1:D1").setBackground("#d9d2e9"); // 紫系
-    sheet.getRange("A1:D1").setFontWeight("bold");
-    sheet.getRange("A1:D1").setHorizontalAlignment("center");
+    // A: Run, B: Type, C: Context, D: Raw, E: DNA
+    const headers = [["🚀 Run", "Type (種類)", "Image Context (写真/背景の説明)", "Raw Post (バズった原文)", "DNA (構造・型)"]];
+    const headerRange = sheet.getRange("A1:E1");
+    headerRange.setValues(headers);
+    headerRange.setBackground("#d9d2e9"); // 紫系
+    headerRange.setFontWeight("bold");
+    headerRange.setHorizontalAlignment("center");
 
     // 2. 列幅調整
-    sheet.setColumnWidth(1, 80);  // Type
-    sheet.setColumnWidth(2, 200); // Image Context
-    sheet.setColumnWidth(3, 300); // Raw Post
-    sheet.setColumnWidth(4, 300); // DNA
-    // sheet.setColumnWidth(5, 80);  // Status Removed
+    sheet.setColumnWidth(1, 50);  // Run (Checkbox)
+    sheet.setColumnWidth(2, 80);  // Type
+    sheet.setColumnWidth(3, 200); // Image Context
+    sheet.setColumnWidth(4, 300); // Raw Post
+    sheet.setColumnWidth(5, 300); // DNA
 
-    // 3. データバリデーション (A列 Type)
-    // まず古いルールをクリア (C列などに残っている場合があるため)
-    sheet.getRange("B2:D100").clearDataValidations();
+    // 3. データバリデーション
+    // A列: Run Checkbox
+    const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    sheet.getRange("A2:A100").setDataValidation(checkboxRule);
 
-    // BoardのTypeと合わせる
+    // B列: Type (Shifted from A)
+    // まず古いルールをクリア (広範囲をクリアしてゴミ掃除)
+    sheet.getRange("B2:E100").clearDataValidations();
+
     const typeRule = SpreadsheetApp.newDataValidation()
         .requireValueInList(['単品', '日常', '有益', '議論', '実体験', '自己紹介', 'Free'], true).build();
-    sheet.getRange("A2:A100").setDataValidation(typeRule);
+    sheet.getRange("B2:B100").setDataValidation(typeRule);
 
     // 4. ヒント追加 (Notes)
     const hints = {
-        1: "【Type (種類)】\nネタの種類を選んでください。\n(例: 日常ツイートのサンプルなら「日常」)",
-        2: "【Image Context (背景)】\nもし画像付きの投稿なら、どんな写真だったかメモしてください。\n(文字だけの投稿なら空欄でOK)",
-        3: "【Raw Post (原文)】\nバズった投稿の本文をそのまま貼り付けてください。\n→貼り付けると自動で解析が始まります(数秒後)。\n※初回のみメニューの『自動分析トリガー設定』を実行してください。",
-        4: "【DNA (構造・型)】\n🤖 AI分析エリア\nAIがバズりの構造を解析してここに書き込みます。\n※編集不可(ロック中)"
+        1: "【🚀 Run (実行)】\nチェックを入れると、その行の分析を開始します。\n(分析が終わると自動でチェックが外れます)",
+        2: "【Type (種類)】\nネタの種類を選んでください。\n(例: 日常ツイートのサンプルなら「日常」)",
+        3: "【Image Context (背景)】\nもし画像付きの投稿なら、どんな写真だったかメモしてください。\n(文字だけの投稿なら空欄でOK)",
+        4: "【Raw Post (原文)】\nバズった投稿の本文をそのまま貼り付けてください。\n→貼り付けると自動で解析が始まります(数秒後)。\n※初回のみメニューの『自動分析トリガー設定』を実行してください。",
+        5: "【DNA (構造・型)】\n🤖 AI分析エリア\nAIがバズりの構造を解析してここに書き込みます。\n※編集不可(ロック中)"
     };
     for (const [col, note] of Object.entries(hints)) {
         sheet.getRange(1, Number(col)).setNote(note);
     }
 
-    // 5. 保護 (Lock Column D)
-    const protection = sheet.getRange("D:D").protect();
+    // 5. 保護 (Lock Column E)
+    // 既存の保護をクリアする処理は入れていないが、上書き設定
+    const protection = sheet.getRange("E:E").protect();
     protection.setDescription("AI DNA Area");
     protection.setWarningOnly(true); // 警告を表示
 
-    // 6. Trigger Button
-    try {
-        const imageUrl = "https://cdn-icons-png.flaticon.com/512/9373/9373268.png"; // Robot/AI Icon
-        const blob = UrlFetchApp.fetch(imageUrl).getBlob();
-        const img = sheet.insertImage(blob, 5, 1); // E1
-        img.assignScript("setupLabTrigger");
-        img.setWidth(60).setHeight(60);
-
-        sheet.getRange("E2").setValue("← 初回のみON！").setFontColor("red").setFontWeight("bold");
-    } catch (e) {
-        sheet.getRange("E1").setValue("【自動化スイッチ】").setFontColor("red");
-    }
-
-    Browser.msgBox(`シート「${SHEET_LAB}」を更新しました！\n\n・E列に「自動化スイッチ」を設置しました。\n・初回のみクリックして認証してください。`);
+    // 6. 完了メッセージ
+    Browser.msgBox(`シート「${SHEET_LAB}」を更新しました！\n\nA列に「🚀 Run」ボタンを設置し、データのズレを補正しました。\n不要な列(F列以降)もクリーニングしました。`);
 }
 
 
