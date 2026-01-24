@@ -2020,14 +2020,14 @@ function setupLabSheet() {
         sheet.insertRows(2);
     }
 
+    // ★CRITICAL FIX: Clear Validations FIRST before writing guide text used to fail.
+    sheet.getRange("A2:E1000").clearDataValidations();
+
     const guides = [["↓分析開始", "↓種類を選択", "【画像】あれば内容をメモ", "【原文】ここにバズッた投稿をコピペ", "←ここにAI分析結果が出ます"]];
     sheet.getRange("A2:E2").setValues(guides);
     sheet.getRange("A2:E2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
     sheet.setRowHeight(2, 60);
     sheet.setFrozenRows(2);
-
-    // 3. Clear Old Validations (Safe Clear)
-    sheet.getRange("A2:E1000").clearDataValidations();
 
     // 4. Validation & Format (Start from Row 3)
     // A: Checkbox
