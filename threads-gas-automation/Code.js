@@ -56,42 +56,43 @@ function onOpen() {
  * トリガー機能: 編集時即時反映
  * 投稿ボードで「Selector(案1,2,3)」を変更した際、Sourceから本文を即座に書き換える
  */
-const sheet = e.source.getActiveSheet();
-const range = e.range;
+function onEdit(e) {
+    const sheet = e.source.getActiveSheet();
+    const range = e.range;
 
-// 対象シート: 投稿作成ボード
-if (sheet.getName() !== SHEET_BOARD) return;
+    // 対象シート: 投稿作成ボード
+    if (sheet.getName() !== SHEET_BOARD) return;
 
-// 対象列: H列 (Selector) (9列目) Note: Comment says 8 but Selector is I (9)
-// Actually Selector is I (9). The code says `range.getColumn() !== 8` which is H.
-// Wait, let's check setupBoardSheet.
-// A(1), B(2), C(3), D(4), E(5), F(6), G(7), H(8)=Output, I(9)=Selector
-// So current code `range.getColumn() !== 8` logic seems to be monitoring Output?
-// No, existing code: `if (range.getColumn() !== 8` means "If NOT 8 then return"?
-// Wait, previous code: `range.getColumn() !== 8`. 8 is Output.
-// Ah, `setupBoardSheet` defines I as Selector.
-// Let's fix the column index to 9 (Selector).
+    // 対象列: H列 (Selector) (9列目) Note: Comment says 8 but Selector is I (9)
+    // Actually Selector is I (9). The code says `range.getColumn() !== 8` which is H.
+    // Wait, let's check setupBoardSheet.
+    // A(1), B(2), C(3), D(4), E(5), F(6), G(7), H(8)=Output, I(9)=Selector
+    // So current code `range.getColumn() !== 8` logic seems to be monitoring Output?
+    // No, existing code: `if (range.getColumn() !== 8` means "If NOT 8 then return"?
+    // Wait, previous code: `range.getColumn() !== 8`. 8 is Output.
+    // Ah, `setupBoardSheet` defines I as Selector.
+    // Let's fix the column index to 9 (Selector).
 
-if (range.getColumn() !== 9 || range.getRow() < 4) return;
+    if (range.getColumn() !== 9 || range.getRow() < 4) return;
 
-const selectorValue = range.getValue(); // "案1", "案2", "案3"
-const rowIndex = range.getRow();
+    const selectorValue = range.getValue(); // "案1", "案2", "案3"
+    const rowIndex = range.getRow();
 
-let content = "";
+    let content = "";
 
-// Fetch from Draft Columns (O=15, P=16, Q=17)
-if (selectorValue === "案1") {
-    content = sheet.getRange(rowIndex, 15).getValue();
-} else if (selectorValue === "案2") {
-    content = sheet.getRange(rowIndex, 16).getValue();
-} else if (selectorValue === "案3") {
-    content = sheet.getRange(rowIndex, 17).getValue();
-}
+    // Fetch from Draft Columns (O=15, P=16, Q=17)
+    if (selectorValue === "案1") {
+        content = sheet.getRange(rowIndex, 15).getValue();
+    } else if (selectorValue === "案2") {
+        content = sheet.getRange(rowIndex, 16).getValue();
+    } else if (selectorValue === "案3") {
+        content = sheet.getRange(rowIndex, 17).getValue();
+    }
 
-if (content) {
-    // Output列(H=8)を更新
-    sheet.getRange(rowIndex, 8).setValue(content);
-}
+    if (content) {
+        // Output列(H=8)を更新
+        sheet.getRange(rowIndex, 8).setValue(content);
+    }
 }
 
 /**
