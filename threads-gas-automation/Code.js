@@ -269,11 +269,11 @@ function setupBoardSheet() {
     // 3. ガイド行 (2行目) - New
     // Description text directly in the cells
     const guides = [
-        "", "", "", "↓タイプを選択", "↓笑いの強さ",
+        "↓ボタンを押すと文章が生成されます", "↓投稿出来る状態になります", "", "↓タイプを選択", "↓笑いの度合いを選択できます",
         "【ネタ】ここに書きたいことを入力\n（例：今日は疲れた...）",
         "【画像】URLやメモ",
-        "←ここにAIが書いた文章が出ます",
-        "←表示切替", "", "", 0, "", ""
+        "←文章が３案出ますので、Selectorで一つを選びます",
+        "←文章を選びます", "ID", "Last", "Cnt", "Analysis", "Drafts"
     ];
     sheet.getRange("A2:N2").setValues([guides]);
     sheet.getRange("A2:Q2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
