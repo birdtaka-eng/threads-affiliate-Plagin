@@ -1994,65 +1994,101 @@ function setupLabSheet() {
     if (!sheet) {
         sheet = ss.insertSheet(SHEET_LAB);
     } else {
-        // Migration Check: If A1 is not "🚀 Run", insert column
+        // Migration Check: If A1 is "🚀 Run" (Old Header), insert row for Description
         const a1 = sheet.getRange("A1").getValue();
-        if (a1 && String(a1).indexOf("🚀") === -1) {
-            sheet.insertColumns(1);
-            Browser.msgBox("旧レイアウトを検知しました。A列を挿入してデータを右にずらしました。");
+        if (String(a1).includes("🚀")) {
+            sheet.insertRows(1);
+        }
+        // If A2 is "🚀 Run" (Current Header), insert row if description missing? 
+        // Logic: We want Layout:
+        // R1: Description
+        // R2: Header
+        // R3: Guide
+        // R4: Data
+
+        // If A2 is NOT "🚀 Run", maybe we are in Old-Old state or New State.
+        // Let's rely on checking A1. 
+        // If A1 contains "収集施設", it's already done.
+        // If A1 is "🚀 Run", insert 1 row.
+        // If A1 is "↓", insert 2 rows.
+    }
+
+    // Ensure Row 1 is Description
+    const manualText = "【最強の「文体」収集施設】\nバズった他人の投稿をここに貼り付けると、AIがその「バズりの構造(DNA)」を解析・抽出します。\nただの保存場所ではありません。ここは「AIの学習データ」そのものです。\n\n★入れれば入れるほど進化する！\nDNAデータが増えれば増えるほど、AIの引き出しが増えます。（『口調』もコピー可能です）";
+
+    // Check if A1 is already description
+    const currentA1 = sheet.getRange("A1").getValue();
+    if (!String(currentA1).includes("収集施設")) {
+        // Determine how many rows to shift based on what's in A1
+        if (String(currentA1).includes("🚀")) {
+            // A1 is Header. Insert 1 row.
+            sheet.insertRows(1);
+        } else if (String(currentA1).includes("↓")) {
+            // A1 is Guide (Weird state). Insert 2 rows.
+            sheet.insertRows(1, 2);
+        } else {
+            // Unknown. Just insert 1 row to be safe? Or maybe it's just empty.
+            // If A1 is empty or data, insert row.
+            sheet.insertRows(1);
         }
     }
 
-    // 1. Headers
+    // 1. Description (Row 1)
+    sheet.getRange("A1:E1").merge().setValue(manualText);
+    sheet.getRange("A1").setBackground("#fff2cc").setFontWeight("bold").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP).setVerticalAlignment("top").setPadding(10, 10, 10, 10);
+    sheet.setRowHeight(1, 100);
+
+    // 2. Headers (Row 2)
     const headers = [["🚀 Run", "Type", "Image Context (背景・状況)", "Raw Post (原文)", "DNA (Analysis Result)"]];
-    sheet.getRange("A1:E1").setValues(headers);
+    sheet.getRange("A2:E2").setValues(headers);
 
     // Style
-    sheet.getRange("A1:E1").setBackground("#4c1130"); // Dark Red
-    sheet.getRange("A1:E1").setFontColor("white");
-    sheet.getRange("A1:E1").setFontWeight("bold");
-    sheet.getRange("A1:E1").setHorizontalAlignment("center");
-    sheet.setRowHeight(1, 40);
+    sheet.getRange("A2:E2").setBackground("#4c1130"); // Dark Red
+    sheet.getRange("A2:E2").setFontColor("white");
+    sheet.getRange("A2:E2").setFontWeight("bold");
+    sheet.getRange("A2:E2").setHorizontalAlignment("center");
+    sheet.setRowHeight(2, 40);
 
-    // 2. Guide Row (Check & Insert)
-    const checkA2 = sheet.getRange("A2").getValue();
-    // If A2 doesn't start with down arrow, assumption: it's data or empty. Insert row.
-    if (!String(checkA2).includes("↓")) {
-        sheet.insertRows(2);
-        // ★Force Clear New Row 2 Immediately to prevent inheritance issues
-        sheet.getRange("2:2").clearDataValidations();
+    // 3. Guide Row (Check & Insert at Row 3)
+    const checkA3 = sheet.getRange("A3").getValue();
+    if (!String(checkA3).includes("↓")) {
+        sheet.insertRows(3);
+        sheet.getRange("3:3").clearDataValidations();
     }
-
-    // Double safety: Clear range before writing
-    sheet.getRange("A2:E2").clearDataValidations();
+    // Double safety clear
+    sheet.getRange("A3:E3").clearDataValidations();
 
     const guides = [["↓分析開始", "↓種類を選択", "【画像】あれば内容をメモ", "【原文】ここにバズッた投稿をコピペ", "←ここにAI分析結果が出ます"]];
-    sheet.getRange("A2:E2").setValues(guides);
-    sheet.getRange("A2:E2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.setRowHeight(2, 60);
-    sheet.setFrozenRows(2);
+    sheet.getRange("A3:E3").setValues(guides);
+    sheet.getRange("A3:E3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.setRowHeight(3, 60);
+    sheet.setFrozenRows(3);
 
-    // 4. Validation & Format (Start from Row 3)
+    // 4. Clear Old Validations (Safe Clear)
+    sheet.getRange("A4:E1000").clearDataValidations();
+
+    // 5. Validation & Format (Start from Row 4)
     // A: Checkbox
     const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("A3:A500").setDataValidation(checkbox);
-    sheet.getRange("A3:A500").setHorizontalAlignment("center");
+    sheet.getRange("A4:A500").setDataValidation(checkbox);
+    sheet.getRange("A4:A500").setHorizontalAlignment("center");
 
     // B: Type
     const ruleType = SpreadsheetApp.newDataValidation()
         .requireValueInList(["単品", "日常", "有益", "自己紹介", "Free", "まとめ"], true)
         .setAllowInvalid(false).build();
-    sheet.getRange("B3:B500").setDataValidation(ruleType);
+    sheet.getRange("B4:B500").setDataValidation(ruleType);
 
     // D: Raw Post
-    sheet.getRange("D3:D500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("D3:D500").setVerticalAlignment("top");
+    sheet.getRange("D4:D500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("D4:D500").setVerticalAlignment("top");
 
     // E: DNA
-    sheet.getRange("E3:E500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("E3:E500").setVerticalAlignment("top");
-    sheet.getRange("E3:E500").setBackground("#f3f3f3");
+    sheet.getRange("E4:E500").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("E4:E500").setVerticalAlignment("top");
+    sheet.getRange("E4:E500").setBackground("#f3f3f3");
 
-    // 5. Widths
+    // 6. Widths
     sheet.setColumnWidth(1, 60);  // Run
     sheet.setColumnWidth(2, 80);  // Type
     sheet.setColumnWidth(3, 150); // Image
@@ -2062,8 +2098,9 @@ function setupLabSheet() {
     // Clean up F (Old Guide)
     sheet.getRange("F2:F100").clearContent();
 
-    Browser.msgBox("バズ研究所(Lab)を更新しました！\\n2行目にガイドを追加しました。");
+    Browser.msgBox("バズ研究所(Lab)を更新しました！\\n1行目にマニュアルを追加しました。");
 }
+
 /**
  * Helper: Analyze Single Block of Text and Update DB/Settings
  */
