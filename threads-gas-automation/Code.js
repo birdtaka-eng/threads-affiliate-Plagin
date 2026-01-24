@@ -2011,11 +2011,10 @@ function setupLabSheet() {
     sheet.getRange("A1:E1").setFontWeight("bold");
     sheet.getRange("A1:E1").setHorizontalAlignment("center");
 
-    // 2. Clear Old Validations
+    // 3. Clear Old Validations
     sheet.getRange("A2:E1000").clearDataValidations();
 
-    // 3. Validation & Format
-    // A: Checkbox
+    // 4. Validation & Format (Row 3+)   // A: Checkbox
     const checkbox = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     sheet.getRange("A2:A500").setDataValidation(checkbox);
     sheet.getRange("A2:A500").setHorizontalAlignment("center");
