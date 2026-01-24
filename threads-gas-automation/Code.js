@@ -1612,19 +1612,27 @@ function setupManualSheet() {
         ["", "4. 近くにある数字（例: 1234567890）をコピーし、「設定」シートのB3セルに貼り付け", ""],
 
         ["3. Access Token (自動投稿用の鍵)", "任意", "自動投稿したい場合のみ必要です（未設定でも生成は可能）。"],
-        ["   手順A:", "1. Meta for Developers (developers.facebook.com) にアクセス", "Instagramアカウントでログイン"],
-        ["", "2. 「マイアプリ」>「アプリを作成」をクリック", "タイプ:「ユースケース」>「その他」>「Threads API」を選択"],
-        ["   手順B:", "3. 左メニュー「Threads」>「User Token Generator」を探す", "※まだ押さない"],
-        ["", "4. 下部の「Threads Testers」で「テスターを追加」をクリック", "自分のInstagram IDを入力して追加"],
-        ["   手順C:", "5. Instagramの「設定」>「アプリとウェブサイト」>「テスターの招待」を開く", "招待を「承認」する (ここが最難関！忘れないで)"],
-        ["   手順D:", "6. Developersに戻り、「User Token Generator」で「Generate Token」をクリック", "表示された長い文字列をコピーし、設定シートB4へ"],
+        ["   手順:", "取得手順が複雑なため、以下のnote記事を参照して取得してください（画像付きで分かりやすいです）。", ""],
+        ["   Link:", "https://note.com/resisan80/n/nabd605a1be83", ""],
+        ["", "発行されたトークンを、「設定」シートのB4セルに貼り付けてください。", ""],
 
         ["4. Gemini Model (AIモデル選択)", "推奨", "B5セルでAIの賢さを選択できます (基本はgemini-2.5-flash)"],
         ["5. Persona (あなたの基本プロフィール)", "必須", "AIのキャラ設定の土台になります。"],
         ["   手順:", "1. 「設定」シートのB6セルに「28歳女性、会社員」のように入力", ""]
     ];
 
-    sheet.getRange("B6:D20").setValues(setupDetails);
+    // Data has 15 rows (indices 0 to 14).
+    // Target Range B6:D20 is 15 rows.
+    // Wait, let's count exactly.
+    // 0:Key, 1:Step1, 2:Step2, 3:Step3 (4 rows)
+    // 4:ThreadID, 5:Step1, 6:Step2, 7:Step3, 8:Step4 (5 rows)
+    // 9:Token, 10:Step, 11:Link, 12:Final (4 rows)
+    // 13:Model (1 row)
+    // 14:Persona, 15:Step1 (2 rows)
+    // Total = 4+5+4+1+2 = 16 rows.
+    // Range B6:D20 is 15 rows (6 to 20 inclusive).
+    // Need B6:D21.
+    sheet.getRange("B6:D21").setValues(setupDetails);
 
     // Style
     sheet.getRange("B6:D6").setFontWeight("bold").setBackground("#d9d2e9"); // Header like row
