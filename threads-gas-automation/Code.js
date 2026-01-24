@@ -2035,7 +2035,7 @@ function setupLabSheet() {
 
     // 1. Description (Row 1)
     sheet.getRange("A1:E1").merge().setValue(manualText);
-    sheet.getRange("A1").setBackground("#fff2cc").setFontWeight("bold").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP).setVerticalAlignment("top").setPadding(10, 10, 10, 10);
+    sheet.getRange("A1").setBackground("#fff2cc").setFontColor("black").setFontWeight("bold").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP).setVerticalAlignment("top");
     sheet.setRowHeight(1, 100);
 
     // 2. Headers (Row 2)
