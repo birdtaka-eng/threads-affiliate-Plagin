@@ -2039,7 +2039,7 @@ function setupLabSheet() {
 
     // B: Type
     const ruleType = SpreadsheetApp.newDataValidation()
-        .requireValueInList(["日常", "有益", "議論", "過去のバズ", "その他"], true)
+        .requireValueInList(["単品", "日常", "有益", "自己紹介", "Free", "まとめ"], true)
         .setAllowInvalid(false).build();
     sheet.getRange("B3:B500").setDataValidation(ruleType);
 
