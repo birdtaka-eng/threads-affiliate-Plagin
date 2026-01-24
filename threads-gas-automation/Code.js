@@ -87,6 +87,11 @@ function onEdit(e) {
         content = sheet.getRange(rowIndex, 16).getValue();
     } else if (selectorValue === "案3") {
         content = sheet.getRange(rowIndex, 17).getValue();
+    } else if (selectorValue === "すべて") {
+        const d1 = sheet.getRange(rowIndex, 15).getValue();
+        const d2 = sheet.getRange(rowIndex, 16).getValue();
+        const d3 = sheet.getRange(rowIndex, 17).getValue();
+        content = `【案1】\n${d1}\n\n【案2】\n${d2}\n\n【案3】\n${d3}`;
     }
 
     if (content) {
@@ -282,7 +287,7 @@ function setupBoardSheet() {
 
     // I: Selector Rule (Shifted from H)
     const selectorRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['案1', '案2', '案3'], true).build();
+        .requireValueInList(['すべて', '案1', '案2', '案3'], true).build();
     sheet.getRange("I4:I100").setDataValidation(selectorRule);
 
     // 5. 幅調整
