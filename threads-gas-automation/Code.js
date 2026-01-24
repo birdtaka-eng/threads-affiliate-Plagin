@@ -56,47 +56,42 @@ function onOpen() {
  * トリガー機能: 編集時即時反映
  * 投稿ボードで「Selector(案1,2,3)」を変更した際、Sourceから本文を即座に書き換える
  */
-function onEdit(e) {
-    const sheet = e.source.getActiveSheet();
-    const range = e.range;
+const sheet = e.source.getActiveSheet();
+const range = e.range;
 
-    // 対象シート: 投稿作成ボード
-    if (sheet.getName() !== SHEET_BOARD) return;
+// 対象シート: 投稿作成ボード
+if (sheet.getName() !== SHEET_BOARD) return;
 
-    // 対象列: H列 (Selector) (8列目)
-    if (range.getColumn() !== 8 || range.getRow() < 4) return;
+// 対象列: H列 (Selector) (9列目) Note: Comment says 8 but Selector is I (9)
+// Actually Selector is I (9). The code says `range.getColumn() !== 8` which is H.
+// Wait, let's check setupBoardSheet.
+// A(1), B(2), C(3), D(4), E(5), F(6), G(7), H(8)=Output, I(9)=Selector
+// So current code `range.getColumn() !== 8` logic seems to be monitoring Output?
+// No, existing code: `if (range.getColumn() !== 8` means "If NOT 8 then return"?
+// Wait, previous code: `range.getColumn() !== 8`. 8 is Output.
+// Ah, `setupBoardSheet` defines I as Selector.
+// Let's fix the column index to 9 (Selector).
 
-    const selectorValue = range.getValue(); // "案1", "案2", "案3"
-    const rowIndex = range.getRow();
-    const sourceValue = sheet.getRange(rowIndex, 13).getValue(); // M列 (Drafts Source)
+if (range.getColumn() !== 9 || range.getRow() < 4) return;
 
-    if (!sourceValue || String(sourceValue).length < 20) return; // データなし
+const selectorValue = range.getValue(); // "案1", "案2", "案3"
+const rowIndex = range.getRow();
 
-    // Parse (Simple Logic mirroring generatePostsCommon)
-    let content = "";
+let content = "";
 
-    // Regexで抽出
-    // 案1: ---案1: ... ---\n(ここで切る)---案2: ...
-    if (selectorValue === "案1") {
-        const match = sourceValue.match(/---案1:.*?---\n([\s\S]*?)---案2:/);
-        if (match) content = match[1].trim();
-        else {
-            // Fallback
-            const split = sourceValue.split("---案2:");
-            if (split.length > 0) content = split[0].replace(/---案1:.*?---/, "").trim();
-        }
-    } else if (selectorValue === "案2") {
-        const match = sourceValue.match(/---案2:.*?---\n([\s\S]*?)---案3:/);
-        if (match) content = match[1].trim();
-    } else if (selectorValue === "案3") {
-        const match = sourceValue.match(/---案3:.*?---\n([\s\S]*)/); // 案3は最後まで
-        if (match) content = match[1].trim();
-    }
+// Fetch from Draft Columns (O=15, P=16, Q=17)
+if (selectorValue === "案1") {
+    content = sheet.getRange(rowIndex, 15).getValue();
+} else if (selectorValue === "案2") {
+    content = sheet.getRange(rowIndex, 16).getValue();
+} else if (selectorValue === "案3") {
+    content = sheet.getRange(rowIndex, 17).getValue();
+}
 
-    if (content) {
-        // Output列(G)を更新 - Shifted +1
-        sheet.getRange(rowIndex, 7).setValue(content);
-    }
+if (content) {
+    // Output列(H=8)を更新
+    sheet.getRange(rowIndex, 8).setValue(content);
+}
 }
 
 /**
@@ -229,12 +224,12 @@ function setupBoardSheet() {
     }
 
     // 1. クリーニング
-    sheet.getRange("A1:N1000").clear(); // Extended to N
-    sheet.getRange("A1:N1000").clearDataValidations();
-    sheet.getRange("A1:N1000").clearFormat();
+    sheet.getRange("A1:Q1000").clear(); // Extended to Q
+    sheet.getRange("A1:Q1000").clearDataValidations();
+    sheet.getRange("A1:Q1000").clearFormat();
 
-    // 2. プロンプトガイドエリア (A1:N1)
-    const promptRange = sheet.getRange("A1:N1");
+    // 2. プロンプトガイドエリア (A1:Q1)
+    const promptRange = sheet.getRange("A1:Q1");
     promptRange.merge();
 
     const defaultPrompt =
@@ -248,20 +243,20 @@ function setupBoardSheet() {
     promptRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
 
     // 全体の折り返し設定 (A4以降)
-    sheet.getRange("A4:N1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A4:N1000").setVerticalAlignment("top"); // 見やすくするため上揃えも追加
+    sheet.getRange("A4:Q1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A4:Q1000").setVerticalAlignment("top"); // 見やすくするため上揃えも追加
     promptRange.setVerticalAlignment("top");
     promptRange.setFontSize(10);
     sheet.setRowHeight(1, 80);
 
     // 3. ヘッダー (3行目)
     const headers = [
-        ["🚀 Create", "ON AIR", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Assets (画像/URL)", "Output (生成本文)", "Selector", "System ID", "Last Played", "Count", "Analysis", "Drafts Source"]
+        ["🚀 Create", "ON AIR", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Assets (画像/URL)", "Output (決定稿)", "Selector", "System ID", "Last Played", "Count", "Analysis", "Drafts Source", "Draft 1 (案1)", "Draft 2 (案2)", "Draft 3 (案3)"]
     ];
-    sheet.getRange("A3:N3").setValues(headers);
-    sheet.getRange("A3:N3").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A3:N3").setFontWeight("bold");
-    sheet.getRange("A3:N3").setHorizontalAlignment("center");
+    sheet.getRange("A3:Q3").setValues(headers);
+    sheet.getRange("A3:Q3").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A3:Q3").setFontWeight("bold");
+    sheet.getRange("A3:Q3").setHorizontalAlignment("center");
 
     // 4. バリデーション
     // A: Create Checkbox
@@ -305,18 +300,25 @@ function setupBoardSheet() {
     sheet.setColumnWidth(13, 150); // Analysis
     // 14: Drafts Source (Hidden)
 
+    // 5. 幅調整
+    // ... (Prior settings)
+    sheet.setColumnWidth(14, 50); // Drafts Source (N) - Keep small/hidden
+    sheet.setColumnWidth(15, 300); // Draft 1
+    sheet.setColumnWidth(16, 300); // Draft 2
+    sheet.setColumnWidth(17, 300); // Draft 3
+
     // Hide Drafts Source (N)
     sheet.hideColumns(14);
 
     // 6. サンプルデータ (Shifted)
     const samples = [
-        [false, false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "案1", "", "", 0, ""],
-        [false, false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "案1", "", "", 0, ""],
-        [false, false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "案1", "", "", 0, ""]
+        [false, false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "案1", "", "", 0, "", "", "案1のサンプル", "案2のサンプル", "案3のサンプル"],
+        [false, false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "案1", "", "", 0, "", "", "案1のサンプル", "案2のサンプル", "案3のサンプル"],
+        [false, false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "案1", "", "", 0, "", "", "案1のサンプル", "案2のサンプル", "案3のサンプル"]
     ];
 
     samples.forEach((row, i) => {
-        sheet.getRange(4 + i, 1, 1, 13).setValues([row]);
+        sheet.getRange(4 + i, 1, 1, 17).setValues([row]);
     });
 
     Browser.msgBox(`シート「${sheetName}」を放送局仕様(v3.0)にアップデートしました。\n\nA列に「🚀 Create」ボタン(チェックボックス)を追加しました！`);
@@ -496,7 +498,10 @@ function generatePostsCommon(sheetName, targetRow) {
     const colAssets = 7; // G
     const colOutput = 8; // H
     const colSelector = 9; // I
-    const colDraftsSource = 14; // N
+    const colDraftsSource = 14; // N (Backup)
+    const colDraft1 = 15; // O
+    const colDraft2 = 16; // P
+    const colDraft3 = 17; // Q
 
     let targets = [];
 
@@ -668,9 +673,24 @@ function generatePostsCommon(sheetName, targetRow) {
                 }
             }
 
+
+            // Add Standard Format Instruction to Force Separate Outputs
+            formatInstruction = `
+【出力形式 (区切り文字を使用)】
+以下の「///」を区切り文字として、3つの案を出力してください。
+///案1
+(案1の本文)
+///案2
+(案2の本文)
+///案3
+(案3の本文)
+`;
+        }
+
             const prompt = `
 あなたはThreadsの人気インフルエンサーです。
 以下の「ネタ」から、指定されたTypeに合わせて投稿を作成してください。
+${formatInstruction}
 
 【入力ネタ】
 ${topic}
@@ -718,46 +738,42 @@ ${manualRules ? "参考にしているマニュアルからの重要心得:\n" +
 - 出力は**投稿本文のみ** (解説不要)。
 `;
 
-            let generatedText = callGemini(apiKey, prompt);
-            generatedText = generatedText.replace(/#\S+/g, '').trim();
+        let generatedText = callGemini(apiKey, prompt);
+        generatedText = generatedText.replace(/#\S+/g, '').trim();
 
-            if (usingGrimoire) {
-                // Save Full Blob to Col M
-                sheet.getRange(rowIndex, colDraftsSource).setValue(generatedText);
+        // Backup raw text
+        sheet.getRange(rowIndex, colDraftsSource).setValue(generatedText);
 
-                // Set Selector to "案1"
-                sheet.getRange(rowIndex, colSelector).setValue("案1");
-
-                // Parse "Draft 1"
-                let draft1 = generatedText;
-                const match = generatedText.match(/---案1:.*?---\n([\s\S]*?)---案2:/);
-                if (match && match[1]) {
-                    draft1 = match[1].trim();
-                } else {
-                    // Fallback
-                    const split = generatedText.split("---案2:");
-                    if (split.length > 0) draft1 = split[0].replace(/---案1:.*?---/, "").trim();
-                }
-
-                sheet.getRange(rowIndex, colOutput).setValue(draft1);
-
-            } else {
-                sheet.getRange(rowIndex, colOutput).setValue(generatedText);
-                sheet.getRange(rowIndex, colDraftsSource).clearContent();
-                sheet.getRange(rowIndex, colSelector).clearContent();
+        // Parsing
+        let drafts = ["", "", ""];
+        const parts = generatedText.split("///");
+        let dIndex = 0;
+        for (let p of parts) {
+            let clean = p.replace(/^案\d+\s*/, "").trim();
+            if (clean) {
+                if (dIndex < 3) drafts[dIndex] = clean;
+                dIndex++;
             }
-
-
-            count++;
-
-            Utilities.sleep(1000); // 
-
-        } catch (e) {
-            const rowIndex = dataIndex + 4;
-            sheet.getRange(rowIndex, colOutput).setValue("エラー: " + e.message);
         }
+
+        // Write to Columns O, P, Q
+        sheet.getRange(rowIndex, colDraft1).setValue(drafts[0]);
+        sheet.getRange(rowIndex, colDraft2).setValue(drafts[1]);
+        sheet.getRange(rowIndex, colDraft3).setValue(drafts[2]);
+
+        // Set Selector to "案1" and Copy Draft 1 to Output
+        sheet.getRange(rowIndex, colSelector).setValue("案1");
+        sheet.getRange(rowIndex, colOutput).setValue(drafts[0]);
+
+        count++;
+        Utilities.sleep(1000);
+
+    } catch (e) {
+        const rowIndex = dataIndex + 4;
+        sheet.getRange(rowIndex, colOutput).setValue("エラー: " + e.message);
     }
-    Browser.msgBox(`${count}件の投稿を作成しました！`);
+}
+Browser.msgBox(`${count}件の投稿を作成しました！`);
 }
 
 
