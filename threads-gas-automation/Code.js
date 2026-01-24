@@ -103,6 +103,46 @@ function onEdit(e) {
 }
 
 /**
+ * トリガー機能: 選択範囲変更時に行の高さを自動調整
+ * Output列(H)またはDraft列(O-Q)を選択: 拡大
+ * それ以外を選択: 縮小(前回の行)
+ */
+function onSelectionChange(e) {
+    const sheet = e.source.getActiveSheet();
+    if (sheet.getName() !== SHEET_BOARD) return;
+
+    const range = e.range;
+    const row = range.getRow();
+    const col = range.getColumn();
+
+    // 対象列: H(8), O(15), P(16), Q(17)
+    const targetCols = [8, 15, 16, 17];
+    const isTarget = (row >= 4 && targetCols.includes(col));
+
+    // ユーザープロパティを使って前回の行を記憶
+    const props = PropertiesService.getUserProperties();
+    const lastRowKey = 'LAST_EXPANDED_ROW_' + sheet.getSheetId();
+    const lastRow = props.getProperty(lastRowKey);
+
+    // 1. 前回の行を元に戻す (今回が違う行の場合)
+    if (lastRow && parseInt(lastRow) !== row) {
+        try {
+            // デフォルトの高さ (80px) に戻す
+            // もし前回が "すべて(ComparisonView)" で巨大だった場合も戻る
+            sheet.setRowHeight(parseInt(lastRow), 80);
+        } catch (e) { }
+        props.deleteProperty(lastRowKey);
+    }
+
+    // 2. 今回の行を拡大する (対象列の場合)
+    if (isTarget) {
+        // 読みやすい高さに設定 (400px)
+        sheet.setRowHeight(row, 400);
+        props.setProperty(lastRowKey, row);
+    }
+}
+
+/**
  * 【設定】バズ研究所シート拡張
  * 既存のデータを消さずに、DNA分析用の列定義と見た目を整える
  */
