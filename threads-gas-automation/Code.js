@@ -768,9 +768,10 @@ ${manualRules ? "参考にしているマニュアルからの重要心得:\n" +
             sheet.getRange(rowIndex, colDraft2).setValue(drafts[1]);
             sheet.getRange(rowIndex, colDraft3).setValue(drafts[2]);
 
-            // Set Selector to "案1" and Copy Draft 1 to Output
-            sheet.getRange(rowIndex, colSelector).setValue("案1");
-            sheet.getRange(rowIndex, colOutput).setValue(drafts[0]);
+            // Set Selector to "すべて" and Copy All Drafts to Output (Comparison View)
+            const combinedOutput = `【案1】\n${drafts[0]}\n\n【案2】\n${drafts[1]}\n\n【案3】\n${drafts[2]}`;
+            sheet.getRange(rowIndex, colSelector).setValue("すべて");
+            sheet.getRange(rowIndex, colOutput).setValue(combinedOutput);
 
             count++;
             Utilities.sleep(1000);
