@@ -253,41 +253,49 @@ function setupBoardSheet() {
     }
 
     // 1. クリーニング
-    sheet.getRange("A1:Q1000").clear();
-    sheet.getRange("A1:Q1000").clearDataValidations();
-    sheet.getRange("A1:Q1000").clearFormat();
+    sheet.getRange("A1:T1000").clear();
+    sheet.getRange("A1:T1000").clearDataValidations();
+    sheet.getRange("A1:T1000").clearFormat();
 
-    // 2. ヘッダー (1行目) - Moved from Row 3
+    // 2. ヘッダー (1行目)
     const headers = [
-        ["🚀 Create", "ON AIR", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Assets (画像/URL)", "Output (決定稿)", "Selector", "System ID", "Last Played", "Count", "Analysis", "Drafts Source", "Draft 1 (案1)", "Draft 2 (案2)", "Draft 3 (案3)"]
+        ["🚀 Create", "ON AIR", "No", "Type", "Humor", "Topic (ネタ/メモ)", "Assets (画像/URL)", "Output (決定稿)", "Selector", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "Drafts Source", "Draft 1", "Draft 2", "Draft 3"]
     ];
-    sheet.getRange("A1:Q1").setValues(headers);
-    sheet.getRange("A1:Q1").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A1:Q1").setFontWeight("bold");
-    sheet.getRange("A1:Q1").setHorizontalAlignment("center");
+    // Columns:
+    // A(1):Create, B(2):OnAir, C(3):No, D(4):Type, E(5):Humor, F(6):Topic, G(7):Assets, H(8):Output, I(9):Selector
+    // J(10):SystemID
+    // K(11):Views, L(12):Likes, M(13):Replies, N(14):Reposts
+    // O(15):Engagement Rate
+    // P(16):Judge (判定)
+    // Q(17):Drafts Source ...
 
-    // 3. ガイド行 (2行目) - New
-    // Description text directly in the cells
+    sheet.getRange("A1:T1").setValues(headers);
+    sheet.getRange("A1:T1").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A1:T1").setFontWeight("bold");
+    sheet.getRange("A1:T1").setHorizontalAlignment("center");
+
+    // 3. ガイド行 (2行目)
     const guides = [
         "", "", "", "↓タイプを選択", "↓笑いの強さ",
         "【ネタ】ここに書きたいことを入力\n（例：今日は疲れた...）",
         "【画像】URLやメモ",
         "←ここにAIが書いた文章が出ます",
-        "←表示切替", "", "", 0, "", ""
+        "←表示切替",
+        "⛔ ID(触らない)", "閲覧数", "いいね", "返信", "引用/再投稿", "反応率", "判定",
+        "", "", "", ""
     ];
-    sheet.getRange("A2:N2").setValues([guides]);
-    sheet.getRange("A2:Q2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.setRowHeight(2, 60); // Guide row height
+    sheet.getRange("A2:T2").setValues([guides]);
+    sheet.getRange("A2:T2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.setRowHeight(2, 60);
 
     // 4. データエリア設定 (3行目以降)
-    sheet.getRange("A3:Q1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A3:Q1000").setVerticalAlignment("top");
-    sheet.setRowHeight(1, 40); // Header height
-
-    // 固定 (Freeze 2 rows)
+    sheet.getRange("A3:T1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A3:T1000").setVerticalAlignment("top");
+    sheet.setRowHeight(1, 40);
     sheet.setFrozenRows(2);
 
-    // 5. バリデーション (Start from Row 3)
+    // 5. バリデーション & 幅調整
+    // ... (Existing validations A-I are fine) ...
     // A: Create Checkbox
     const checkboxCreate = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     sheet.getRange("A3:A100").setDataValidation(checkboxCreate);
@@ -296,53 +304,47 @@ function setupBoardSheet() {
     const checkboxOnAir = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     sheet.getRange("B3:B100").setDataValidation(checkboxOnAir);
 
-    // D: Type Rule (Shifted from C)
+    // D: Type Rule
     const ruleType = SpreadsheetApp.newDataValidation()
         .requireValueInList(["単品", "日常", "有益", "自己紹介", "Free", "まとめ"], true)
         .setAllowInvalid(false).build();
     sheet.getRange("D3:D100").setDataValidation(ruleType);
 
-    // E: Humor Rule (Shifted from D)
+    // E: Humor Rule
     const ruleHumor = SpreadsheetApp.newDataValidation()
         .requireValueInList(["Lv1: 控えめ", "Lv2: 標準", "Lv3: 全力"], true)
         .setAllowInvalid(false).build();
     sheet.getRange("E3:E100").setDataValidation(ruleHumor);
 
-    // I: Selector Rule (Shifted from H)
+    // I: Selector Rule
     const selectorRule = SpreadsheetApp.newDataValidation()
         .requireValueInList(['すべて', '案1', '案2', '案3'], true).build();
     sheet.getRange("I3:I100").setDataValidation(selectorRule);
 
-    // 5. 幅調整
-    sheet.setColumnWidth(1, 60);  // Create (Check)
-    sheet.setColumnWidth(2, 60);  // ON AIR (Check)
+    // Widths
+    sheet.setColumnWidth(1, 60);  // Create
+    sheet.setColumnWidth(2, 60);  // ON AIR
     sheet.setColumnWidth(3, 40);  // No
     sheet.setColumnWidth(4, 80);  // Type
     sheet.setColumnWidth(5, 80);  // Humor
     sheet.setColumnWidth(6, 300); // Topic
-    sheet.setColumnWidth(7, 150); // Assets
+    sheet.setColumnWidth(7, 100); // Assets
     sheet.setColumnWidth(8, 400); // Output
     sheet.setColumnWidth(9, 80); // Selector
     sheet.setColumnWidth(10, 50); // System ID
-    sheet.setColumnWidth(11, 80); // Last Played
-    sheet.setColumnWidth(12, 40); // Count
-    sheet.setColumnWidth(13, 100); // Analysis
 
-    // Hide Drafts Source (N)
-    sheet.hideColumns(14);
-    // Hide Draft Columns (O, P, Q) - Keep data but hide from view
-    sheet.hideColumns(15, 3);
+    // Metrics Widths
+    sheet.setColumnWidth(11, 60); // Views
+    sheet.setColumnWidth(12, 60); // Likes
+    sheet.setColumnWidth(13, 60); // Replies
+    sheet.setColumnWidth(14, 60); // Reposts
+    sheet.setColumnWidth(15, 60); // Rate
+    sheet.setColumnWidth(16, 60); // Judge
 
-    // 6. Samples (Row 3+)
-    const samples = [
-        [false, false, 1, "単品", "Lv2: 標準", "母の日2026・おしゃれな花瓶", "", "", "すべて", "", "", 0, "", ""],
-        [false, false, 2, "日常", "Lv2: 標準", "最近あったちょっといい話", "", "", "すべて", "", "", 0, "", ""],
-        [false, false, 3, "有益", "Lv1: 控えめ", "初心者向けGAS活用術3選", "", "", "すべて", "", "", 0, "", ""]
-    ];
+    // Hide Drafts
+    sheet.hideColumns(17, 4); // Q, R, S, T
 
-    sheet.getRange(3, 1, samples.length, 14).setValues(samples); // Write to A3:N5
-
-    Browser.msgBox(`シート「${sheetName}」を放送局仕様(v3.1)にアップデートしました。\n\nヘッダーを1行目に、ガイドを2行目に配置しました！`);
+    Browser.msgBox(`シート「${sheetName}」を放送局仕様(v3.2)にアップデートしました。\n\n反響データ詳細用の列(J〜P)を追加しました！`);
 }
 
 
@@ -916,34 +918,65 @@ function updateMetrics() {
     const { token } = creds;
 
     const lastRow = boardSheet.getLastRow();
-    if (lastRow < 4) return;
+    if (lastRow < 3) return;
 
-    // I: System ID (Index 8), L: Analysis (Index 11)
-    const range = boardSheet.getRange(4, 1, lastRow - 3, 12); // Reduced width
+    // J: System ID (Index 10)
+    // Metrics: K(11), L(12), M(13), N(14), O(15), P(16)
+    const range = boardSheet.getRange(3, 1, lastRow - 2, 16);
     const data = range.getValues();
     let updateCount = 0;
 
     data.forEach((row, i) => {
-        const sysId = row[8]; // Index 8 (I列)
+        const sysId = row[9]; // Index 9 (J列)
         if (!sysId) return;
 
         try {
             // Get Insights
             // Insights API: GET /{media_id}/insights?metric=views,likes,replies,reposts,quotes
+            // Note: 'quotes' are often essentially reposts with comments, threads separates them. 
+            // We sum reposts + quotes for "Diffusion".
             const url = `https://graph.threads.net/v1.0/${sysId}/insights?metric=views,likes,replies,reposts,quotes&access_token=${token}`;
             const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
             const json = JSON.parse(resp.getContentText());
 
             if (json.data) {
-                // Format: [{name: "likes", values: [{value: 10}]}, ...]
-                let analysis = {};
+                let views = 0, likes = 0, replies = 0, reposts = 0, quotes = 0;
+
                 json.data.forEach(item => {
-                    const val = item.values && item.values.length > 0 ? item.values[0].value : 0;
-                    analysis[item.name] = val;
+                    const val = (item.values && item.values.length > 0) ? item.values[0].value : 0;
+                    if (item.name === 'views') views = val;
+                    if (item.name === 'likes') likes = val;
+                    if (item.name === 'replies') replies = val;
+                    if (item.name === 'reposts') reposts = val;
+                    if (item.name === 'quotes') quotes = val;
                 });
 
-                // Write back JSON string (Col L = 12)
-                boardSheet.getRange(4 + i, 12).setValue(JSON.stringify(analysis));
+                const totalDiffusion = reposts + quotes;
+
+                // Engagement Rate: (Likes + Replies + Diffusion) / Views
+                let rate = 0;
+                if (views > 0) {
+                    rate = ((likes + replies + totalDiffusion) / views) * 100;
+                }
+                const rateStr = rate.toFixed(2) + "%";
+
+                // Judge (Simple logic)
+                let judge = "-";
+                if (views > 1000 && rate > 5.0) judge = "🔥バズ";
+                else if (views > 500 && rate > 3.0) judge = "🎯良";
+                else if (views > 100) judge = "👀";
+
+                // Write back specific columns (Row = i + 3)
+                // K(11) -> P(16)
+                // Offset is 11.
+                const targetRow = i + 3;
+                boardSheet.getRange(targetRow, 11).setValue(views); // K
+                boardSheet.getRange(targetRow, 12).setValue(likes); // L
+                boardSheet.getRange(targetRow, 13).setValue(replies); // M
+                boardSheet.getRange(targetRow, 14).setValue(totalDiffusion); // N
+                boardSheet.getRange(targetRow, 15).setValue(rateStr); // O
+                boardSheet.getRange(targetRow, 16).setValue(judge); // P
+
                 updateCount++;
             }
         } catch (e) {
