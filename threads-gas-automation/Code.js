@@ -13,6 +13,7 @@ function onOpen() {
         .addItem('【作成】まとめネタ作成 (選択合体)', 'generateSummaryPost')
         .addItem('【放送】手動放送テスト (今放送すべきものを実行)', 'runBroadcast')
         .addItem('【分析】投稿データ更新 (Metrics)', 'updateMetrics')
+        .addItem('【分析】虎の巻アップデート (Master DNA)', 'updateMasterDNA')
         .addSeparator()
         .addItem('【ヒント】表示ON', 'showTips')
         .addItem('【ヒント】表示OFF', 'hideTips')
@@ -418,10 +419,14 @@ function callGeminiDebug(apiKey, prompt) {
         muteHttpExceptions: true
     };
 
-    try {
-        const response = UrlFetchApp.fetch(url, options);
-        return response.getContentText(); // Return RAW JSON String
-    } catch (e) {
-        return JSON.stringify({ error: e.message });
-    }
+} catch (e) {
+    return JSON.stringify({ error: e.message });
+}
+}
+
+/**
+ * Legacy Alias for Grid buttons
+ */
+function runDojoAnalysis() {
+    updateMasterDNA();
 }
