@@ -26,7 +26,7 @@ function setupLabSheet() {
     sheet.getRange("A1:E1").merge().setValue(LAB_CONFIG.description);
     sheet.getRange("A1").setBackground("#fff2cc").setFontColor("#000000");
     sheet.getRange("A1").setVerticalAlignment("top").setHorizontalAlignment("left");
-    sheet.getRange("A1").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP).setPadding(5, 5, 5, 5);
+    sheet.getRange("A1").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
     sheet.setRowHeight(1, 100);
 
     // 2. Headers & Guides (Rows 2 & 3)
