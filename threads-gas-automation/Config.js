@@ -18,13 +18,11 @@ const SHOW_DEV_TOOLS = true;
 
 // --- 3. Gemini Models ---
 const AI_MODELS = [
-   "gemini-2.5-flash",
-   "gemini-2.5-pro",
-   "gemini-2.0-flash",
+   "gemini-2.0-flash-exp",
    "gemini-1.5-flash",
    "gemini-1.5-pro"
 ];
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-1.5-flash";
 
 // --- 4. Layout Definitions (Buzz Lab) ---
 const LAB_CONFIG = {
