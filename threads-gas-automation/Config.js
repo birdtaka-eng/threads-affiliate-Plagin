@@ -8,6 +8,7 @@
 const SHEET_BOARD = "投稿作成ボード";
 const SHEET_LAB = "バズ研究所";
 const SHEET_DB = "テンプレートDB";
+const SHEET_TORANOMAKI = "虎の巻DB"; // User defined sheet
 const SHEET_SCHEDULE = "番組表";
 const SHEET_SETTINGS = "設定";
 

@@ -103,8 +103,9 @@ function setupTemplateDatabase(silent = false) {
     dbSheet = ss.insertSheet(SHEET_DB);
 
     // Headers
+    // Headers
     const headers = [
-        "A: ID (Auto)", "B: Skill Name", "C: Context/Target", "D: Syntax Template",
+        "A: Last Learned", "B: Skill Name", "C: Context/Target", "D: Syntax Template",
         "E: Humor Formula", "F: Type", "G: Source (Lab URL)", "H: Status (Active/Archived)", "I: Rating (1-5)"
     ];
 
@@ -193,7 +194,7 @@ ${rawText}
         data.templates.forEach(t => {
             if (!existingSyntaxes.includes(t.syntax)) {
                 newRows.push([
-                    Utilities.getUuid(),
+                    "", // A: Last Learned (Empty initially)
                     `Dojo: ${t.name}`,
                     t.context,
                     t.syntax,
@@ -226,101 +227,7 @@ ${rawText}
     return { summary: display };
 }
 
-function updateMasterDNA() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    setupTemplateDatabase(true);
-
-    const labSheet = ss.getSheetByName(SHEET_LAB);
-    const dbSheet = ss.getSheetByName(SHEET_DB);
-    let setSheet = ss.getSheetByName(SHEET_SETTINGS);
-
-    if (!labSheet || !dbSheet) return;
-
-    // --- Phase 1: Sync Lab -> DB ---
-    const lastLabRow = labSheet.getLastRow();
-    if (lastLabRow > 3) {
-        // Lab Data: Run(A), Type(B), Context(C), Raw(D), DNA(E)
-        // Data starts at Row 4
-        const labValues = labSheet.getRange(4, 1, lastLabRow - 3, 5).getValues();
-
-        // Read Existing Syntaxes from Col D (Index 3)
-        const lastDbRow = dbSheet.getLastRow();
-        const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
-
-        const newRows = [];
-        labValues.forEach(row => {
-            const type = row[1]; // Col B
-            const context = row[2]; // Col C
-            const dna = row[4]; // Col E
-
-            if (dna && dna !== "" && !existingSyntaxes.includes(dna)) {
-                newRows.push([
-                    Utilities.getUuid(),
-                    `Auto-Imported Skill (${type})`, // Name
-                    `Context: ${context}`, // Context
-                    dna, // Syntax Template
-                    "Auto-Analyze required", // Humor Formula
-                    type,
-                    "Lab Auto-Sync",
-                    "Active",
-                    "3"
-                ]);
-            }
-        });
-
-        if (newRows.length > 0) {
-            dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
-        }
-    }
-
-    // --- Phase 1.5: Auto-Classify Humor (Binding) ---
-    // (Omitted strict impl for brevity, assuming main usage is Sync)
-    // Actually, I should check if I need to move the Classification Logic too?
-    // Yes, but I'll assume minimal port for now or it will get too big.
-    // Wait, updateMasterDNA contained Phase 2 (Grimoire Gen).
-    // I should include that.
-
-    // ... Phase 2: DB -> Grimoire ...
-    const finalDbRow = dbSheet.getLastRow();
-    if (finalDbRow < 2) return;
-
-    const dbData = dbSheet.getRange(2, 1, finalDbRow - 1, 9).getValues();
-    const activeSkills = dbData.filter(row => row[7] === "Active").map(row => {
-        return `【Skill: ${row[1]}】\n(Context: ${row[2]})\n${row[3]}\n(Formula: ${row[4]})`;
-    });
-
-    const allDNA = activeSkills.join("\n\n-------------------\n\n");
-    const prompt = `
-あなたは世界最高峰のコピーライティング・ストラテジスト兼、キャラクタープロファイラーです。
-以下は、データベースに登録された「有効なクリエイティブ・スキル（DNA）」のリストです。
-
-【有効スキルリスト（学習した文体）】
-${allDNA}
-
-【ユーモア心理学・会話の公式】
-${HUMOR_LIBRARY}
-
-【指示】
-これらのデータから、**このアカウントの「隠されたキャラクター性（Tone of Voice）」**を分析し、それを再現するためのスキルセット（魔導書）を作成してください。
-
-# 🃏 Master DNA Grimoire
-(Output Character DNA & Skill Analysis)
-`;
-
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) return;
-
-    try {
-        const grimoire = callGeminiSafe(apiKey, prompt);
-
-        if (!setSheet) setSheet = ss.insertSheet(SHEET_SETTINGS);
-        setSheet.getRange("A9").setValue("Master DNA (Grimoire)");
-        setSheet.getRange("B9").setValue(grimoire);
-        setSheet.getRange("B10").setValue("Last Updated: " + new Date());
-    } catch (e) {
-        console.warn("Master DNA Update Failed: " + e.message);
-    }
-}
+// End of Lab.js
 
 /**
  * 【設定】自動化トリガー設定 (バズ研究所)
@@ -346,8 +253,12 @@ function onLabEditInstallable(e) {
 
     if (range.getValue() !== true) return;
 
+    // Show feedback
+    sheet.getRange(row, 5).setValue("⏳ Analyzing...");
+    SpreadsheetApp.flush();
+
     analyzeSingleRow(sheet, row);
-    range.setValue(false);
+    range.setValue(false); // Reset checkbox
 }
 
 /**

@@ -8,7 +8,7 @@
  * メニュー作成
  */
 function onOpen() {
-    SpreadsheetApp.getUi().createMenu('🚀 Threads運用メニュー')
+    SpreadsheetApp.getUi().createMenu('🤖 Threads職人 (v2)')
         .addItem('【作成】投稿一括生成 (全タイプ)', 'generateUnifiedPosts')
         .addItem('【作成】まとめネタ作成 (選択合体)', 'generateSummaryPost')
         .addItem('【放送】手動放送テスト (今放送すべきものを実行)', 'runBroadcast')
@@ -432,4 +432,11 @@ function callGeminiDebug(apiKey, prompt) {
  */
 function runDojoAnalysis() {
     updateMasterDNA();
+}
+
+function debugListSheets() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheets = ss.getSheets();
+    const names = sheets.map(s => s.getName()).join("\\n");
+    Browser.msgBox("Sheets:\\n" + names);
 }
