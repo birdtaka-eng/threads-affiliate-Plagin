@@ -419,9 +419,12 @@ function callGeminiDebug(apiKey, prompt) {
         muteHttpExceptions: true
     };
 
-} catch (e) {
-    return JSON.stringify({ error: e.message });
-}
+    try {
+        const response = UrlFetchApp.fetch(url, options);
+        return response.getContentText(); // Return RAW JSON String
+    } catch (e) {
+        return JSON.stringify({ error: e.message });
+    }
 }
 
 /**
