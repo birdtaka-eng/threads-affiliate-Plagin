@@ -1047,128 +1047,78 @@ if (dbSheet.getLastRow() === 0) {
     dbSheet.getRange("H2:H1000").setDataValidation(rule);
 
     // Add sample
-    dbSheet.getRange(2, 1, 1, 8).setValues([[
-        Utilities.getUuid(),
-        "Sample Skill: The Whisper",
-        "Target: Mothers. Context: Gift giving.",
-        "【[Target]へ】\n[Suggestion]はいかが？",
-        "None",
-        "Offer",
-        "Manual",
-        "Active"
-    ]]);
-}
-Browser.msgBox("テンプレートDBを初期化しました。");
-}
+    // Debris removed
 
-/**
- * 【設定】DNA統合 (グリモワール化)
- * 研究所の全てのDNAを統合し、一つの「汎用スキルリスト」を作成する
- */
-const HUMOR_LIBRARY = `
-## 1. The Rule of Three (三段オチ)
-**Establish pattern, then break it.**
-- **Structure**: "Normal A, Normal B, [Absurd C]"
 
-## 2. Specific Hyperbole (具体的すぎる誇張)
-**Replaces generic adjectives with absurdly specific visuals.**
-- **Structure**: "Not just [Adjective], but [Adjective] like [Specific Scene]"
+    /**
+     * 【設定】DNA統合 (グリモワール化)
+     * 研究所の全てのDNAを統合し、一つの「汎用スキルリスト」を作成する
+     */
+    // HUMOR_LIBRARY moved to Config.js
 
-## 3. The Honest Reversal (急な裏切り/本音)
-**High status introduction -> Low status confession.**
-- **Structure**: [Serious/Professional Statement] + [Pathetic/Lazy Reality]
 
-## 4. The "Me vs. World" Contrast (自虐)
-**Blaming oneself for a universal problem.**
-- **Structure**: "Everyone else: [Success]. Me: [Struggle]."
+    // updateMasterDNA moved to Lab.js
+    const dbSheet = ss.getSheetByName(SHEET_DB);
+    let setSheet = ss.getSheetByName(SHEET_SETTINGS);
 
-## 5. Metaphorical Juxtaposition (異種格闘技戦)
-**Comparing the topic to something completely unrelated.**
-- **Structure**: "[Topic] is like [Unrelated Thing] because [Shared Trait]."
+    if (!labSheet || !dbSheet) return;
 
-## 6. The Playful Label (愛嬌のある造語)
-**Converting a negative or boring attribute into a cute "Character Name".**
-- **Structure**: [Target Attribute] -> [Playful Neologism]
+    // --- Phase 1: Sync Lab -> DB ---
+    const lastLabRow = labSheet.getLastRow();
+    if (lastLabRow > 1) {
+        // Lab Data: Type(A), Context(B), DNA(D)
+        const labValues = labSheet.getRange(2, 1, lastLabRow - 1, 4).getValues();
 
-## 7. The Benign Violation (緩和された違反)
-**Something "wrong" (violation) + something "safe" (benign) = Humor.**
-- **Structure**: [A mild threat/taboo/insult] + [Playful context/Safety net]
+        // Read Existing Syntaxes from Col D (Index 3)
+        const lastDbRow = dbSheet.getLastRow();
+        const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
 
-## 8. The Joy of Debugging (思考のバグ)
-**Presenting a logical error that the reader's brain enjoys "fixing".**
-- **Structure**: [Impossible Logic] + [Confident Assertion]
+        const newRows = [];
+        labValues.forEach(row => {
+            const type = row[0];
+            const context = row[1];
+            const dna = row[3];
 
-## 9. The Insignificant Detail (どうでもいい話)
-**Focusing intensely on a trivial detail while ignoring the main event.**
-- **Structure**: [Big Event] -> [Focus on tiny, irrelevant detail]
+            // Generate UUID if needed, but here simple sync
+            // Check uniqueness by full Syntax string
+            if (dna && dna !== "" && !existingSyntaxes.includes(dna)) {
+                newRows.push([
+                    Utilities.getUuid(),
+                    `Auto-Imported Skill (${type})`, // Name
+                    `Context: ${context}`, // Context
+                    dna, // Syntax Template
+                    "Auto-Analyze required", // Humor Formula
+                    type,
+                    "Lab Auto-Sync",
+                    "Active",
+                    "3"
+                ]);
+            }
+        });
 
-## 10. The Ride & Deny (ノリツッコミ/1回肯定)
-**Agreeing with a false premise to build tension, then dropping it.**
-- **Structure**: [Total Agreement/Praise] -> [Sudden Denial/Reality Check]
-`;
-
-// updateMasterDNA moved to Lab.js
-const dbSheet = ss.getSheetByName(SHEET_DB);
-let setSheet = ss.getSheetByName(SHEET_SETTINGS);
-
-if (!labSheet || !dbSheet) return;
-
-// --- Phase 1: Sync Lab -> DB ---
-const lastLabRow = labSheet.getLastRow();
-if (lastLabRow > 1) {
-    // Lab Data: Type(A), Context(B), DNA(D)
-    const labValues = labSheet.getRange(2, 1, lastLabRow - 1, 4).getValues();
-
-    // Read Existing Syntaxes from Col D (Index 3)
-    const lastDbRow = dbSheet.getLastRow();
-    const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
-
-    const newRows = [];
-    labValues.forEach(row => {
-        const type = row[0];
-        const context = row[1];
-        const dna = row[3];
-
-        // Generate UUID if needed, but here simple sync
-        // Check uniqueness by full Syntax string
-        if (dna && dna !== "" && !existingSyntaxes.includes(dna)) {
-            newRows.push([
-                Utilities.getUuid(),
-                `Auto-Imported Skill (${type})`, // Name
-                `Context: ${context}`, // Context
-                dna, // Syntax Template
-                "Auto-Analyze required", // Humor Formula
-                type,
-                "Lab Auto-Sync",
-                "Active",
-                "3"
-            ]);
+        if (newRows.length > 0) {
+            dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
         }
-    });
-
-    if (newRows.length > 0) {
-        dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
     }
-}
 
-// --- Phase 1.5: Auto-Classify Humor (Binding) ---
-// Analyze rows where Humor Formula (Col E/Index 4) is 'Auto-Analyze required'
-const dbLastRow = dbSheet.getLastRow();
-if (dbLastRow > 1) {
-    const checkRange = dbSheet.getRange(2, 1, dbLastRow - 1, 9);
-    const checkValues = checkRange.getValues();
+    // --- Phase 1.5: Auto-Classify Humor (Binding) ---
+    // Analyze rows where Humor Formula (Col E/Index 4) is 'Auto-Analyze required'
+    const dbLastRow = dbSheet.getLastRow();
+    if (dbLastRow > 1) {
+        const checkRange = dbSheet.getRange(2, 1, dbLastRow - 1, 9);
+        const checkValues = checkRange.getValues();
 
-    const apiKey = getGeminiApiKey(); // Get Key for this phase
+        const apiKey = getGeminiApiKey(); // Get Key for this phase
 
-    checkValues.forEach((row, idx) => {
-        const formula = row[4];
-        const status = row[7];
+        checkValues.forEach((row, idx) => {
+            const formula = row[4];
+            const status = row[7];
 
-        if (status === "Active" && (formula === "Auto-Analyze required" || formula === "")) {
-            // Classify this DNA
-            const skillName = row[1];
-            const syntax = row[3];
-            const classifyPrompt = `
+            if (status === "Active" && (formula === "Auto-Analyze required" || formula === "")) {
+                // Classify this DNA
+                const skillName = row[1];
+                const syntax = row[3];
+                const classifyPrompt = `
 あなたはユーモア分析のスペシャリストです。
 以下の「SNS投稿テンプレート（DNA）」に、最も相性の良い「ユーモア公式」を1つ選んでください。
 
@@ -1185,37 +1135,37 @@ ${HUMOR_LIBRARY}
 - 例: 「自虐的な構文」なら「Formula 4」、「対比構造」なら「Formula 5」など。
 - 出力は**公式名のみ**（例: Formula 4: Me vs. World）を返してください。解説不要。
 `;
-            try {
-                if (apiKey) {
-                    let bestFormula = callGemini(apiKey, classifyPrompt).trim();
-                    // Update DB Cell (Col E is Index 5 in Sheet, but Row is idx + 2)
-                    dbSheet.getRange(idx + 2, 5).setValue(bestFormula);
-                    Utilities.sleep(500); // Rate limit
+                try {
+                    if (apiKey) {
+                        let bestFormula = callGemini(apiKey, classifyPrompt).trim();
+                        // Update DB Cell (Col E is Index 5 in Sheet, but Row is idx + 2)
+                        dbSheet.getRange(idx + 2, 5).setValue(bestFormula);
+                        Utilities.sleep(500); // Rate limit
+                    }
+                } catch (e) {
+                    // Ignore error, try next time
                 }
-            } catch (e) {
-                // Ignore error, try next time
             }
-        }
+        });
+    }
+
+    // --- Phase 2: DB -> Grimoire ---
+    // Read ONLY Active rows from DB
+    const finalDbRow = dbSheet.getLastRow();
+    if (finalDbRow < 2) {
+        Browser.msgBox("テンプレートDBに有効なスキルがありません。");
+        return;
+    }
+
+    const dbData = dbSheet.getRange(2, 1, finalDbRow - 1, 9).getValues();
+    // Filter Active (Col H = 'Active')
+    const activeSkills = dbData.filter(row => row[7] === "Active").map(row => {
+        return `【Skill: ${row[1]}】\n(Context: ${row[2]})\n${row[3]}\n(Formula: ${row[4]})`;
     });
-}
 
-// --- Phase 2: DB -> Grimoire ---
-// Read ONLY Active rows from DB
-const finalDbRow = dbSheet.getLastRow();
-if (finalDbRow < 2) {
-    Browser.msgBox("テンプレートDBに有効なスキルがありません。");
-    return;
-}
+    const allDNA = activeSkills.join("\n\n-------------------\n\n");
 
-const dbData = dbSheet.getRange(2, 1, finalDbRow - 1, 9).getValues();
-// Filter Active (Col H = 'Active')
-const activeSkills = dbData.filter(row => row[7] === "Active").map(row => {
-    return `【Skill: ${row[1]}】\n(Context: ${row[2]})\n${row[3]}\n(Formula: ${row[4]})`;
-});
-
-const allDNA = activeSkills.join("\n\n-------------------\n\n");
-
-const prompt = `
+    const prompt = `
 あなたは世界最高峰のコピーライティング・ストラテジスト兼、キャラクタープロファイラーです。
 以下は、データベースに登録された「有効なクリエイティブ・スキル（DNA）」のリストです。
 
@@ -1249,30 +1199,30 @@ ${HUMOR_LIBRARY}
 ...(略)...
 `;
 
-const apiKey = getGeminiApiKey();
-if (!apiKey) return;
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) return;
 
-try {
-    const grimoire = callGemini(apiKey, prompt);
+    try {
+        const grimoire = callGemini(apiKey, prompt);
 
-    // Save to Settings Sheet (Col B, Row 8) -> Moved from B5
-    if (!setSheet) {
-        setSheet = ss.insertSheet(SHEET_SETTINGS);
+        // Save to Settings Sheet (Col B, Row 8) -> Moved from B5
+        if (!setSheet) {
+            setSheet = ss.insertSheet(SHEET_SETTINGS);
+        }
+
+        // Label update if needed (Optional, user might handle manual setup)
+        // But let's ensure labels exist.
+        setSheet.getRange("A5").setValue("Basic Profile (Persona)");
+
+        setSheet.getRange("A9").setValue("Master DNA (Grimoire)");
+        setSheet.getRange("B9").setValue(grimoire);
+        setSheet.getRange("B10").setValue("Last Updated: " + new Date());
+
+
+        // No popup needed for auto-run.
+    } catch (e) {
+        console.warn("Master DNA Update Failed (Silent): " + e.message);
     }
-
-    // Label update if needed (Optional, user might handle manual setup)
-    // But let's ensure labels exist.
-    setSheet.getRange("A5").setValue("Basic Profile (Persona)");
-
-    setSheet.getRange("A9").setValue("Master DNA (Grimoire)");
-    setSheet.getRange("B9").setValue(grimoire);
-    setSheet.getRange("B10").setValue("Last Updated: " + new Date());
-
-
-    // No popup needed for auto-run.
-} catch (e) {
-    console.warn("Master DNA Update Failed (Silent): " + e.message);
-}
 }
 
 // ------------------------------------------
