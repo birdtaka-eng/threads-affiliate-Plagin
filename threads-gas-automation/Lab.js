@@ -156,7 +156,10 @@ ${rawText}
 }
 `;
 
-    const result = callGemini(apiKey, prompt);
+    const result = callGeminiSafe(apiKey, prompt);
+    if (!result) {
+        throw new Error("No response from AI (Result is empty).");
+    }
     let jsonStr = result.replace(/```json/g, "").replace(/```/g, "").trim();
     let data;
     try {
@@ -308,7 +311,7 @@ ${HUMOR_LIBRARY}
     if (!apiKey) return;
 
     try {
-        const grimoire = callGemini(apiKey, prompt);
+        const grimoire = callGeminiSafe(apiKey, prompt);
 
         if (!setSheet) setSheet = ss.insertSheet(SHEET_SETTINGS);
         setSheet.getRange("A9").setValue("Master DNA (Grimoire)");
@@ -316,5 +319,59 @@ ${HUMOR_LIBRARY}
         setSheet.getRange("B10").setValue("Last Updated: " + new Date());
     } catch (e) {
         console.warn("Master DNA Update Failed: " + e.message);
+    }
+}
+
+/**
+ * 【設定】自動化トリガー設定 (バズ研究所)
+ */
+function setupLabTrigger() {
+    setupTriggerCommon(SHEET_LAB, "onLabEditInstallable");
+}
+
+/**
+ * トリガーによって実行されるDNA分析関数
+ */
+function onLabEditInstallable(e) {
+    if (!e) return;
+    const range = e.range;
+    const sheet = range.getSheet();
+
+    if (sheet.getName() !== SHEET_LAB) return;
+
+    // Check Column: Col 1 (Run Checkbox)
+    const col = range.getColumn();
+    const row = range.getRow();
+    if (col !== 1 || row < 2) return;
+
+    if (range.getValue() !== true) return;
+
+    analyzeSingleRow(sheet, row);
+    range.setValue(false);
+}
+
+/**
+ * 単一行分析ロジック
+ */
+function analyzeSingleRow(sheet, row) {
+    let apiKey = getGeminiApiKey();
+    if (!apiKey) return;
+
+    // Data Columns (Shifted by +1 due to Checkbox at A)
+    const rawPostCell = sheet.getRange(row, 4);
+    const dnaCell = sheet.getRange(row, 5);
+
+    const rawPost = rawPostCell.getValue();
+    if (!rawPost) return;
+
+    try {
+        const result = analyzeDojoText(apiKey, rawPost, sheet.getParent());
+
+        // Write Result
+        if (result.summary) {
+            dnaCell.setValue(result.summary);
+        }
+    } catch (e) {
+        dnaCell.setValue("Error: " + e.message);
     }
 }

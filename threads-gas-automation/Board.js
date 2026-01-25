@@ -165,7 +165,7 @@ ${combinedContent}
 `;
 
     try {
-        let text = callGemini(apiKey, prompt);
+        let text = callGeminiSafe(apiKey, prompt);
         text = text.replace(/#\S+/g, '').trim();
 
         sheet.appendRow([
@@ -357,6 +357,12 @@ function generatePostsCommon(sheetName, targetRow) {
             const type = dataRow[colType - 1];
             const humor = dataRow[colHumor - 1];
             const topic = dataRow[colTopic - 1];
+            if (!topic) {
+                throw new Error("Error: Topic is empty. Please enter a topic.");
+            }
+            if (!topic) {
+                throw new Error("Error: Topic is empty. Please enter a topic.");
+            }
 
             // DNA Selection
             let dnaContext = "";
@@ -476,10 +482,11 @@ ${manualRules ? "参考にしているマニュアルからの重要心得:\n" +
             sheet.getRange(rowIndex, colOutput).setValue("⏳ AI執筆中... (3案を作成しています)");
             SpreadsheetApp.flush();
 
-            let generatedText = callGemini(apiKey, prompt);
+            let generatedText = callGeminiSafe(apiKey, prompt);
+            if (!generatedText) {
+                throw new Error("No response (blocked or empty).");
+            }
             generatedText = generatedText.replace(/#\S+/g, '').trim();
-
-            sheet.getRange(rowIndex, colDraftsSource).setValue(generatedText);
 
             // Parsing
             let drafts = ["", "", ""];
@@ -505,7 +512,7 @@ ${manualRules ? "参考にしているマニュアルからの重要心得:\n" +
             Utilities.sleep(1000);
 
         } catch (e) {
-            // error info
+            sheet.getRange(dataIndex + 3, colOutput).setValue("Error: " + e.message);
         }
     }
 

@@ -149,7 +149,7 @@ function setupSettingsSheet() {
     sheet.getRange("A4").setValue("Threads Token");
     sheet.getRange("B4").setValue(existingToken || "Enter Token");
     sheet.getRange("A5").setValue("Gemini Model");
-    const ruleModel = SpreadsheetApp.newDataValidation().requireValueInList(["gemini-2.5-flash", "gemini-1.5-pro"], true).build();
+    const ruleModel = SpreadsheetApp.newDataValidation().requireValueInList(["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"], true).build();
     sheet.getRange("B5").setDataValidation(ruleModel).setValue(existingModel || "gemini-2.5-flash");
     sheet.getRange("A6").setValue("Basic Profile (Persona)");
     sheet.getRange("B6").setValue(existingPersona || "ここにプロフィールを入力");
@@ -313,10 +313,19 @@ function getThreadsCredentials() {
     return { userId, token };
 }
 
-function callGemini(apiKey, prompt) {
+function callGeminiSafe(apiKey, prompt) {
     const model = getGeminiModel();
-    const url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
-    const payload = { contents: [{ parts: [{ text: prompt }] }] };
+    // Use v1beta for access to newer models (like gemini-2.5-flash)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+    };
     const options = {
         method: "post",
         contentType: "application/json",
@@ -331,15 +340,23 @@ function callGemini(apiKey, prompt) {
             const response = UrlFetchApp.fetch(url, options);
             const responseCode = response.getResponseCode();
             const json = JSON.parse(response.getContentText());
-            if (responseCode === 200 && json.candidates && json.candidates.length > 0) {
-                return json.candidates[0].content.parts[0].text;
+
+            if (responseCode === 200) {
+                if (json.candidates && json.candidates.length > 0) {
+                    return json.candidates[0].content.parts[0].text;
+                }
+                const reason = json.promptFeedback ? JSON.stringify(json.promptFeedback) : "Unknown (No Candidates)";
+                throw new Error(`Gemini Blocked: ${reason}`);
             }
+
             if ([429, 500, 503].includes(responseCode)) {
                 Utilities.sleep(1000 * Math.pow(2, attempt));
                 attempt++;
                 continue;
             }
-            throw new Error(`Gemini Error (${responseCode})`);
+            const errorMsg = json.error ? json.error.message : "Unknown Error";
+            throw new Error(`Gemini Error (${responseCode}): ${errorMsg}`);
+
         } catch (e) {
             if (attempt === maxRetries - 1) throw e;
             Utilities.sleep(1000);
@@ -377,4 +394,34 @@ function debugListModels() {
             Browser.msgBox("Available Models:\\n" + genModels);
         }
     } catch (e) { }
+}
+
+function callGeminiDebug(apiKey, prompt) {
+    const model = getGeminiModel();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    // Safety Settings included
+    const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+    };
+
+    const options = {
+        method: "post",
+        contentType: "application/json",
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+    };
+
+    try {
+        const response = UrlFetchApp.fetch(url, options);
+        return response.getContentText(); // Return RAW JSON String
+    } catch (e) {
+        return JSON.stringify({ error: e.message });
+    }
 }
