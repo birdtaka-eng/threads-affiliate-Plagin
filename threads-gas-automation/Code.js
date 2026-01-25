@@ -128,103 +128,97 @@ function onSelectionChange(e) {
  * 【設定】バズ研究所シート拡張
  * 既存のデータを消さずに、DNA分析用の列定義と見た目を整える
  */
-function setupLabSheet() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_LAB);
+// setupLabSheet at top moved to Lab.js
 
-    if (!sheet) {
-        sheet = ss.insertSheet(SHEET_LAB);
+// 0. Auto-Migration & Cleanup (Smart Fix v3 - Row by Row)
+// Scan first 50 rows. If a row has "Type" in Col A, shift IT ONLY right.
+const maxScanRow = 50;
+const scanRange = sheet.getRange(2, 1, maxScanRow, 1); // A2:A51
+const scanValues = scanRange.getValues().flat(); // Array of A values
+const knownTypes = ['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'];
+let fixedCount = 0;
+
+for (let i = 0; i < scanValues.length; i++) {
+    const val = scanValues[i];
+    const row = i + 2; // actual row number
+
+    // Check if this row is "Old Format" (A is Type)
+    if (typeof val === 'string' && knownTypes.includes(val.trim())) {
+        // Shift this ROW's data: A..Y -> B..Z
+        // We move A..LastCol to B..
+        // Limit to 20 columns to be safe/fast
+        sheet.getRange(row, 1, 1, 20).moveTo(sheet.getRange(row, 2));
+
+        // Set A to Checkbox
+        sheet.getRange(row, 1).insertCheckboxes().setValue(false);
+
+        fixedCount++;
     }
+}
 
-    // 0. Auto-Migration & Cleanup (Smart Fix v3 - Row by Row)
-    // Scan first 50 rows. If a row has "Type" in Col A, shift IT ONLY right.
-    const maxScanRow = 50;
-    const scanRange = sheet.getRange(2, 1, maxScanRow, 1); // A2:A51
-    const scanValues = scanRange.getValues().flat(); // Array of A values
-    const knownTypes = ['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'];
-    let fixedCount = 0;
+if (fixedCount > 0) {
+    Browser.msgBox(`⚠️ データのズレを補正しました。\n・修正した行数: ${fixedCount}行\n・混合データを整形しました。`);
+}
 
-    for (let i = 0; i < scanValues.length; i++) {
-        const val = scanValues[i];
-        const row = i + 2; // actual row number
-
-        // Check if this row is "Old Format" (A is Type)
-        if (typeof val === 'string' && knownTypes.includes(val.trim())) {
-            // Shift this ROW's data: A..Y -> B..Z
-            // We move A..LastCol to B..
-            // Limit to 20 columns to be safe/fast
-            sheet.getRange(row, 1, 1, 20).moveTo(sheet.getRange(row, 2));
-
-            // Set A to Checkbox
-            sheet.getRange(row, 1).insertCheckboxes().setValue(false);
-
-            fixedCount++;
-        }
-    }
-
-    if (fixedCount > 0) {
-        Browser.msgBox(`⚠️ データのズレを補正しました。\n・修正した行数: ${fixedCount}行\n・混合データを整形しました。`);
-    }
-
-    // Clear Residual Data (F列以降を掃除して「免許皆伝」などを消す)
-    // Force cleanup from Column 6 (F) to the end
-    const maxCols = sheet.getMaxColumns();
-    if (maxCols >= 6) {
-        // Clear content and validations
-        sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clear();
-        sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clearDataValidations();
-    }
+// Clear Residual Data (F列以降を掃除して「免許皆伝」などを消す)
+// Force cleanup from Column 6 (F) to the end
+const maxCols = sheet.getMaxColumns();
+if (maxCols >= 6) {
+    // Clear content and validations
+    sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clear();
+    sheet.getRange(1, 6, sheet.getMaxRows(), maxCols - 5).clearDataValidations();
+}
 
 
-    // 1. ヘッダー更新 (1行目のみ上書き)
-    // A: Run, B: Type, C: Context, D: Raw, E: DNA
-    const headers = [["🚀 Run", "Type (種類)", "Image Context (写真/背景の説明)", "Raw Post (バズった原文)", "DNA (構造・型)"]];
-    const headerRange = sheet.getRange("A1:E1");
-    headerRange.setValues(headers);
-    headerRange.setBackground("#d9d2e9"); // 紫系
-    headerRange.setFontWeight("bold");
-    headerRange.setHorizontalAlignment("center");
+// 1. ヘッダー更新 (1行目のみ上書き)
+// A: Run, B: Type, C: Context, D: Raw, E: DNA
+const headers = [["🚀 Run", "Type (種類)", "Image Context (写真/背景の説明)", "Raw Post (バズった原文)", "DNA (構造・型)"]];
+const headerRange = sheet.getRange("A1:E1");
+headerRange.setValues(headers);
+headerRange.setBackground("#d9d2e9"); // 紫系
+headerRange.setFontWeight("bold");
+headerRange.setHorizontalAlignment("center");
 
-    // 2. 列幅調整
-    sheet.setColumnWidth(1, 50);  // Run (Checkbox)
-    sheet.setColumnWidth(2, 80);  // Type
-    sheet.setColumnWidth(3, 200); // Image Context
-    sheet.setColumnWidth(4, 300); // Raw Post
-    sheet.setColumnWidth(5, 300); // DNA
+// 2. 列幅調整
+sheet.setColumnWidth(1, 50);  // Run (Checkbox)
+sheet.setColumnWidth(2, 80);  // Type
+sheet.setColumnWidth(3, 200); // Image Context
+sheet.setColumnWidth(4, 300); // Raw Post
+sheet.setColumnWidth(5, 300); // DNA
 
-    // 3. データバリデーション
-    // A列: Run Checkbox
-    const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("A2:A100").setDataValidation(checkboxRule);
+// 3. データバリデーション
+// A列: Run Checkbox
+const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+sheet.getRange("A2:A100").setDataValidation(checkboxRule);
 
-    // B列: Type (Shifted from A)
-    // まず古いルールをクリア (広範囲をクリアしてゴミ掃除)
-    sheet.getRange("B2:E100").clearDataValidations();
+// B列: Type (Shifted from A)
+// まず古いルールをクリア (広範囲をクリアしてゴミ掃除)
+sheet.getRange("B2:E100").clearDataValidations();
 
-    const typeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'], true).build();
-    sheet.getRange("B2:B100").setDataValidation(typeRule);
+const typeRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['単品', '日常', '有益', '自己紹介', 'Free', 'まとめ'], true).build();
+sheet.getRange("B2:B100").setDataValidation(typeRule);
 
-    // 4. ヒント追加 (Notes)
-    const hints = {
-        1: "【🚀 Run (実行)】\nチェックを入れると、その行の分析を開始します。\n(分析が終わると自動でチェックが外れます)",
-        2: "【Type (種類)】\nネタの種類を選んでください。\n(例: 日常ツイートのサンプルなら「日常」)",
-        3: "【Image Context (背景)】\nもし画像付きの投稿なら、どんな写真だったかメモしてください。\n(文字だけの投稿なら空欄でOK)",
-        4: "【Raw Post (原文)】\nバズった投稿の本文をそのまま貼り付けてください。\n→貼り付けると自動で解析が始まります(数秒後)。\n※初回のみメニューの『自動分析トリガー設定』を実行してください。",
-        5: "【DNA (構造・型)】\n🤖 AI分析エリア\nAIがバズりの構造を解析してここに書き込みます。\n※編集不可(ロック中)"
-    };
-    for (const [col, note] of Object.entries(hints)) {
-        sheet.getRange(1, Number(col)).setNote(note);
-    }
+// 4. ヒント追加 (Notes)
+const hints = {
+    1: "【🚀 Run (実行)】\nチェックを入れると、その行の分析を開始します。\n(分析が終わると自動でチェックが外れます)",
+    2: "【Type (種類)】\nネタの種類を選んでください。\n(例: 日常ツイートのサンプルなら「日常」)",
+    3: "【Image Context (背景)】\nもし画像付きの投稿なら、どんな写真だったかメモしてください。\n(文字だけの投稿なら空欄でOK)",
+    4: "【Raw Post (原文)】\nバズった投稿の本文をそのまま貼り付けてください。\n→貼り付けると自動で解析が始まります(数秒後)。\n※初回のみメニューの『自動分析トリガー設定』を実行してください。",
+    5: "【DNA (構造・型)】\n🤖 AI分析エリア\nAIがバズりの構造を解析してここに書き込みます。\n※編集不可(ロック中)"
+};
+for (const [col, note] of Object.entries(hints)) {
+    sheet.getRange(1, Number(col)).setNote(note);
+}
 
-    // 5. 保護 (Lock Column E)
-    // 既存の保護をクリアする処理は入れていないが、上書き設定
-    const protection = sheet.getRange("E:E").protect();
-    protection.setDescription("AI DNA Area");
-    protection.setWarningOnly(true); // 警告を表示
+// 5. 保護 (Lock Column E)
+// 既存の保護をクリアする処理は入れていないが、上書き設定
+const protection = sheet.getRange("E:E").protect();
+protection.setDescription("AI DNA Area");
+protection.setWarningOnly(true); // 警告を表示
 
-    // 6. 完了メッセージ
-    Browser.msgBox(`シート「${SHEET_LAB}」を更新しました！\n\nA列に「🚀 Run」ボタンを設置し、データのズレを補正しました。\n不要な列(F列以降)もクリーニングしました。`);
+// 6. 完了メッセージ
+Browser.msgBox(`シート「${SHEET_LAB}」を更新しました！\n\nA列に「🚀 Run」ボタンを設置し、データのズレを補正しました。\n不要な列(F列以降)もクリーニングしました。`);
 }
 
 
@@ -1031,45 +1025,40 @@ function debugListModels() {
  * テンプレートDBシートの構築
  * スキル（DNA）を管理するデータベースを作成する
  */
-function setupTemplateDatabase() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let dbSheet = ss.getSheetByName(SHEET_DB);
-    if (!dbSheet) {
-        dbSheet = ss.insertSheet(SHEET_DB);
-    }
+// setupTemplateDatabase moved to Lab.js
 
-    // Headers
-    const headers = [
-        "A: ID (Auto)", "B: Skill Name", "C: Context/Target", "D: Syntax Template",
-        "E: Humor Formula", "F: Type", "G: Source (Lab URL)", "H: Status (Active/Archived)", "I: Rating (1-5)"
-    ];
+// Headers
+const headers = [
+    "A: ID (Auto)", "B: Skill Name", "C: Context/Target", "D: Syntax Template",
+    "E: Humor Formula", "F: Type", "G: Source (Lab URL)", "H: Status (Active/Archived)", "I: Rating (1-5)"
+];
 
-    // Set Headers if row 1 is empty
-    if (dbSheet.getLastRow() === 0) {
-        dbSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-        dbSheet.setFrozenRows(1);
-        dbSheet.getRange("A:I").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP); // Wrap text
-        dbSheet.setColumnWidth(2, 200); // Name
-        dbSheet.setColumnWidth(3, 200); // Context
-        dbSheet.setColumnWidth(4, 300); // Syntax
+// Set Headers if row 1 is empty
+if (dbSheet.getLastRow() === 0) {
+    dbSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    dbSheet.setFrozenRows(1);
+    dbSheet.getRange("A:I").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP); // Wrap text
+    dbSheet.setColumnWidth(2, 200); // Name
+    dbSheet.setColumnWidth(3, 200); // Context
+    dbSheet.setColumnWidth(4, 300); // Syntax
 
-        // Add Validation for Status
-        const rule = SpreadsheetApp.newDataValidation().requireValueInList(["Active", "Archived"]).build();
-        dbSheet.getRange("H2:H1000").setDataValidation(rule);
+    // Add Validation for Status
+    const rule = SpreadsheetApp.newDataValidation().requireValueInList(["Active", "Archived"]).build();
+    dbSheet.getRange("H2:H1000").setDataValidation(rule);
 
-        // Add sample
-        dbSheet.getRange(2, 1, 1, 8).setValues([[
-            Utilities.getUuid(),
-            "Sample Skill: The Whisper",
-            "Target: Mothers. Context: Gift giving.",
-            "【[Target]へ】\n[Suggestion]はいかが？",
-            "None",
-            "Offer",
-            "Manual",
-            "Active"
-        ]]);
-    }
-    Browser.msgBox("テンプレートDBを初期化しました。");
+    // Add sample
+    dbSheet.getRange(2, 1, 1, 8).setValues([[
+        Utilities.getUuid(),
+        "Sample Skill: The Whisper",
+        "Target: Mothers. Context: Gift giving.",
+        "【[Target]へ】\n[Suggestion]はいかが？",
+        "None",
+        "Offer",
+        "Manual",
+        "Active"
+    ]]);
+}
+Browser.msgBox("テンプレートDBを初期化しました。");
 }
 
 /**
@@ -1118,73 +1107,68 @@ const HUMOR_LIBRARY = `
 - **Structure**: [Total Agreement/Praise] -> [Sudden Denial/Reality Check]
 `;
 
-function updateMasterDNA() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    // 0. Ensure DB exists
-    setupTemplateDatabase();
+// updateMasterDNA moved to Lab.js
+const dbSheet = ss.getSheetByName(SHEET_DB);
+let setSheet = ss.getSheetByName(SHEET_SETTINGS);
 
-    const labSheet = ss.getSheetByName(SHEET_LAB);
-    const dbSheet = ss.getSheetByName(SHEET_DB);
-    let setSheet = ss.getSheetByName(SHEET_SETTINGS);
+if (!labSheet || !dbSheet) return;
 
-    if (!labSheet || !dbSheet) return;
+// --- Phase 1: Sync Lab -> DB ---
+const lastLabRow = labSheet.getLastRow();
+if (lastLabRow > 1) {
+    // Lab Data: Type(A), Context(B), DNA(D)
+    const labValues = labSheet.getRange(2, 1, lastLabRow - 1, 4).getValues();
 
-    // --- Phase 1: Sync Lab -> DB ---
-    const lastLabRow = labSheet.getLastRow();
-    if (lastLabRow > 1) {
-        // Lab Data: Type(A), Context(B), DNA(D)
-        const labValues = labSheet.getRange(2, 1, lastLabRow - 1, 4).getValues();
+    // Read Existing Syntaxes from Col D (Index 3)
+    const lastDbRow = dbSheet.getLastRow();
+    const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
 
-        // Read Existing Syntaxes from Col D (Index 3)
-        const lastDbRow = dbSheet.getLastRow();
-        const existingSyntaxes = lastDbRow > 1 ? dbSheet.getRange(2, 4, lastDbRow - 1, 1).getValues().flat().map(String) : [];
+    const newRows = [];
+    labValues.forEach(row => {
+        const type = row[0];
+        const context = row[1];
+        const dna = row[3];
 
-        const newRows = [];
-        labValues.forEach(row => {
-            const type = row[0];
-            const context = row[1];
-            const dna = row[3];
-
-            // Generate UUID if needed, but here simple sync
-            // Check uniqueness by full Syntax string
-            if (dna && dna !== "" && !existingSyntaxes.includes(dna)) {
-                newRows.push([
-                    Utilities.getUuid(),
-                    `Auto-Imported Skill (${type})`, // Name
-                    `Context: ${context}`, // Context
-                    dna, // Syntax Template
-                    "Auto-Analyze required", // Humor Formula
-                    type,
-                    "Lab Auto-Sync",
-                    "Active",
-                    "3"
-                ]);
-            }
-        });
-
-        if (newRows.length > 0) {
-            dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
+        // Generate UUID if needed, but here simple sync
+        // Check uniqueness by full Syntax string
+        if (dna && dna !== "" && !existingSyntaxes.includes(dna)) {
+            newRows.push([
+                Utilities.getUuid(),
+                `Auto-Imported Skill (${type})`, // Name
+                `Context: ${context}`, // Context
+                dna, // Syntax Template
+                "Auto-Analyze required", // Humor Formula
+                type,
+                "Lab Auto-Sync",
+                "Active",
+                "3"
+            ]);
         }
+    });
+
+    if (newRows.length > 0) {
+        dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
     }
+}
 
-    // --- Phase 1.5: Auto-Classify Humor (Binding) ---
-    // Analyze rows where Humor Formula (Col E/Index 4) is 'Auto-Analyze required'
-    const dbLastRow = dbSheet.getLastRow();
-    if (dbLastRow > 1) {
-        const checkRange = dbSheet.getRange(2, 1, dbLastRow - 1, 9);
-        const checkValues = checkRange.getValues();
+// --- Phase 1.5: Auto-Classify Humor (Binding) ---
+// Analyze rows where Humor Formula (Col E/Index 4) is 'Auto-Analyze required'
+const dbLastRow = dbSheet.getLastRow();
+if (dbLastRow > 1) {
+    const checkRange = dbSheet.getRange(2, 1, dbLastRow - 1, 9);
+    const checkValues = checkRange.getValues();
 
-        const apiKey = getGeminiApiKey(); // Get Key for this phase
+    const apiKey = getGeminiApiKey(); // Get Key for this phase
 
-        checkValues.forEach((row, idx) => {
-            const formula = row[4];
-            const status = row[7];
+    checkValues.forEach((row, idx) => {
+        const formula = row[4];
+        const status = row[7];
 
-            if (status === "Active" && (formula === "Auto-Analyze required" || formula === "")) {
-                // Classify this DNA
-                const skillName = row[1];
-                const syntax = row[3];
-                const classifyPrompt = `
+        if (status === "Active" && (formula === "Auto-Analyze required" || formula === "")) {
+            // Classify this DNA
+            const skillName = row[1];
+            const syntax = row[3];
+            const classifyPrompt = `
 あなたはユーモア分析のスペシャリストです。
 以下の「SNS投稿テンプレート（DNA）」に、最も相性の良い「ユーモア公式」を1つ選んでください。
 
@@ -1201,37 +1185,37 @@ ${HUMOR_LIBRARY}
 - 例: 「自虐的な構文」なら「Formula 4」、「対比構造」なら「Formula 5」など。
 - 出力は**公式名のみ**（例: Formula 4: Me vs. World）を返してください。解説不要。
 `;
-                try {
-                    if (apiKey) {
-                        let bestFormula = callGemini(apiKey, classifyPrompt).trim();
-                        // Update DB Cell (Col E is Index 5 in Sheet, but Row is idx + 2)
-                        dbSheet.getRange(idx + 2, 5).setValue(bestFormula);
-                        Utilities.sleep(500); // Rate limit
-                    }
-                } catch (e) {
-                    // Ignore error, try next time
+            try {
+                if (apiKey) {
+                    let bestFormula = callGemini(apiKey, classifyPrompt).trim();
+                    // Update DB Cell (Col E is Index 5 in Sheet, but Row is idx + 2)
+                    dbSheet.getRange(idx + 2, 5).setValue(bestFormula);
+                    Utilities.sleep(500); // Rate limit
                 }
+            } catch (e) {
+                // Ignore error, try next time
             }
-        });
-    }
-
-    // --- Phase 2: DB -> Grimoire ---
-    // Read ONLY Active rows from DB
-    const finalDbRow = dbSheet.getLastRow();
-    if (finalDbRow < 2) {
-        Browser.msgBox("テンプレートDBに有効なスキルがありません。");
-        return;
-    }
-
-    const dbData = dbSheet.getRange(2, 1, finalDbRow - 1, 9).getValues();
-    // Filter Active (Col H = 'Active')
-    const activeSkills = dbData.filter(row => row[7] === "Active").map(row => {
-        return `【Skill: ${row[1]}】\n(Context: ${row[2]})\n${row[3]}\n(Formula: ${row[4]})`;
+        }
     });
+}
 
-    const allDNA = activeSkills.join("\n\n-------------------\n\n");
+// --- Phase 2: DB -> Grimoire ---
+// Read ONLY Active rows from DB
+const finalDbRow = dbSheet.getLastRow();
+if (finalDbRow < 2) {
+    Browser.msgBox("テンプレートDBに有効なスキルがありません。");
+    return;
+}
 
-    const prompt = `
+const dbData = dbSheet.getRange(2, 1, finalDbRow - 1, 9).getValues();
+// Filter Active (Col H = 'Active')
+const activeSkills = dbData.filter(row => row[7] === "Active").map(row => {
+    return `【Skill: ${row[1]}】\n(Context: ${row[2]})\n${row[3]}\n(Formula: ${row[4]})`;
+});
+
+const allDNA = activeSkills.join("\n\n-------------------\n\n");
+
+const prompt = `
 あなたは世界最高峰のコピーライティング・ストラテジスト兼、キャラクタープロファイラーです。
 以下は、データベースに登録された「有効なクリエイティブ・スキル（DNA）」のリストです。
 
@@ -1265,30 +1249,30 @@ ${HUMOR_LIBRARY}
 ...(略)...
 `;
 
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) return;
+const apiKey = getGeminiApiKey();
+if (!apiKey) return;
 
-    try {
-        const grimoire = callGemini(apiKey, prompt);
+try {
+    const grimoire = callGemini(apiKey, prompt);
 
-        // Save to Settings Sheet (Col B, Row 8) -> Moved from B5
-        if (!setSheet) {
-            setSheet = ss.insertSheet(SHEET_SETTINGS);
-        }
-
-        // Label update if needed (Optional, user might handle manual setup)
-        // But let's ensure labels exist.
-        setSheet.getRange("A5").setValue("Basic Profile (Persona)");
-
-        setSheet.getRange("A9").setValue("Master DNA (Grimoire)");
-        setSheet.getRange("B9").setValue(grimoire);
-        setSheet.getRange("B10").setValue("Last Updated: " + new Date());
-
-
-        // No popup needed for auto-run.
-    } catch (e) {
-        console.warn("Master DNA Update Failed (Silent): " + e.message);
+    // Save to Settings Sheet (Col B, Row 8) -> Moved from B5
+    if (!setSheet) {
+        setSheet = ss.insertSheet(SHEET_SETTINGS);
     }
+
+    // Label update if needed (Optional, user might handle manual setup)
+    // But let's ensure labels exist.
+    setSheet.getRange("A5").setValue("Basic Profile (Persona)");
+
+    setSheet.getRange("A9").setValue("Master DNA (Grimoire)");
+    setSheet.getRange("B9").setValue(grimoire);
+    setSheet.getRange("B10").setValue("Last Updated: " + new Date());
+
+
+    // No popup needed for auto-run.
+} catch (e) {
+    console.warn("Master DNA Update Failed (Silent): " + e.message);
+}
 }
 
 // ------------------------------------------
