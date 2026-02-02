@@ -4,134 +4,249 @@
 <head>
     <base target="_top">
     <style>
+        :root {
+            --bg-primary: #0f172a;
+            /* Slate 900 */
+            --bg-secondary: #1e293b;
+            /* Slate 800 */
+            --accent: #6366f1;
+            /* Indigo 500 */
+            --text-primary: #f8fafc;
+            /* Slate 50 */
+            --text-secondary: #94a3b8;
+            /* Slate 400 */
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
         body {
-            padding: 10px;
+            margin: 0;
+            padding: 16px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header / Controls */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Main Editor Area */
+        .editor-container {
+            flex-grow: 1;
+            position: relative;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+
+        .editor-container:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
         }
 
         textarea {
             width: 100%;
-            height: 400px;
+            height: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
             font-size: 14px;
-            line-height: 1.5;
-            padding: 8px;
+            line-height: 1.6;
+            padding: 16px;
             box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            resize: vertical;
+            resize: none;
+            outline: none;
         }
 
-        .status {
-            font-size: 11px;
-            color: #666;
-            margin-top: 5px;
-            text-align: right;
+        textarea::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.5;
         }
 
-        .controls {
-            margin-bottom: 10px;
+        /* Footer / Status */
+        .footer {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-top: 12px;
+            font-size: 12px;
         }
 
-        button {
-            background-color: #1a73e8;
+        .status {
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #64748b;
+            /* Gray */
+        }
+
+        .status-dot.active {
+            background-color: #22c55e;
+            /* Green */
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+        }
+
+        .status-dot.saving {
+            background-color: #eab308;
+            /* Yellow */
+        }
+
+        /* Button */
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
             color: white;
             border: none;
             padding: 8px 16px;
-            border-radius: 4px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
             cursor: pointer;
-            font-weight: bold;
+            transition: transform 0.1s, opacity 0.2s;
+            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
         }
 
-        button:hover {
-            background-color: #1557b0;
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
         }
 
-        button:disabled {
-            background-color: #ccc;
-            cursor: default;
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            cursor: not-allowed;
+            box-shadow: none;
         }
     </style>
 </head>
 
 <body>
-    <div class="controls">
-        <strong>Active Cell Content</strong>
-        <button id="saveBtn" onclick="saveContent()" disabled>Update Cell</button>
+    <div class="header">
+        <span class="title">AI Cockpit // Editor</span>
     </div>
-    <textarea id="editor" placeholder="Select a cell to view/edit..."></textarea>
-    <div class="status" id="status">Waiting for selection...</div>
+
+    <div class="editor-container">
+        <textarea id="editor" placeholder="Select a cell on the board..."></textarea>
+    </div>
+
+    <div class="footer">
+        <div class="status" id="status-container">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">Ready</span>
+        </div>
+        <button id="saveBtn" class="btn-primary" onclick="saveContent()" disabled>
+            Save Changes
+        </button>
+    </div>
 
     <script>
         let currentContent = "";
-        let isEditing = false;
 
         // Poll for changes every 1 second
         setInterval(pollActiveCell, 1000);
 
         function pollActiveCell() {
-            // Don't overwrite if user is actively editing and hasn't saved, 
-            // BUT for a simple viewer, usually we want to see what's selected.
-            // Let's only update if the textarea is not focused OR if we decide to force sync.
-            // For this version (Viewer priority), we sync unless dirty.
-
             const editor = document.getElementById('editor');
-
-            // If user has modified text, don't overwrite
             if (editor.value !== currentContent && document.activeElement === editor) {
                 return;
             }
-
             google.script.run.withSuccessHandler(updateUI).getSidebarContent();
         }
 
         function updateUI(content) {
             const editor = document.getElementById('editor');
-            const status = document.getElementById('status');
+            const statusText = document.getElementById('status-text');
+            const statusDot = document.getElementById('status-dot');
             const saveBtn = document.getElementById('saveBtn');
 
-            // If content changed externally (cell selection changed)
             if (content !== currentContent) {
-                // Only update if we are not "dirty" (handled above, but double check)
-                // If the user changed selection, we SHOULD update even if dirty? 
-                // Standard Sidebar behavior: Selection change wins.
                 editor.value = content;
                 currentContent = content;
-                status.textContent = "Synced: " + new Date().toLocaleTimeString();
+
+                statusText.textContent = "Synced";
+                statusDot.className = "status-dot active";
                 saveBtn.disabled = true;
+
+                // Reset status after a while
+                setTimeout(() => {
+                    if (statusText.textContent === "Synced") {
+                        statusDot.className = "status-dot";
+                    }
+                }, 2000);
             }
         }
 
         // Enable save button on input
         document.getElementById('editor').addEventListener('input', function () {
             const saveBtn = document.getElementById('saveBtn');
-            const status = document.getElementById('status');
+            const statusText = document.getElementById('status-text');
+            const statusDot = document.getElementById('status-dot');
+
             if (this.value !== currentContent) {
                 saveBtn.disabled = false;
-                status.textContent = "Edited (Unsaved)";
+                statusText.textContent = "Edited";
+                statusDot.className = "status-dot"; // Gray when editing
             } else {
                 saveBtn.disabled = true;
-                status.textContent = "Synced";
+                statusText.textContent = "Synced";
+                statusDot.className = "status-dot active";
             }
         });
 
         function saveContent() {
             const editor = document.getElementById('editor');
             const newContent = editor.value;
-            const status = document.getElementById('status');
+            const statusText = document.getElementById('status-text');
+            const statusDot = document.getElementById('status-dot');
             const saveBtn = document.getElementById('saveBtn');
 
-            status.textContent = "Saving...";
+            statusText.textContent = "Saving...";
+            statusDot.className = "status-dot saving"; // Yellow
             saveBtn.disabled = true;
 
             google.script.run.withSuccessHandler(function () {
                 currentContent = newContent;
-                status.textContent = "Saved to Cell!";
-                setTimeout(() => status.textContent = "Synced", 2000);
+                statusText.textContent = "Saved";
+                statusDot.className = "status-dot active"; // Green
+
+                setTimeout(() => {
+                    statusText.textContent = "Synced";
+                }, 2000);
             }).withFailureHandler(function (e) {
-                status.textContent = "Error: " + e.message;
+                statusText.textContent = "Error";
+                statusDot.className = "status-dot"; // simple
+                alert("Error: " + e.message);
                 saveBtn.disabled = false;
             }).updateSidebarContent(newContent);
         }

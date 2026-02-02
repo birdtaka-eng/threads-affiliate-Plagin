@@ -33,6 +33,8 @@ function onOpen() {
         .addItem('【設定】番組表リセット', 'setupScheduleSheet')
         .addItem('【設定】バズ研究所シート拡張', 'setupLabSheet')
         .addSeparator()
+        .addItem('🎨【デザイン】Midnight Glass適用', 'applyPremiumTheme')
+        .addSeparator()
         .addItem('【設定】自動分析トリガー設定', 'setupAllTriggers');
 
     // Developer Only Menu
@@ -527,4 +529,43 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.message }))
             .setMimeType(ContentService.MimeType.JSON);
     }
+}
+
+/**
+ * 🎨 Design: Apply "Midnight Glass" Theme to Sheets
+ */
+function applyPremiumTheme() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheets = ss.getSheets();
+
+    // Theme Config
+    const colorHeaderBg = "#3c4043"; // Dark Grey
+    const colorHeaderTx = "#ffffff";
+    const colorBorder = "#e8eaed";
+
+    sheets.forEach(sheet => {
+        const lastRow = sheet.getLastRow();
+        const lastCol = sheet.getLastColumn();
+        if (lastRow < 1 || lastCol < 1) return;
+
+        const fullRange = sheet.getRange(1, 1, lastRow, lastCol);
+
+        // 1. Reset Basic Styles
+        fullRange.setFontFamily("Roboto");
+        fullRange.setVerticalAlignment("middle");
+
+        // 2. Header Style (Row 1)
+        const headerRange = sheet.getRange(1, 1, 1, lastCol);
+        headerRange
+            .setBackground(colorHeaderBg)
+            .setFontColor(colorHeaderTx)
+            .setFontWeight("bold")
+            .setHorizontalAlignment("center")
+            .setBorder(false, false, true, false, false, false, colorBorder, SpreadsheetApp.BorderStyle.SOLID);
+
+        // 3. Gridlines Off
+        sheet.setHiddenGridlines(true);
+    });
+
+    Browser.msgBox("✨ Design Upgrade: 'Midnight Glass' UI and Clean Sheets applied!");
 }
