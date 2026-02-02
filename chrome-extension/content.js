@@ -65,3 +65,60 @@ async function waitForEditor() {
     }
     return null;
 }
+return null;
+}
+
+// v4.3 Scraping Logic
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "scrapePost") {
+        const data = scrapeMainPost();
+        sendResponse(data);
+        return true;
+    }
+});
+
+function scrapeMainPost() {
+    // 1. Get URL and Author
+    const url = window.location.href;
+    let author = "Unknown";
+    let text = "";
+
+    // 2. Try to find the main post content
+    // Threads structure varies, but usually it's in a specific div hierarchy.
+    // Strategy: Look for the first major visual text block or specifically targeted semantics.
+
+    // Attempt 1: Meta Tags (cleanest for single post view)
+    const card = document.querySelector('div[data-pressable-container="true"]'); // Often the post container
+
+    // Let's try grabbing visible text from the "main" area.
+    // In Single Post View, the first thread item is the main one.
+
+    // Heuristic: Get all spans/divs with substantial text
+    const articles = document.querySelectorAll('div[data-pressable-container="true"]');
+
+    if (articles.length > 0) {
+        // Assume first article is the target (if user opens single post)
+        // Or if feed, it's the first one? User usually focuses on one.
+        const main = articles[0];
+        text = main.innerText;
+
+        // Extract Author?
+        // Usually "user name" is at the top.
+        // Let's just fallback to full text for now, extracting nuances later in GAS.
+    } else {
+        // Fallback: Body text
+        text = document.body.innerText.substring(0, 2000);
+    }
+
+    // Try finding og:description for clean text if available
+    const metaDesc = document.querySelector('meta[property="og:description"]');
+    if (metaDesc) {
+        // often contained in content
+    }
+
+    return {
+        text: text,
+        url: url,
+        author: author
+    };
+}

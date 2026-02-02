@@ -169,22 +169,29 @@ ${rawText}
         return { summary: "JSON Parse Error: " + result.substring(0, 100) };
     }
 
-    // 2. Update Settings (Rules) - Append
-    const setSheet = ss.getSheetByName(SHEET_SETTINGS);
-    if (setSheet) {
-        setSheet.getRange("A8").setValue("Manual Rules (心得)");
-        const currentRules = setSheet.getRange("B8").getValue();
-        let newRuleText = data.general_rules;
-        if (currentRules && String(currentRules).length > 5) {
-            newRuleText = currentRules + "\n\n" + newRuleText;
-        }
-        setSheet.getRange("B8").setValue(newRuleText);
+    // 2. Update Toranomaki DB (Rules) - Append
+    const toraSheet = ss.getSheetByName(SHEET_TORANOMAKI);
+    let addedRulesCount = 0;
+
+    if (toraSheet && data.general_rules) {
+        // Check duplicates? For now, we append "Analysis Rules" as a new item.
+        const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
+        const ruleText = data.general_rules;
+
+        // Append Row: [Date, Text, Status, Insight]
+        toraSheet.appendRow([
+            dateStr,
+            `【Lab Analysis】\n${ruleText}`,
+            "Pending Study", // Toranomaki.js will process this next
+            "Extracted from Lab Post"
+        ]);
+        addedRulesCount = 1;
     }
 
     // 3. Update DB (Templates) - Deduplication
     setupTemplateDatabase(true); // Ensure DB exists silently
     const dbSheet = ss.getSheetByName(SHEET_DB);
-    let addedCount = 0;
+    let addedTemplateCount = 0;
 
     if (dbSheet && data.templates) {
         const lastDbRow = dbSheet.getLastRow();
@@ -195,12 +202,12 @@ ${rawText}
             if (!existingSyntaxes.includes(t.syntax)) {
                 newRows.push([
                     "", // A: Last Learned (Empty initially)
-                    `Dojo: ${t.name}`,
+                    `Lab: ${t.name}`,
                     t.context,
                     t.syntax,
                     "Auto-Analyze required",
                     "Manual",
-                    "Dojo Import",
+                    "Lab Analysis",
                     "Active",
                     "3"
                 ]);
@@ -209,15 +216,16 @@ ${rawText}
 
         if (newRows.length > 0) {
             dbSheet.getRange(lastDbRow + 1, 1, newRows.length, 9).setValues(newRows);
-            addedCount = newRows.length;
+            addedTemplateCount = newRows.length;
         }
     }
 
     // 4. Update Grimoire (Sync)
+    // This will trigger Toranomaki.js to read the new Rule from Toranomaki DB and evolve B8.
     updateMasterDNA();
 
     // Construct Display Summary
-    let display = `✅ Analysis Complete\n\n[Rules]\n${data.general_rules.substring(0, 100)}...\n\n[Templates (+${addedCount})]\n`;
+    let display = `✅ Analysis Complete\n\n[Rules (+${addedRulesCount})]\n${data.general_rules.substring(0, 50)}...\n(Saved to Toranomaki DB)\n\n[Templates (+${addedTemplateCount})]\n`;
     if (data.templates) {
         data.templates.forEach(t => {
             display += `- ${t.name}: ${t.syntax.substring(0, 30)}...\n`;

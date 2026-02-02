@@ -15,6 +15,9 @@ function onOpen() {
         .addItem('【分析】投稿データ更新 (Metrics)', 'updateMetrics')
         .addItem('【分析】虎の巻アップデート (Master DNA)', 'updateMasterDNA')
         .addSeparator()
+        .addItem('🏭【製造】楽天工場 (シート作成)', 'setupRakutenSheet')
+        .addItem('🏭【製造】アフィリエイト生成 (実行)', 'generateRakutenPosts')
+        .addSeparator()
         .addItem('【ヒント】表示ON', 'showTips')
         .addItem('【ヒント】表示OFF', 'hideTips')
         .addSeparator()
@@ -152,13 +155,21 @@ function setupSettingsSheet() {
     sheet.getRange("A5").setValue("Gemini Model");
     const ruleModel = SpreadsheetApp.newDataValidation().requireValueInList(["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"], true).build();
     sheet.getRange("B5").setDataValidation(ruleModel).setValue(existingModel || "gemini-2.5-flash");
-    sheet.getRange("A6").setValue("Basic Profile (Persona)");
-    sheet.getRange("B6").setValue(existingPersona || "ここにプロフィールを入力");
-    sheet.getRange("A7").setValue("【以下、AI自動管理エリア】");
+    sheet.getRange("A6").setValue("User Wish (Seed Persona)");
+    sheet.getRange("B6").setValue(existingPersona || "【種】なりたい自分を自由に記述\n(例: 20代OL。カフェ巡りが好きで、親しみやすい存在になりたい。)");
+
+    sheet.getRange("A7").setValue("【以下、AI自動進化エリア】");
     sheet.getRange("A7").setFontWeight("bold").setBackground("#e6b8af");
-    sheet.getRange("A8").setValue("Manual Rules (心得)");
-    sheet.getRange("A9").setValue("Master DNA (Grimoire)");
-    Browser.msgBox("設定シートをリセットしました！");
+
+    // B8: Reinforced Persona (AI Generated)
+    sheet.getRange("A8").setValue("Evolved Persona (AI強化人格)");
+    sheet.getRange("A8").setNote("あなたの「種(B6)」に、バズ研究所の成功法則を掛け合わせて生成された「最強の人格」です。");
+
+    // B9: Master Style (AI Generated)
+    sheet.getRange("A9").setValue("Master Style (文体・リズム)");
+    sheet.getRange("A9").setNote("バズ研究所から抽出された、具体的な「書き方・リズム」の定義書です。");
+
+    Browser.msgBox("設定シートをリセットしました！\nB6: あなたの願い(種)\nB8: AIが育てた最強人格\nB9: 文体スタイル\nこれらが連携して動作します。");
 }
 
 function setupScheduleSheet() {
@@ -439,4 +450,81 @@ function debugListSheets() {
     const sheets = ss.getSheets();
     const names = sheets.map(s => s.getName()).join("\\n");
     Browser.msgBox("Sheets:\\n" + names);
+}
+// ------------------------------------------
+// Web API for Chrome Extension (Clip to Lab)
+// ------------------------------------------
+
+function doPost(e) {
+    // 1. Parse Request
+    let data;
+    try {
+        data = JSON.parse(e.postData.contents);
+    } catch (err) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid JSON" }))
+            .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2. Extract Data
+    const { text, url, author, context } = data;
+    if (!text) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No text provided" }))
+            .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 3. Append to Lab Sheet
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(SHEET_LAB);
+    if (!sheet) {
+        setupLabSheet();
+        sheet = ss.getSheetByName(SHEET_LAB);
+    }
+
+    try {
+        // Lab Sheet Layout: [Run(A), Type(B), Context(C), Raw(D), DNA(E)]
+        // We append a new row.
+
+        // Find next empty row manually or use appendRow? 
+        // appendRow adds to bottom. Let's use insertRowAfter(3) to keep it at top if possible, 
+        // but Lab sheet reads from top down for "Run".
+        // Let's just append.
+
+        const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
+
+        // Context: Add URL and Author info
+        const metaContext = `[Source] ${url || "Unknown"}\n[Author] ${author || "Unknown"}\n[Saved] ${dateStr}`;
+        const finalContext = context ? `${context}\n---\n${metaContext}` : metaContext;
+
+        sheet.appendRow([
+            true,           // A: Run (Auto-check) -> Triggers Analysis
+            "単品",         // B: Type (Default to Single Item as requested)
+            finalContext,   // C: Context
+            text,           // D: Raw Post
+            ""              // E: DNA (Empty)
+        ]);
+
+        // Important: Flush to ensure Trigger sees the change? 
+        // Actually, script-initiated edits do NOT trigger simple onEdit, 
+        // BUT we set up "Installable Trigger" (onLabEditInstallable) which listens to 'EDIT'?
+        // No, Installable OnEdit also requires USER interaction usually, or API edits?
+        // Wait, Web App edits counts as API edits?
+        // Actually, easier way: Call analysis DIRECTLY here.
+
+        const lastRow = sheet.getLastRow();
+
+        // Trigger Analysis Immediately
+        // Note: analyzeSingleRow uses SHEET UI logic (getRange etc), which works in Web App context 
+        // IF the container is bound.
+        analyzeSingleRow(sheet, lastRow);
+
+        // Uncheck Run
+        sheet.getRange(lastRow, 1).setValue(false);
+
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Saved & Analyzing..." }))
+            .setMimeType(ContentService.MimeType.JSON);
+
+    } catch (err) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.message }))
+            .setMimeType(ContentService.MimeType.JSON);
+    }
 }

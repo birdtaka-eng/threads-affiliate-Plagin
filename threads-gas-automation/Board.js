@@ -276,34 +276,49 @@ function generatePostsCommon(sheetName, targetRow) {
         return;
     }
 
-    // 0. 設定読み込み
-    const settings = sheet.getRange("A1").getValue();
-    let persona = "30代女性インフルエンサー。";
+    // --- 1. Resources: Personas & Style ---
+    let evolvedPersona = "30代女性インフルエンサー";
+    let masterStyle = "";
 
-    // 0.5 Master DNA & Manual Rules
-    let grimoireText = "";
-    let manualRules = "";
     try {
         const setSheet = ss.getSheetByName(SHEET_SETTINGS);
         if (setSheet) {
-            const userPersona = setSheet.getRange("B6").getValue();
-            if (userPersona && String(userPersona).length > 2) persona = userPersona;
-            grimoireText = setSheet.getRange("B9").getValue();
-            const b8 = setSheet.getRange("B8").getValue();
-            if (b8 && String(b8).length > 5) manualRules = b8;
+            // Evolved Persona (B8)
+            const p = setSheet.getRange("B8").getValue();
+            if (p && String(p).length > 10) evolvedPersona = p;
+            else {
+                // Fallback to Seed (B6)
+                const seed = setSheet.getRange("B6").getValue();
+                if (seed) evolvedPersona = seed;
+            }
+
+            // Master Style (B9)
+            const s = setSheet.getRange("B9").getValue();
+            if (s) masterStyle = s;
         }
     } catch (e) { }
 
-    // 1. リソース取得 (Lab Data)
-    let labData = [];
-    if (labSheet && labSheet.getLastRow() > 1) {
+    // --- 2. Resources: Expert Tips (Toranomaki DB) ---
+    // Read raw tips (Techniques)
+    let expertTips = "";
+    const toraSheet = ss.getSheetByName(SHEET_TORANOMAKI);
+    if (toraSheet && toraSheet.getLastRow() >= 2) {
         try {
-            const lastLabRow = labSheet.getLastRow();
-            labData = labSheet.getRange(2, 1, lastLabRow - 1, 5).getValues();
+            const rawTips = toraSheet.getRange(2, 2, toraSheet.getLastRow() - 1, 1).getValues();
+            expertTips = rawTips.flat().filter(String).join("\n- ");
         } catch (e) { }
     }
 
-    // 2. ターゲット特定
+    // --- 3. Resources: Template DB (Skeleton) ---
+    let templates = [];
+    if (dbSheet && dbSheet.getLastRow() > 1) {
+        try {
+            const lastDbRow = dbSheet.getLastRow();
+            templates = dbSheet.getRange(2, 1, lastDbRow - 1, 6).getValues();
+        } catch (e) { }
+    }
+
+    // --- 4. Target Identification ---
     const lastRow = sheet.getLastRow();
     if (lastRow < 3) return;
 
@@ -313,26 +328,23 @@ function generatePostsCommon(sheetName, targetRow) {
     const colHumor = 5;
     const colTopic = 6;
     const colOutput = 8;
-    const colSelector = 9;
-    const colDraftsSource = 17; // Q
-    const colDraft1 = 18; // R
-    const colDraft2 = 19; // S
-    const colDraft3 = 20; // T
+    const colDraft1 = 18;
+    const colDraft2 = 19;
+    const colDraft3 = 20;
 
     let targets = [];
-
     if (targetRow) {
         if (targetRow < 3) return;
         targets.push(targetRow - 3);
     } else {
-        const data = sheet.getRange(3, 1, lastRow - 2, 14).getValues();
+        const data = sheet.getRange(3, 1, lastRow - 2, 8).getValues();
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
-            const createCheck = row[colCreate - 1]; // Col A
+            const check = row[colCreate - 1];
             const topic = row[colTopic - 1];
             const output = row[colOutput - 1];
 
-            if (createCheck === true) {
+            if (check === true) {
                 targets.push(i);
             } else if (topic && !output && row[colType - 1] !== 'まとめ') {
                 targets.push(i);
@@ -345,178 +357,93 @@ function generatePostsCommon(sheetName, targetRow) {
         return;
     }
 
-    // 3. 生成ループ
-    const fullData = sheet.getRange(3, 1, lastRow - 2, 14).getValues();
-
+    // --- 5. Generation Loop ---
+    const fullData = sheet.getRange(3, 1, lastRow - 2, 8).getValues();
     let count = 0;
+
     for (const dataIndex of targets) {
         try {
             const rowIndex = dataIndex + 3;
             const dataRow = fullData[dataIndex];
-
             const type = dataRow[colType - 1];
             const humor = dataRow[colHumor - 1];
             const topic = dataRow[colTopic - 1];
-            if (!topic) {
-                throw new Error("Error: Topic is empty. Please enter a topic.");
-            }
-            if (!topic) {
-                throw new Error("Error: Topic is empty. Please enter a topic.");
-            }
 
-            // DNA Selection
-            let dnaContext = "";
-            let usingGrimoire = false;
+            if (!topic) continue;
 
-            if (grimoireText && String(grimoireText).length > 50) {
-                usingGrimoire = true;
-                dnaContext = grimoireText;
-                if (count === 0 && !targetRow) {
-                    Browser.msgBox(`【📖 魔導書モード発動】\n最強のスキルリスト(Master DNA)から、3つのアプローチを提案します。`);
-                }
-            } else if (labData.length > 0) {
-                // Fallback Logic
-                let candidates = labData
-                    .filter(r => r[1] === type && r[4])
-                    .map(r => r[4]);
-
-                if (candidates.length === 0) {
-                    candidates = labData.map(r => r[4]).filter(String);
-                }
-
-                if (candidates.length > 0) {
-                    const randomDNA = candidates[Math.floor(Math.random() * candidates.length)];
-                    dnaContext = `【今回の投稿スタイル】\n${randomDNA}\n`;
-                }
-            }
-
-            // --- Dynamic Prompt Switching ---
-            let typeInstruction = "";
-            let toneInstruction = "";
-            let lengthInstruction = "";
-
-            switch (type) {
-                case "単品":
-                    typeInstruction = `【Type: 単品紹介】\n目的: アフィリエイト誘導や商品への興味喚起。短く、勢いで読ませる。`;
-                    lengthInstruction = `文字数: 140文字程度。短文推奨。`;
-                    break;
-                case "日常":
-                    typeInstruction = `【Type: 日常ツイート】\n目的: フォロワーとの共感、エンゲージメント。何気ないエピソードから感情を引き出す。`;
-                    lengthInstruction = `文字数: 200〜300文字。`;
-                    break;
-                case "有益":
-                    typeInstruction = `【Type: 有益情報】\n目的: 「保存」や「シェア」。役立つ知識やノウハウ。`;
-                    lengthInstruction = `文字数: **300文字以内**。`;
-                    break;
-                case "自己紹介":
-                    lengthInstruction = "文字数: 長文OKだが、読ませる工夫が必須。";
-                    typeInstruction = "【Type: 自己紹介】\n目的: ファン化を促進するストーリーテリング。";
-                    break;
-                case "Free":
-                    typeInstruction = `【Type: Free (推敲・微調整)】\n目的: プロの視点で「読みやすく」「魅力的」に磨き上げる。`;
-                    lengthInstruction = `文字数: 原文の意図を損なわない範囲で調整。`;
-                    break;
-                default:
-                    typeInstruction = `【Type: 一般投稿】`;
-                    lengthInstruction = `文字数: 200文字程度。`;
-            }
-
-            // Humor Handling
-            let humorInstruction = "";
-            if (humor === "Lv3: 全力") {
-                humorInstruction = `【ユーモア: 爆笑・自虐】\n読者を笑わせる強いスパイス。自虐や誇張を恐れない。`;
-            } else if (humor === "Lv1: 控えめ") {
-                humorInstruction = `【ユーモア: 安心・知的】\nクスッとした笑いと安心感。知的でウィットに富んだ表現。`;
-            } else {
-                humorInstruction = `【ユーモア: 共感・スパイス】\n「あるある」と共感できる程よい温度感。`;
-            }
-
-            // DNA Override
-            if (usingGrimoire) {
-                toneInstruction = "";
-                typeInstruction += "\\nIMPORTANT: 【Master DNA Grimoire】から、このネタに適したスキルを**3つ**選択し、その構文・文体をトレースしてください。";
-            } else if (dnaContext) {
-                typeInstruction += "\nIMPORTANT: 【投稿スタイル(設計図)】の構成とリズムを完全再現してください。";
-            }
-
-            const formatInstruction = `
-【出力形式 (区切り文字を使用)】
-以下の「///」を区切り文字として、3つの案を出力してください。
-///案1
-(案1の本文)
-///案2
-(案2の本文)
-///案3
-(案3の本文)
-`;
-
-            const prompt = `
-あなたはThreadsの人気インフルエンサーです。
-以下の「ネタ」から、指定されたTypeに合わせて投稿を作成してください。
-${formatInstruction}
-
-【入力ネタ】
-${topic}
-
-【基本設定】
-${persona}
-
-【Type指示】
-${typeInstruction}
-${lengthInstruction}
-${toneInstruction}
-
-【ユーモア指示】
-${humorInstruction}
-
-${dnaContext || ""} 
-
-【追加ルール】
-${manualRules ? "参考にしているマニュアルからの重要心得:\n" + manualRules : ""}
-
-【指示】
-- ハッシュタグは**一切禁止** (Threadsの仕様)。
-- 出力は**投稿本文のみ** (解説不要)。
-`;
-
-            sheet.getRange(rowIndex, colOutput).setValue("⏳ AI執筆中... (3案を作成しています)");
+            sheet.getRange(rowIndex, colOutput).setValue("⏳ AI思考中 (Full Synthesis)...");
             SpreadsheetApp.flush();
 
-            let generatedText = callGeminiSafe(apiKey, prompt);
-            if (!generatedText) {
-                throw new Error("No response (blocked or empty).");
-            }
-            generatedText = generatedText.replace(/#\S+/g, '').trim();
+            // --- SELECT TEMPLATES ---
+            let selectedHook = "";
+            let selectedCTA = "";
 
-            // Parsing
-            let drafts = ["", "", ""];
-            const parts = generatedText.split("///");
-            let dIndex = 0;
-            for (let p of parts) {
-                let clean = p.replace(/^案\d+\s*/, "").trim();
-                if (clean) {
-                    if (dIndex < 3) drafts[dIndex] = clean;
-                    dIndex++;
-                }
+            if (templates.length > 0) {
+                const hooks = templates.filter(r => r[5] === 'HOOK' || (r[1] && String(r[1]).toUpperCase().includes('HOOK')));
+                const ctas = templates.filter(r => r[5] === 'CTA' || (r[1] && String(r[1]).toUpperCase().includes('CTA')));
+
+                if (hooks.length > 0) selectedHook = hooks[Math.floor(Math.random() * hooks.length)][3];
+                if (ctas.length > 0) selectedCTA = ctas[Math.floor(Math.random() * ctas.length)][3];
             }
 
-            sheet.getRange(rowIndex, colDraft1).setValue(drafts[0]);
-            sheet.getRange(rowIndex, colDraft2).setValue(drafts[1]);
-            sheet.getRange(rowIndex, colDraft3).setValue(drafts[2]);
+            // --- PROMPT CONSTRUCTION ---
+            const prompt = `
+[Role Definition (Evolved Persona)]
+You are: 
+${evolvedPersona}
+(Act as this persona fully.)
 
-            const combinedOutput = `【案1】\n${drafts[0]}\n\n【案2】\n${drafts[1]}\n\n【案3】\n${drafts[2]}`;
-            sheet.getRange(rowIndex, colSelector).setValue("すべて");
-            sheet.getRange(rowIndex, colOutput).setValue(combinedOutput);
+[Writing Style (Master Style)]
+Adopt the following rhythm and rhetoric style:
+${masterStyle || "Professional yet engaging."}
 
-            count++;
-            Utilities.sleep(1000);
+[Structural Constraints (Template Skeleton)]
+Structure the post as follows:
+- **Hook**: "${selectedHook || "Catchy opening"}"
+- **Body**: Develop the topic using your Persona and Style.
+- **CTA**: "${selectedCTA || "Engagement prompt"}"
+- **Humor**: ${humor}
 
+[Expert Tips (Techniques)]
+Incorporate these applicable techniques if relevant to the topic:
+- ${expertTips.slice(0, 1000) || "No specific tips."} (Selected tips)
+
+[Task]
+Write a Threads post about: "${topic}".
+
+[Output Format]
+Output ONLY the post content.
+ ///案1
+ (Draft 1)
+ ///案2
+ (Draft 2)
+ ///案3
+ (Draft 3)
+`;
+
+            const result = callGeminiSafe(apiKey, prompt);
+
+            if (result) {
+                const parts = result.split("///").filter(s => s.trim().length > 0);
+                let drafts = ["", "", ""];
+                parts.forEach((p, idx) => { if (idx < 3) drafts[idx] = p.replace(/^案\d+\s*/, "").trim(); });
+
+                sheet.getRange(rowIndex, colDraft1).setValue(drafts[0]);
+                sheet.getRange(rowIndex, colDraft2).setValue(drafts[1]);
+                sheet.getRange(rowIndex, colDraft3).setValue(drafts[2]);
+
+                const combinedOutput = `【案1】\n${drafts[0]}\n\n【案2】\n${drafts[1]}\n\n【案3】\n${drafts[2]}`;
+                sheet.getRange(rowIndex, colOutput).setValue(combinedOutput);
+                sheet.getRange(rowIndex, 9).setValue("すべて");
+                sheet.getRange(rowIndex, colCreate).setValue(false);
+                count++;
+            }
         } catch (e) {
             sheet.getRange(dataIndex + 3, colOutput).setValue("Error: " + e.message);
         }
     }
 
-    if (count > 0) Browser.msgBox(`${count}件の投稿を生成しました！`);
+    if (!targetRow && count > 0) Browser.msgBox(`Completed: ${count} posts generated.`);
 }
 
 /**
