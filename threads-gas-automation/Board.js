@@ -23,7 +23,7 @@ function setupBoardSheet() {
     // 2. ヘッダー (1行目)
     // A: ON AIR, B: No, C: Type, D: Photo 1, E: Photo 2, F: Photo 3, G: Topic, H: Output, I: System ID, J: Views, K: Likes, L: Replies, M: Reposts, N: Rate, O: Judge, P: DNA
     var headers = [
-        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "Assets (ネタ/URL)", "Output (決定稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Drafts Source", "Draft 1", "Draft 2", "Draft 3", "🚀 Create"]
+        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "Select Master (師匠選択)", "Output (決定稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Drafts Source", "Draft 1", "Draft 2", "Draft 3", "🚀 Create"]
     ];
 
     sheet.getRange("A1:U1").setValues(headers);
@@ -34,7 +34,7 @@ function setupBoardSheet() {
     // 3. ガイド行 (2行目)
     var guides = [
         "チェックボックス", "No", "↓Type", "[Auto1]", "[Auto2]", "[Auto3]",
-        "【ネタ】ここに書きたいことを入力\n（例：今日は疲れた...）",
+        "↓使用する師匠を選択",
         "←ここにAIが書いた文章が出ます",
         "⛔ ID", "閲覧数", "いいね", "返信", "引用/再投稿", "反応率", "判定",
         "←ここにAI分析結果が出ます",
@@ -72,7 +72,20 @@ function setupBoardSheet() {
     sheet.setColumnWidth(4, 100); // Photo 1
     sheet.setColumnWidth(5, 100); // Photo 2
     sheet.setColumnWidth(6, 100); // Photo 3
-    sheet.setColumnWidth(7, 300); // Topic
+    // G: Master Select Rule (Updated for Click-to-Gem)
+    var ruleMaster = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["Basic", "Var", "Rewrite", "Poison"], true)
+        .setAllowInvalid(true).build(); // Allow invalid for legacy text compatibility
+    sheet.getRange("G3:G100").setDataValidation(ruleMaster);
+
+    // Widths
+    sheet.setColumnWidth(1, 60);  // ON AIR
+    sheet.setColumnWidth(2, 40);  // No
+    sheet.setColumnWidth(3, 80);  // Type
+    sheet.setColumnWidth(4, 100); // Photo 1
+    sheet.setColumnWidth(5, 100); // Photo 2
+    sheet.setColumnWidth(6, 100); // Photo 3
+    sheet.setColumnWidth(7, 150); // Select Master (Was Topic)
     sheet.setColumnWidth(8, 400); // Output
     sheet.setColumnWidth(9, 50);  // System ID
 
@@ -94,6 +107,27 @@ function setupBoardSheet() {
         // API実行時はスキップ
         console.log("Setup completed (Headless mode)");
     }
+}
+
+/**
+ * 【緊急】G列のドロップダウンのみを適用（データは消さない）
+ */
+function applyMasterValidation() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_BOARD);
+    if (!sheet) return;
+
+    // G: Master Select Rule
+    var ruleMaster = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["Basic", "Var", "Rewrite", "Poison"], true)
+        .setAllowInvalid(true).build();
+    sheet.getRange("G3:G100").setDataValidation(ruleMaster);
+
+    // Header & Guide Update
+    sheet.getRange("G1").setValue("Select Master (師匠選択)");
+    sheet.getRange("G2").setValue("↓使用する師匠を選択");
+
+    Browser.msgBox("G列のドロップダウンを修復しました！");
 }
 
 /**
@@ -397,6 +431,23 @@ function generatePostsCommon(sheetName, targetRow) {
                 if (ctas.length > 0) selectedCTA = ctas[Math.floor(Math.random() * ctas.length)][3];
             }
 
+            // --- FETCH IMAGES ---
+            // D(4), E(5), F(6)
+            var imageUrls = [dataRow[3], dataRow[4], dataRow[5]]; // D, E, F
+            var encodedImages = [];
+
+            imageUrls.forEach(url => {
+                if (url && String(url).startsWith("http")) {
+                    var imgData = fetchImageAsBase64(url);
+                    if (imgData) encodedImages.push(imgData);
+                }
+            });
+
+            var imageContextMsg = "";
+            if (encodedImages.length > 0) {
+                imageContextMsg = `[Visual Context]\nI have attached ${encodedImages.length} image(s) from the post. Please refer to them for visual details (colors, atmosphere, text in image).\n`;
+            }
+
             // --- PROMPT CONSTRUCTION ---
             const prompt = `
 [Role Definition (Evolved Persona)]
@@ -405,8 +456,10 @@ ${evolvedPersona}
 (Act as this persona fully.)
 
 [Writing Style (Master Style)]
-Adopt the following rhythm and rhetoric style:
+Adopt the following rhetoric style:
 ${masterStyle || "Professional yet engaging."}
+
+${imageContextMsg}
 
 [Structural Constraints (Template Skeleton)]
 Structure the post as follows:
@@ -432,7 +485,7 @@ Output ONLY the post content.
  (Draft 3)
 `;
 
-            const result = callGeminiSafe(apiKey, prompt);
+            const result = callGeminiSafe(apiKey, prompt, encodedImages);
 
             if (result) {
                 const parts = result.split("///").filter(s => s.trim().length > 0);
@@ -541,7 +594,7 @@ function analyzeSingleRowBoard(sheet, row) {
         dnaCell.setValue("⏳ Analyzing DNA...");
         SpreadsheetApp.flush();
 
-        var result = analyzeDojoTextBoard(apiKey, rawPost, sheet.getParent());
+        var result = analyzeDojoTextBoard(apiKey, rawPost, sheet, row);
 
         if (result.summary) {
             dnaCell.setValue(result.summary);
@@ -551,20 +604,35 @@ function analyzeSingleRowBoard(sheet, row) {
     }
 }
 
+
 /**
- * AI Analysis logic for the Board
+ * AI Analysis logic for the Board (Multimodal)
  */
-function analyzeDojoTextBoard(apiKey, rawText, ss) {
+function analyzeDojoTextBoard(apiKey, rawText, sheet, row) {
+    // Fetch Images from row (Col D, E, F -> 4, 5, 6)
+    var imageRange = sheet.getRange(row, 4, 1, 3); // D, E, F
+    var urls = imageRange.getValues()[0];
+    var encodedImages = [];
+
+    urls.forEach(url => {
+        if (url && String(url).startsWith("http")) {
+            var imgData = fetchImageAsBase64(url);
+            if (imgData) encodedImages.push(imgData);
+        }
+    });
+
     var prompt = "あなたは世界最高峰のコンテンツ・ストラテジストです。\n" +
-        "以下の「SNS投稿」から、AI生成システムに組み込むための「構造化データ（エッセンス）」を抽出してください。\n\n" +
-        "【対象投稿】\n" + rawText + "\n\n" +
+        "以下の「SNS投稿」（テキストと添付画像）から、AI生成システムに組み込むための「構造化データ（エッセンス）」を抽出してください。\n\n" +
+        "【対象投稿テキスト】\n" + rawText + "\n\n" +
+        (encodedImages.length > 0 ? "【添付画像】\n" + encodedImages.length + "枚の画像を添付しました。画像内の文字や視覚的情報も分析に含めてください。\n\n" : "") +
         "【抽出項目】\n" +
         "1. General Rules (心得・戦略・フックの癖)\n" +
-        "2. Templates (そのまま使える構文テンプレート)\n\n" +
+        "2. Templates (そのまま使える構文テンプレート)\n" +
+        "3. Visual DNA (画像の傾向・構図・文字入れの特徴)\n\n" +
         "必ず以下の形式で簡潔に出力してください。\n" +
-        "【DNA要約】\n(ここにルールと型をまとめる)";
+        "【DNA要約】\n(ここにルールと型と視覚的特徴をまとめる)";
 
-    var result = callGeminiSafe(apiKey, prompt);
+    var result = callGeminiSafe(apiKey, prompt, encodedImages);
     if (!result) return { summary: "Analysis failed." };
 
     return { summary: result };

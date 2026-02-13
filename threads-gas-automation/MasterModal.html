@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_blank">
+    <style>
+        body {
+            font-family: 'Google Sans', Roboto, Arial, sans-serif;
+            padding: 15px;
+            text-align: center;
+            background-color: #f8f9fa;
+        }
+
+        .profile-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #202124;
+            margin-bottom: 5px;
+        }
+
+        .images-preview {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            height: 60px;
+        }
+
+        .img-box {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #dadce0;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .img-box img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .btn-main {
+            width: 100%;
+            max-width: 280px;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-size: 15px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-main:active {
+            transform: scale(0.98);
+        }
+
+        .color-Basic {
+            background: #3b82f6;
+        }
+
+        .color-Var {
+            background: #10b981;
+        }
+
+        .color-Rewrite {
+            background: #f59e0b;
+        }
+
+        .color-Poison {
+            background: #ef4444;
+        }
+
+        .status {
+            margin-top: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #d93025;
+            min-height: 18px;
+        }
+
+        .hidden-area {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+        }
+
+        textarea {
+            width: 90%;
+            height: 60px;
+            font-size: 11px;
+            color: #555;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            margin-top: 5px;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <? 
+     var primaryKey = "";
+     if (masterGems[masterName]) { primaryKey = masterName; } 
+  ?>
+
+    <div class="profile-name">
+        <?= primaryKey ? "To: " + primaryKey + " 師匠" : "Select Master" ?>
+    </div>
+
+    <div class="images-preview">
+        <? for (var i = 0; i < imageUrls.length; i++) { ?>
+        <div class="img-box"><img src="<?= imageUrls[i] ?>" crossorigin="anonymous"></div>
+        <? } ?>
+        <? if (imageUrls.length === 0) { ?>
+        <div style="color:#999; font-size:12px; padding-top:20px;">(No Images)</div>
+        <? } ?>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <!-- Primary Action -->
+    <? if (primaryKey) { ?>
+    <button id="goBtn" class="btn-main color-<?= primaryKey ?>"
+        onclick="handleCopyAndGo('<?= masterGems[primaryKey] ?>')">
+        🚀 Copy & Go to
+        <?= primaryKey ?>
+    </button>
+    <? } else { ?>
+    <div style="color:red; margin-bottom:10px;">G列で師匠を選んでください</div>
+    <? } ?>
+
+    <!-- Fallback Text Area -->
+    <div class="hint">画像がコピーされない場合はこちらをコピー:</div>
+    <textarea id="promptBox" readonly>画像を送信してください。</textarea>
+
+    <div id="copyContainer" contenteditable="true" class="hidden-area"></div>
+
+    <script>
+        var imageUrls = <?!= JSON.stringify(imageUrls) ?>;
+
+        async function handleCopyAndGo(targetUrl) {
+            if (!targetUrl) return;
+            var status = document.getElementById('status');
+            var btn = document.getElementById('goBtn');
+
+            status.innerText = "⏳ 画像を取得中...";
+            btn.disabled = true;
+
+            try {
+                if (imageUrls.length > 0) {
+                    // Try to copy the FIRST image as a Blob (Best for pasting into Gemini)
+                    await copyImageAsBlob(imageUrls[0]);
+                    status.innerText = "✅ 画像をクリップボードに保存しました！";
+                    status.style.color = "green";
+                } else {
+                    status.innerText = "画像がありません。";
+                }
+
+                setTimeout(function () {
+                    status.innerText += " 師匠の部屋を開きます...";
+                    window.open(targetUrl, '_blank');
+                    google.script.host.close();
+                }, 1200);
+
+            } catch (e) {
+                console.error(e);
+                status.innerText = "⚠️ 自動コピー失敗: 画像をドラッグ＆ドロップしてください";
+                status.style.color = "red";
+                setTimeout(function () {
+                    window.open(targetUrl, '_blank');
+                }, 2000);
+            }
+        }
+
+        async function copyImageAsBlob(url) {
+            try {
+                // 1. Fetch the image
+                const response = await fetch(url, { mode: 'cors' });
+                const blob = await response.blob();
+
+                // 2. Write to Clipboard using modern API
+                const item = new ClipboardItem({ [blob.type]: blob });
+                await navigator.clipboard.write([item]);
+                return true;
+            } catch (err) {
+                console.error("Clipboard API Failed:", err);
+                throw new Error("Copy failed");
+            }
+        }
+</body >
+
+</html >

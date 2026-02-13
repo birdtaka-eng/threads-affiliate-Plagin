@@ -8,9 +8,15 @@
  * メニュー作成
  */
 function onOpen() {
+    // 1. Main User Menu
     SpreadsheetApp.getUi().createMenu('🤖 Threads職人 (v2)')
         .addItem('【作成】投稿一括生成 (全タイプ)', 'generateUnifiedPosts')
         .addItem('【作成】まとめネタ作成 (選択合体)', 'generateSummaryPost')
+        .addSeparator()
+        .addItem('★ G列プルダウン強制復活', 'forceSetupDropdown')
+        .addItem('🚀 師匠へ (Copy & Go)', 'showMasterModal')
+        .addItem('🔧 ボード修復 (G列メニュー復活)', 'applyMasterValidation') // Added here
+        .addSeparator()
         .addItem('【放送】手動放送テスト (今放送すべきものを実行)', 'runBroadcast')
         .addItem('【分析】投稿データ更新 (Metrics)', 'updateMetrics')
         .addItem('【分析】虎の巻アップデート (Master DNA)', 'updateMasterDNA')
@@ -21,10 +27,13 @@ function onOpen() {
         .addItem('👁️ ドラフトビューワーを開く', 'showSidebar')
         .addToUi();
 
-    const devMenu = SpreadsheetApp.getUi().createMenu('🤖 Threads職人');
+    // 2. Dev/Setup Menu
+    const devMenu = SpreadsheetApp.getUi().createMenu('⚙️ 設定・開発'); // Renamed for clarity
 
-    // User Standard Menu
-    devMenu.addItem('【設定】操作マニュアル更新', 'setupManualSheet')
+    // User Standard Setup
+    devMenu.addItem('🔧 ボード修復 (G列メニュー復活)', 'applyMasterValidation') // Also here
+        .addSeparator()
+        .addItem('【設定】操作マニュアル更新', 'setupManualSheet')
         .addItem('【設定】全体設定シート作成 (リセット)', 'setupSettingsSheet')
         .addItem('【設定】投稿ボード作成 (リセット)', 'setupBoardSheet')
         .addItem('【設定】番組表リセット', 'setupScheduleSheet')
@@ -34,7 +43,7 @@ function onOpen() {
         .addSeparator()
         .addItem('【設定】自動分析トリガー設定', 'setupAllTriggers');
 
-    // Developer Only Menu
+    // Developer Only
     if (isDevMode()) {
         devMenu.addSeparator()
             .addItem('🛑【開発】DNA統合 (グリモワール化)', 'updateMasterDNA')
@@ -98,16 +107,75 @@ function setupTriggerCommon(sheetName, functionName) {
 // ------------------------------------------
 
 function showSidebar() {
-    const html = HtmlService.createHtmlOutputFromFile('sidebar')
-        .setTitle('Draft Viewer (編集可能)')
+    var html = HtmlService.createHtmlOutputFromFile('sidebar')
+        .setTitle('AI Cockpit v2.1') // Update Badge
         .setWidth(300);
     SpreadsheetApp.getUi().showSidebar(html);
 }
 
+/**
+ * Sidebar Polling Function (State Manager)
+ * サイドバーから1秒ごとに呼ばれ、現在の選択セルの状態を返します。
+ */
 function getSidebarContent() {
-    const range = SpreadsheetApp.getActiveRange();
-    if (!range) return "";
-    return range.getValue();
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getActiveSheet();
+        const range = ss.getActiveRange();
+
+        if (!range) return { mode: 'empty' };
+
+        const row = range.getRow();
+        const col = range.getColumn();
+        const sheetName = sheet.getName();
+        const cellValue = range.getValue();
+
+        // Mode 1: Board Sheet - Master Selection (Column G = 7)
+        // Ensure constants exist, otherwise fallback
+        const targetSheetName = (typeof SHEET_BOARD !== 'undefined') ? SHEET_BOARD : "投稿作成ボード";
+
+        if (sheetName === targetSheetName && row >= 3) {
+            // G列(7)情報取得
+            const masterName = sheet.getRange(row, 7).getValue(); // Col G
+
+            // 画像URL取得
+            const imgRange = sheet.getRange(row, 4, 1, 3);
+            const rawValues = imgRange.getValues()[0];
+            const rawFormulas = imgRange.getFormulas()[0];
+
+            const images = [];
+            for (let i = 0; i < 3; i++) {
+                let url = "";
+                let val = rawValues[i];
+                let formula = rawFormulas[i];
+
+                if (val && String(val).startsWith('http')) url = String(val);
+                else if (formula && formula.includes('IMAGE')) {
+                    const match = formula.match(/IMAGE\s*\(\s*"([^"]+)"/i);
+                    if (match && match[1]) url = match[1];
+                }
+                if (url) images.push(url);
+            }
+
+            return {
+                mode: 'board_master',
+                text: String(cellValue),
+                row: row,
+                masterName: masterName,
+                imageUrls: images,
+                masterGems: (typeof MASTER_GEMS !== 'undefined') ? MASTER_GEMS : {}
+            };
+        }
+
+        // Mode 2: Normal Text Editor
+        return {
+            mode: 'text',
+            text: String(cellValue),
+            row: row
+        };
+    } catch (e) {
+        return { mode: 'error', message: e.toString() + " Stack: " + e.stack };
+    }
 }
 
 function updateSidebarContent(content) {
@@ -324,12 +392,35 @@ function getThreadsCredentials() {
     return { userId, token };
 }
 
-function callGeminiSafe(apiKey, prompt) {
+/**
+ * Call Gemini API (Text + Images Support)
+ * @param {string} apiKey
+ * @param {string} prompt
+ * @param {Array<{mimeType: string, data: string}>} [images] - Array of base64 images
+ */
+function callGeminiSafe(apiKey, prompt, images) {
     const model = getGeminiModel();
-    // Use v1beta for access to newer models (like gemini-2.5-flash)
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    // Construct Parts
+    const parts = [{ text: prompt }];
+
+    // Add Images if provided
+    if (images && Array.isArray(images)) {
+        images.forEach(img => {
+            if (img.data) {
+                parts.push({
+                    inline_data: {
+                        mime_type: img.mimeType || "image/jpeg",
+                        data: img.data
+                    }
+                });
+            }
+        });
+    }
+
     const payload = {
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: parts }],
         safetySettings: [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -337,6 +428,7 @@ function callGeminiSafe(apiKey, prompt) {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
         ]
     };
+
     const options = {
         method: "post",
         contentType: "application/json",
@@ -373,6 +465,33 @@ function callGeminiSafe(apiKey, prompt) {
             Utilities.sleep(1000);
             attempt++;
         }
+    }
+}
+
+/**
+ * Fetch image from URL and convert to Base64
+ */
+function fetchImageAsBase64(url) {
+    try {
+        if (!url || !url.startsWith("http")) return null;
+
+        const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+        if (response.getResponseCode() !== 200) {
+            console.warn(`Failed to fetch image: ${url} (Status: ${response.getResponseCode()})`);
+            return null;
+        }
+
+        const blob = response.getBlob();
+        const mimeType = blob.getContentType();
+        const base64 = Utilities.base64Encode(blob.getBytes());
+
+        return {
+            mimeType: mimeType,
+            data: base64
+        };
+    } catch (e) {
+        console.warn(`Error fetching image: ${url} - ${e.message}`);
+        return null;
     }
 }
 
@@ -494,4 +613,102 @@ function applyPremiumTheme() {
     });
 
     Browser.msgBox("✨ Design Upgrade: 'Midnight Glass' UI and Clean Sheets applied!");
+}
+
+/**
+ * Handle GET requests (for Extension Data Retrieval)
+ */
+function doGet(e) {
+    var params = e.parameter;
+    var action = params.action;
+    var result = {};
+
+    try {
+        if (!action) throw new Error("No action specified");
+
+        // Routing to APIHandler.js functions
+        // Since APIHandler functions (apiGetMasterInfo) are global in GAS
+        if (action === "getMasterInfo") {
+            result = apiGetMasterInfo(params);
+        } else if (action === "getSettings") {
+            result = apiGetSettings(); // Assuming this exists or will exist
+        } else {
+            throw new Error("Unknown action: " + action);
+        }
+
+    } catch (err) {
+        result = { status: "error", message: err.message };
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Show "Master Modal" for the active row (Click-to-Gem)
+ */
+function showMasterModal() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getActiveSheet();
+
+    // Check if on correct sheet
+    if (sheet.getName() !== SHEET_BOARD) {
+        Browser.msgBox("「投稿作成ボード」で実行してください。");
+        return;
+    }
+
+    var row = sheet.getActiveCell().getRow();
+    if (row < 3) {
+        Browser.msgBox("データ行を選択してください。（3行目以降）");
+        return;
+    }
+
+    // Get Info using API Logic
+    var info = apiGetMasterInfo({ row: row });
+
+    // Debug: Check what we got
+    // Browser.msgBox("Debug: G列の値 = " + info.masterName); 
+
+    // Create Template
+    var t = HtmlService.createTemplateFromFile('MasterModal');
+    t.masterName = info.masterName; // Default/Current selection
+    t.imageUrls = info.imageUrls;
+    t.masterGems = MASTER_GEMS; // Pass all gems for selection
+
+    var html = t.evaluate()
+        .setWidth(450)
+        .setHeight(400); // Slightly taller for buttons
+
+    SpreadsheetApp.getUi().showModalDialog(html, '🚀 師匠へ (Copy & Go)');
+}
+
+/**
+ * Sidebar Helper: Fetch image server-side to bypass CORS
+ */
+function getImageBase64(url) {
+    try {
+        if (!url) return null;
+
+        // Handle formula wrapping if raw string contains it (redundant safety)
+        if (url.includes('IMAGE("')) {
+            const match = url.match(/IMAGE\s*\(\s*"([^"]+)"/i);
+            if (match && match[1]) url = match[1];
+        }
+
+        const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+        if (response.getResponseCode() !== 200) {
+            console.error("Failed to fetch image: " + url);
+            return { error: "Fetch failed: " + response.getResponseCode() };
+        }
+
+        const blob = response.getBlob();
+        const base64 = Utilities.base64Encode(blob.getBytes());
+        return {
+            mimeType: blob.getContentType(),
+            base64: base64
+        };
+    } catch (e) {
+        console.error(e);
+        return { error: e.message };
+    }
 }

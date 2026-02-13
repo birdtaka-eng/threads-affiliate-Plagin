@@ -45,6 +45,9 @@ function handleApiRequest(e) {
             case "getBoardData":
                 result = apiGetBoardData();
                 break;
+            case "getMasterInfo":
+                result = apiGetMasterInfo(payload);
+                break;
             case "getSettings":
                 result = apiGetSettings();
                 break;
@@ -216,4 +219,58 @@ function saveClipToBoard(data) {
     }
 
     return { status: "success", message: "Saved to Board!", row: targetRow };
+}
+
+/**
+ * Get Master URL and Images for the active row (or specified row)
+ */
+function apiGetMasterInfo(payload) {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_BOARD);
+
+    // Default to last row if not specified (simplification for extension)
+    // Ideally extension sends the row index, but for now extension saves then gets info.
+    // Let's rely on finding the *last modified* or passing row.
+    // If payload.row is present use it.
+
+    var row = sheet.getLastRow(); // Default
+    if (payload.row) row = parseInt(payload.row);
+
+    // Read G (Master Name), D, E, F (Images)
+    // G is Col 7, D is Col 4
+    var data = sheet.getRange(row, 4, 1, 4).getValues()[0];
+    var img1 = data[0]; // D
+    var img2 = data[1]; // E
+    var img3 = data[2]; // F
+    var masterName = data[3]; // G
+
+    // Normalize master name (remove extra spaces etc)
+    var rawName = String(masterName).trim();
+
+    // Case-insensitive lookup
+    var targetKey = Object.keys(MASTER_GEMS).find(k => k.toLowerCase() === rawName.toLowerCase());
+
+    if (targetKey) {
+        masterName = targetKey; // Normalize to key name (e.g. "poison" -> "Poison")
+    }
+
+    var masterUrl = "";
+    if (MASTER_GEMS[masterName]) {
+        masterUrl = MASTER_GEMS[masterName];
+    } else {
+        // Fallback or legacy text handling
+        masterUrl = MASTER_GEMS["Basic"]; // Default to Basic
+    }
+
+    var imageUrls = [];
+    if (img1 && String(img1).startsWith("http")) imageUrls.push(img1);
+    if (img2 && String(img2).startsWith("http")) imageUrls.push(img2);
+    if (img3 && String(img3).startsWith("http")) imageUrls.push(img3);
+
+    return {
+        status: "success",
+        masterName: masterName,
+        masterUrl: masterUrl,
+        imageUrls: imageUrls
+    };
 }

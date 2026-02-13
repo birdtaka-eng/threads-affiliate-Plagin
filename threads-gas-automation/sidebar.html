@@ -16,6 +16,9 @@
             --text-secondary: #94a3b8;
             /* Slate 400 */
             --glass-border: rgba(255, 255, 255, 0.1);
+            --success: #22c55e;
+            --warning: #eab308;
+            --error: #ef4444;
         }
 
         body {
@@ -23,232 +26,541 @@
             padding: 16px;
             background-color: var(--bg-primary);
             color: var(--text-primary);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', Roboto, sans-serif;
             height: 100vh;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
+            gap: 16px;
         }
 
-        /* Header / Controls */
+        /* --- Master Action Panel (New) --- */
+        #action-panel {
+            display: none;
+            /* Hidden by default */
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .master-badge {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--accent);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-action:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-action:active {
+            transform: translateY(0);
+        }
+
+        .img-count-badge {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        /* --- Editor Area (Existing) --- */
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
+            padding-bottom: 8px;
             border-bottom: 1px solid var(--glass-border);
         }
 
         .title {
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
         }
 
-        /* Main Editor Area */
         .editor-container {
             flex-grow: 1;
             position: relative;
             background: var(--bg-secondary);
             border-radius: 8px;
             border: 1px solid var(--glass-border);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             overflow: hidden;
-            transition: border-color 0.2s;
-        }
-
-        .editor-container:focus-within {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+            display: flex;
+            flex-direction: column;
         }
 
         textarea {
             width: 100%;
             height: 100%;
-            background: transparent;
             border: none;
+            background: transparent;
             color: var(--text-primary);
-            font-size: 14px;
-            line-height: 1.6;
-            padding: 16px;
-            box-sizing: border-box;
+            padding: 12px;
             resize: none;
             outline: none;
+            font-family: inherit;
+            line-height: 1.5;
+            box-sizing: border-box;
         }
 
-        textarea::placeholder {
-            color: var(--text-secondary);
-            opacity: 0.5;
-        }
-
-        /* Footer / Status */
         .footer {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 12px;
-            font-size: 12px;
-        }
-
-        .status {
+            font-size: 11px;
             color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 6px;
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background-color: #64748b;
-            /* Gray */
+            background-color: var(--text-secondary);
+            display: inline-block;
+            margin-right: 5px;
         }
 
         .status-dot.active {
-            background-color: #22c55e;
-            /* Green */
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+            background-color: var(--success);
+            box-shadow: 0 0 5px var(--success);
         }
 
         .status-dot.saving {
-            background-color: #eab308;
-            /* Yellow */
+            background-color: var(--warning);
         }
 
-        /* Button */
-        .btn-primary {
-            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 12px;
-            cursor: pointer;
-            transition: transform 0.1s, opacity 0.2s;
-            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+        .status-dot.error {
+            background-color: var(--error);
         }
 
-        .btn-primary:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        .btn-primary:active {
-            transform: translateY(0);
+        .preview-item {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            cursor: copy;
+            border: 2px solid transparent;
+            margin-bottom: 8px;
+            transition: all 0.2s;
         }
 
-        .btn-primary:disabled {
-            background: var(--bg-secondary);
-            color: var(--text-secondary);
-            cursor: not-allowed;
-            box-shadow: none;
+        .preview-item:hover {
+            border-color: var(--accent);
+            transform: scale(1.02);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
     </style>
 </head>
 
 <body>
-    <div class="header">
-        <span class="title">AI Cockpit // Editor</span>
+
+    <!-- Action Panel (Dynamic) -->
+    <div id="action-panel">
+        <span class="master-badge" id="master-uid">MASTER DETECTED</span>
+        <button id="goBtn" class="btn-action" onclick="runMasterFlow()">
+            <span>🚀 Copy & Go</span>
+            <span id="img-badge" class="img-count-badge">0 IMG</span>
+        </button>
+
+        <!-- Image Preview -->
+        <div id="preview-container"
+            style="display:none; margin-top:10px; border:1px dashed var(--glass-border); padding:8px; border-radius:4px; max-height:200px; overflow-y:auto;">
+            <!-- Images will be injected here -->
+        </div>
+
+        <div id="action-status" style="font-size:11px; margin-top:5px; min-height:15px; color:#cbd5e1;"></div>
     </div>
 
+    <!-- Editor Header -->
+    <div class="header">
+        <span class="title">AI Cockpit // Editor <span
+                style="font-size:9px; background:#334155; padding:2px 4px; border-radius:3px;">v2.1</span></span>
+        <div id="status-indicator">
+            <span class="status-dot" id="dot"></span>
+            <span id="status-text">Ready</span>
+        </div>
+    </div>
+
+    <!-- Main Editor -->
     <div class="editor-container">
-        <textarea id="editor" placeholder="Select a cell on the board..."></textarea>
+        <textarea id="editor" placeholder="Select a cell..."></textarea>
     </div>
 
     <div class="footer">
-        <div class="status" id="status-container">
-            <div class="status-dot" id="status-dot"></div>
-            <span id="status-text">Ready</span>
-        </div>
-        <button id="saveBtn" class="btn-primary" onclick="saveContent()" disabled>
-            Save Changes
-        </button>
+        <span style="opacity:0.5">Auto-save enabled</span>
+        <button onclick="saveContent()"
+            style="background:transparent; border:1px solid var(--glass-border); color:var(--text-secondary); border-radius:4px; padding:4px 8px; cursor:pointer;">Save</button>
+    </div>
+
+    <div id="debug-footer"
+        style="font-size:9px; color:#475569; text-align:right; margin-top:8px; font-family:monospace;">
+        Initializing...
     </div>
 
     <script>
-        let currentContent = "";
+        // --- State ---
+        let currentText = "";
+        let currentMaster = null;
+        let currentImages = [];
+        let masterGems = {};
 
-        // Poll for changes every 1 second
-        setInterval(pollActiveCell, 1000);
+        // New: Preloaded Blobs for Instant Copy (User Gesture Safety)
+        let preloadedBlobs = [];
+        let isPreloading = false;
 
-        function pollActiveCell() {
+        // --- Debug Info ---
+        function updateDebug(msg) {
+            const footer = document.getElementById('debug-footer');
+            if (footer) footer.textContent = msg;
+        }
+
+        // --- Polling ---
+        setInterval(pollContext, 1000);
+
+        function pollContext() {
+            // Don't poll while user is typing vigorously
             const editor = document.getElementById('editor');
-            if (editor.value !== currentContent && document.activeElement === editor) {
+            if (document.activeElement === editor && editor.value !== currentText) return;
+
+            google.script.run
+                .withSuccessHandler(renderUI)
+                .withFailureHandler(e => updateDebug("Poll Error: " + e.message))
+                .getSidebarContent();
+        }
+
+        function renderUI(data) {
+            try {
+                if (!data) return;
+
+                // Debug Update
+                const timestamp = new Date().toLocaleTimeString();
+                updateDebug(`[${timestamp}] Mode: ${data.mode} | Row: ${data.row || '-'}`);
+
+                if (data.mode === 'error') {
+                    updateDebug("Server Error: " + data.message);
+                    return;
+                }
+
+                // 1. Text Editor Sync
+                const editor = document.getElementById('editor');
+                if (data.text !== undefined && data.text !== currentText) {
+                    if (document.activeElement !== editor) {
+                        editor.value = data.text;
+                        currentText = data.text;
+                        updateStatus("Synced", "active");
+                    }
+                }
+
+                // 2. Mode Switching
+                const panel = document.getElementById('action-panel');
+                const editorElems = document.querySelectorAll('.header, .editor-container, .footer');
+                const masterUid = document.getElementById('master-uid');
+                const imgBadge = document.getElementById('img-badge');
+                const btn = document.getElementById('goBtn');
+
+                if (data.mode === 'board_master' && data.masterName) {
+                    editorElems.forEach(el => el.style.display = 'none');
+
+                    masterGems = data.masterGems || {};
+                    let mName = data.masterName;
+                    let targetKey = Object.keys(masterGems).find(k => k.toLowerCase() === String(mName).trim().toLowerCase());
+
+                    if (targetKey) {
+                        // VALID MASTER
+                        // Check if we need to update state
+                        const newImages = data.imageUrls || [];
+                        const needsUpdate = (currentMaster !== targetKey) || (currentImages.join(',') !== newImages.join(','));
+
+                        if (needsUpdate) {
+                            currentMaster = targetKey;
+                            currentImages = newImages;
+
+                            masterUid.textContent = "To: " + targetKey + " 師匠";
+                            imgBadge.textContent = currentImages.length + " IMG";
+                            panel.style.display = "block";
+
+                            // Colors
+                            if (targetKey === "Poison") btn.style.backgroundColor = "#ef4444";
+                            else if (targetKey === "Var") btn.style.backgroundColor = "#10b981";
+                            else if (targetKey === "Rewrite") btn.style.backgroundColor = "#f59e0b";
+                            else btn.style.backgroundColor = "#6366f1";
+
+                            // Trigger Preload!
+                            preloadImages();
+                        }
+                    } else {
+                        // INVALID MASTER
+                        if (panel.style.display !== "none") panel.style.display = "none";
+                        editorElems.forEach(el => el.style.display = 'flex');
+                        currentMaster = null;
+                        currentImages = [];
+                    }
+                } else {
+                    // TEXT MODE
+                    if (panel.style.display !== "none") panel.style.display = "none";
+                    editorElems.forEach(el => el.style.display = 'flex');
+                    currentMaster = null;
+                    currentImages = [];
+                }
+            } catch (e) {
+                console.error(e);
+                updateDebug("UI Error: " + e.message);
+            }
+        }
+
+        // --- Preload Logic ---
+        function preloadImages() {
+            const btn = document.getElementById('goBtn');
+            const previewContainer = document.getElementById('preview-container');
+            const statusFn = (msg) => document.getElementById('action-status').textContent = msg;
+
+            // Reset
+            preloadedBlobs = [];
+            previewContainer.innerHTML = '<div style="font-size:10px; color:var(--text-secondary); margin-bottom:4px;">Click to Copy / Drag & Drop</div>';
+            previewContainer.style.display = 'block';
+            isPreloading = true;
+
+            if (currentImages.length === 0) {
+                btn.disabled = false;
+                btn.querySelector('span').textContent = "🚀 Open (No Img)";
+                statusFn("Ready to open");
+                isPreloading = false;
                 return;
             }
-            google.script.run.withSuccessHandler(updateUI).getSidebarContent();
+
+            btn.disabled = true;
+            btn.querySelector('span').textContent = "⏳ Loading Images...";
+            statusFn("Downloading " + currentImages.length + " images...");
+
+            let loadedCount = 0;
+
+            currentImages.forEach((url, index) => {
+                google.script.run
+                    .withSuccessHandler(async (result) => {
+                        if (result && result.base64) {
+                            try {
+                                // Create Image Element
+                                const imgPrefix = "data:" + result.mimeType + ";base64,";
+                                const img = document.createElement('img');
+                                img.src = imgPrefix + result.base64;
+                                img.className = 'preview-item';
+                                img.title = "Ready to Copy";
+
+                                // Convert to PNG Blob immediately
+                                await new Promise(resolve => {
+                                    img.onload = resolve;
+                                });
+                                const pngBlob = await convertToPngBlob(img);
+
+                                // Store in global array
+                                preloadedBlobs[index] = {
+                                    blob: pngBlob,
+                                    mimeType: "image/png", // Always PNG
+                                    element: img
+                                };
+
+                                // Show Preview
+                                previewContainer.appendChild(img);
+
+                                // 1. Enhanced Drag Support
+                                img.ondragstart = (e) => {
+                                    // Set data for drag
+                                    e.dataTransfer.setData("text/html", `<img src="${img.src}">`);
+                                    e.dataTransfer.setData("text/uri-list", img.src);
+                                };
+
+                                // 2. Click to Manual Copy (via PNG conversion)
+                                img.onclick = async () => {
+                                    try {
+                                        statusFn("🔄 Converting to PNG for Clipboard...");
+                                        const item = new ClipboardItem({ "image/png": pngBlob });
+                                        await navigator.clipboard.write([item]);
+                                        statusFn("✅ Copied Image " + (index + 1) + " (PNG)");
+                                    } catch (e) {
+                                        console.error(e);
+                                        statusFn("⚠️ Copy Failed: " + e.message);
+                                    }
+                                };
+
+                            } catch (e) {
+                                console.error("Preload conversion failed", e);
+                            }
+                        }
+                        loadedCount++;
+                        checkDone();
+                    })
+                    .withFailureHandler(e => {
+                        console.error("Preload fetch failed", e);
+                        loadedCount++;
+                        checkDone();
+                    })
+                    .getImageBase64(url);
+            });
+
+            function checkDone() {
+                if (loadedCount >= currentImages.length) {
+                    isPreloading = false;
+                    btn.disabled = false;
+                    btn.querySelector('span').textContent = "🚀 Copy & Go";
+
+                    const successCount = preloadedBlobs.filter(b => b).length;
+                    statusFn(successCount > 0 ? "✅ Ready! Click to Copy & Go" : "⚠️ Load Failed. Open Only?");
+                }
+            }
         }
 
-        function updateUI(content) {
-            const editor = document.getElementById('editor');
-            const statusText = document.getElementById('status-text');
-            const statusDot = document.getElementById('status-dot');
-            const saveBtn = document.getElementById('saveBtn');
+        // --- Action Flow (Single Image Revert) ---
+        async function runMasterFlow() {
+            if (!currentMaster || isPreloading) return;
 
-            if (content !== currentContent) {
-                editor.value = content;
-                currentContent = content;
+            const btn = document.getElementById('goBtn');
+            const statusFn = (msg) => document.getElementById('action-status').textContent = msg;
+            const targetUrl = masterGems[currentMaster];
 
-                statusText.textContent = "Synced";
-                statusDot.className = "status-dot active";
-                saveBtn.disabled = true;
+            // 1. Write Single Image to Clipboard (The "Working" Version)
+            if (preloadedBlobs.length > 0) {
+                try {
+                    // Try the first valid image
+                    const item = preloadedBlobs.find(i => i && i.blob);
 
-                // Reset status after a while
-                setTimeout(() => {
-                    if (statusText.textContent === "Synced") {
-                        statusDot.className = "status-dot";
+                    if (item) {
+                        statusFn("📸 Copying First Image...");
+                        const clipboardItem = new ClipboardItem({ [item.mimeType]: item.blob });
+                        await navigator.clipboard.write([clipboardItem]);
+                        statusFn("✅ Copied! Opening...");
+                    } else {
+                        statusFn("⚠️ No Valid Image Blob");
                     }
-                }, 2000);
+                } catch (e) {
+                    console.error(e);
+                    statusFn("⚠️ Copy Error: " + e.message);
+                    alert("Copy Failed: " + e.message);
+                }
+            } else {
+                statusFn("⚠️ No Images Loaded");
             }
+
+            // 2. Open Window and Auto Paste
+            setTimeout(() => {
+                const finalUrl = targetUrl.includes('#') ? targetUrl : targetUrl + "#auto_paste";
+                window.open(finalUrl, '_blank');
+            }, 800);
         }
 
-        // Enable save button on input
-        document.getElementById('editor').addEventListener('input', function () {
-            const saveBtn = document.getElementById('saveBtn');
-            const statusText = document.getElementById('status-text');
-            const statusDot = document.getElementById('status-dot');
+        // Utility: Create Vertical Collage from Image Elements
+        function createCollageBlob(imgElements) {
+            return new Promise((resolve, reject) => {
+                if (!imgElements || imgElements.length === 0) return reject(new Error("No images"));
 
-            if (this.value !== currentContent) {
-                saveBtn.disabled = false;
-                statusText.textContent = "Edited";
-                statusDot.className = "status-dot"; // Gray when editing
-            } else {
-                saveBtn.disabled = true;
-                statusText.textContent = "Synced";
-                statusDot.className = "status-dot active";
-            }
+                // Calculate total dimensions
+                let maxWidth = 0;
+                let totalHeight = 0;
+                imgElements.forEach(img => {
+                    maxWidth = Math.max(maxWidth, img.naturalWidth);
+                    totalHeight += img.naturalHeight;
+                });
+
+                // Add some padding/spacing
+                const spacing = 20;
+                totalHeight += (imgElements.length - 1) * spacing;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = maxWidth;
+                canvas.height = totalHeight;
+                const ctx = canvas.getContext('2d');
+
+                // Fill white background (optional, but safer for transparency)
+                ctx.fillStyle = "#FFFFFF";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                let currentY = 0;
+                imgElements.forEach(img => {
+                    // Center image horizontally
+                    const x = (maxWidth - img.naturalWidth) / 2;
+                    ctx.drawImage(img, x, currentY);
+                    currentY += img.naturalHeight + spacing;
+                });
+
+                canvas.toBlob((blob) => {
+                    if (blob) resolve(blob);
+                    else reject(new Error("Collage toBlob failed"));
+                }, 'image/png');
+            });
+        }
+
+        // Utility: Convert Image Element to PNG Blob (Individual)
+        function convertToPngBlob(imgElement) {
+            return new Promise((resolve, reject) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = imgElement.naturalWidth;
+                canvas.height = imgElement.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(imgElement, 0, 0);
+                canvas.toBlob((blob) => {
+                    if (blob) resolve(blob);
+                    else reject(new Error("Canvas toBlob failed"));
+                }, 'image/png');
+            });
+        }
+
+        // --- Editor Helpers ---
+        document.getElementById('editor').addEventListener('input', function () {
+            updateStatus("Editing...", "none");
         });
 
         function saveContent() {
-            const editor = document.getElementById('editor');
-            const newContent = editor.value;
-            const statusText = document.getElementById('status-text');
-            const statusDot = document.getElementById('status-dot');
-            const saveBtn = document.getElementById('saveBtn');
+            const val = document.getElementById('editor').value;
+            updateStatus("Saving...", "saving");
+            google.script.run.withSuccessHandler(() => {
+                currentText = val;
+                updateStatus("Saved", "active");
+            }).withFailureHandler((e) => {
+                alert(e.message);
+                updateStatus("Error", "error");
+            }).updateSidebarContent(val);
+        }
 
-            statusText.textContent = "Saving...";
-            statusDot.className = "status-dot saving"; // Yellow
-            saveBtn.disabled = true;
-
-            google.script.run.withSuccessHandler(function () {
-                currentContent = newContent;
-                statusText.textContent = "Saved";
-                statusDot.className = "status-dot active"; // Green
-
-                setTimeout(() => {
-                    statusText.textContent = "Synced";
-                }, 2000);
-            }).withFailureHandler(function (e) {
-                statusText.textContent = "Error";
-                statusDot.className = "status-dot"; // simple
-                alert("Error: " + e.message);
-                saveBtn.disabled = false;
-            }).updateSidebarContent(newContent);
+        function updateStatus(text, dotClass) {
+            document.getElementById('status-text').textContent = text;
+            const dot = document.getElementById('dot');
+            dot.className = "status-dot " + dotClass;
         }
     </script>
 </body>

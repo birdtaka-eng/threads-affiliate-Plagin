@@ -4,9 +4,11 @@
     "version": "5.1",
     "description": "あらゆるサイトから画像を手動選択できる最新の投稿支援ツール",
     "permissions": [
-        "storage",
         "activeTab",
-        "scripting"
+        "scripting",
+        "storage",
+        "clipboardRead",
+        "clipboardWrite"
     ],
     "host_permissions": [
         "*://*/*"
@@ -24,6 +26,14 @@
                 "content.js",
                 "instagram.js",
                 "rakuten.js"
+            ]
+        },
+        {
+            "matches": [
+                "https://gemini.google.com/*"
+            ],
+            "js": [
+                "gemini.js"
             ]
         }
     ]

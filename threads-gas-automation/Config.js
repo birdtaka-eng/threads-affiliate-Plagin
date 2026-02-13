@@ -24,6 +24,14 @@ var AI_MODELS = [
 ];
 var DEFAULT_MODEL = "gemini-1.5-flash";
 
+// --- 3.5 Master GEM URLs (Custom Chatbots) ---
+var MASTER_GEMS = {
+   "Basic": "https://gemini.google.com/gem/1aBiJAfolAvFZCOx3prhXY2xIMDiurNaF?usp=sharing",
+   "Var": "https://gemini.google.com/gem/1Q21gMYOlJkmgOgj33WLcJHdMVHUm99Sp?usp=sharing",
+   "Rewrite": "https://gemini.google.com/gem/1X6e0002_wnx0zUVSDJgSG9ZVW04p3qIX?usp=sharing",
+   "Poison": "https://gemini.google.com/gem/1MQ43EwCup8o6Eh6nZPODcFi0JdWidJUT?usp=sharing"
+};
+
 // --- 4. Layout Definitions (Buzz Lab) ---
 var LAB_CONFIG = {
    // Row 1: Description
