@@ -86,7 +86,9 @@ function setupLabSheet() {
         } else break;
     }
 
-    Browser.msgBox("バズ研究所(Lab)を更新しました！(Configベース)");
+    try {
+        Browser.msgBox("バズ研究所(Lab)を更新しました！(Configベース)");
+    } catch (e) { }
 }
 
 /**
@@ -96,7 +98,9 @@ function setupTemplateDatabase(silent = false) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let dbSheet = ss.getSheetByName(SHEET_DB);
     if (dbSheet) {
-        if (!silent) Browser.msgBox("テンプレートDBは既に存在します。");
+        if (!silent) {
+            try { Browser.msgBox("テンプレートDBは既に存在します。"); } catch (e) { }
+        }
         return;
     }
 
@@ -119,7 +123,9 @@ function setupTemplateDatabase(silent = false) {
     const rule = SpreadsheetApp.newDataValidation().requireValueInList(["Active", "Archived"]).build();
     dbSheet.getRange("H2:H1000").setDataValidation(rule);
 
-    if (!silent) Browser.msgBox("テンプレートDBを初期化しました。");
+    if (!silent) {
+        try { Browser.msgBox("テンプレートDBを初期化しました。"); } catch (e) { }
+    }
 }
 
 /**

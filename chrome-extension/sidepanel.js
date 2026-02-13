@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveBtn = document.getElementById('saveBtn');
     const clearAllBtn = document.getElementById('clearAllBtn');
     const listContainer = document.getElementById('listContainer');
+    const clipBtn = document.getElementById('clipBtn');
 
     // 初期ロード
     loadDrafts();
@@ -14,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // イベントリスナー
     // ---------------------------------------------------------
     saveBtn.addEventListener('click', handleImport);
+    if (clipBtn) clipBtn.addEventListener('click', handleClip);
 
     if (clearAllBtn) {
         clearAllBtn.addEventListener('click', () => {
@@ -68,6 +70,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         }
+    }
+
+    function handleClip() {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
+            if (!tab) return;
+
+            let action = "";
+            if (tab.url.includes("instagram.com")) {
+                action = "extract_instagram";
+            } else if (tab.url.includes("threads.net")) {
+                action = "scrapePost";
+            } else {
+                alert("Instagram または Threads の投稿ページを開いてください。");
+                return;
+            }
+
+            clipBtn.disabled = true;
+            clipBtn.innerText = "⏳ 保存中...";
+
+            chrome.tabs.sendMessage(tab.id, { action: action }, (response) => {
+                if (chrome.runtime.lastError || !response) {
+                    console.error("Clip Error:", chrome.runtime.lastError);
+                    alert("スクレイピングに失敗しました。ページを更新して再試行してください。");
+                    resetClipBtn();
+                    return;
+                }
+
+                // Send to GAS
+                sendToGAS(response, (res) => {
+                    if (res && res.status === "success") {
+                        alert("ボードに保存しました！");
+                    } else {
+                        alert("保存失敗: " + (res ? res.message : "接続エラー"));
+                    }
+                    resetClipBtn();
+                });
+            });
+        });
+    }
+
+    function resetClipBtn() {
+        clipBtn.disabled = false;
+        clipBtn.innerHTML = "<span>📸</span> クリップ (ボードへ保存)";
+    }
+
+    function sendToGAS(data, cb) {
+        chrome.storage.local.get(['gasUrl'], (res) => {
+            let url = res.gasUrl;
+            if (!url) {
+                url = prompt("GASのウェブアプリURLを入力してください：");
+                if (url) {
+                    chrome.storage.local.set({ gasUrl: url });
+                } else {
+                    cb(null);
+                    return;
+                }
+            }
+
+            fetch(url, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'clip_instagram', data: data })
+            })
+                .then(r => r.json())
+                .then(json => cb(json))
+                .catch(err => {
+                    console.error("GAS Error:", err);
+                    cb({ status: "error", message: err.message });
+                });
+        });
     }
 
     // ---------------------------------------------------------

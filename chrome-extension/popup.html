@@ -1,257 +1,190 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Threads職人 Pro</title>
   <style>
+    :root {
+      --primary: #0095f6;
+      --bg: #ffffff;
+      --text: #1a1a1a;
+      --border: #efefef;
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      padding: 12px;
-      background: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       margin: 0;
-      color: #333;
-      width: 350px;
-      /* Force popup width */
+      padding: 15px;
+      width: 550px;
+      /* 面積拡大（横幅） */
+      background: var(--bg);
+      color: var(--text);
     }
 
     .header {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 8px;
-      margin-bottom: 12px;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
     }
 
-    h2 {
+    .header h2 {
       margin: 0;
-      font-size: 14px;
-      font-weight: 700;
-      color: #1a1a1a;
+      font-size: 18px;
     }
 
-    .badge {
-      background: #000;
-      color: #fff;
-      font-size: 10px;
-      padding: 2px 6px;
+    .status-badge {
+      font-size: 11px;
+      background: #eee;
+      padding: 3px 8px;
       border-radius: 4px;
     }
 
-    .input-area {
-      margin-bottom: 16px;
+    /* 画像表示エリア */
+    .image-section {
+      margin-bottom: 20px;
     }
 
-    .input-row {
-      display: flex;
-      gap: 8px;
-    }
-
-    textarea {
-      flex: 1;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 11px;
-      font-family: monospace;
-      resize: vertical;
-      min-height: 50px;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: #0095f6;
-      box-shadow: 0 0 0 2px rgba(0, 149, 246, 0.1);
-    }
-
-    button#saveBtn {
-      background: #000;
-      color: #fff;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 12px;
-      white-space: nowrap;
-      height: fit-content;
-      align-self: flex-start;
-    }
-
-    button#saveBtn:hover {
-      background: #333;
-    }
-
-    .help-text {
-      font-size: 10px;
-      color: #999;
-      margin-top: 4px;
-      line-height: 1.3;
-    }
-
-    .queue-header {
-      font-size: 11px;
-      color: #999;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
+    .section-title {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 12px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
     }
 
-    #listContainer {
-      padding-bottom: 20px;
-      max-height: 400px;
-      /* Scrollable list for popup */
+    #countDisplay {
+      color: var(--primary);
+    }
+
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      /* 余白を広げて重なりを解消 */
+      max-height: 500px;
+      /* 高さを拡大 */
       overflow-y: auto;
-    }
-
-    .empty-state {
-      text-align: center;
-      color: #ccc;
-      font-size: 12px;
-      padding: 40px 0;
-      border: 2px dashed #eee;
+      padding: 10px;
+      border: 1px solid var(--border);
       border-radius: 8px;
-      margin-top: 10px;
       background: #fafafa;
     }
 
-    .draft-item {
-      background: #fff;
-      border: 1px solid #eee;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 10px;
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-      transition: all 0.2s;
+    .img-item {
       position: relative;
-    }
-
-    .draft-item:hover {
-      border-color: #0095f6;
-      box-shadow: 0 2px 8px rgba(0, 149, 246, 0.15);
-    }
-
-    .draft-text {
-      font-size: 13px;
-      line-height: 1.5;
-      color: #333;
-      white-space: pre-wrap;
-      margin-bottom: 10px;
-      max-height: 120px;
-      overflow-y: auto;
-    }
-
-    .meta-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-      flex-wrap: wrap;
-    }
-
-    .time-tag {
-      font-size: 11px;
-      color: #e0245e;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      background: #fff5f8;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    .cat-tag {
-      font-size: 10px;
-      color: #666;
-      background: #f0f0f0;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    .actions {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8px;
-    }
-
-    .set-btn {
-      background: #0095f6;
-      color: #fff;
-      border: none;
-      padding: 8px;
+      aspect-ratio: 1 / 1;
       border-radius: 6px;
+      overflow: hidden;
       cursor: pointer;
-      font-weight: 600;
-      font-size: 13px;
-      transition: background 0.1s;
+      border: 3px solid transparent;
+      transition: all 0.2s;
+      background: #eee;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
     }
 
-    .set-btn:hover {
+    .img-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      /* 全体を見やすくし、重なり感を抑える */
+      background: #fff;
+    }
+
+    .img-item.selected {
+      border-color: var(--primary);
+      box-shadow: 0 0 10px rgba(0, 149, 246, 0.4);
+    }
+
+    .img-item input[type="checkbox"] {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    /* アクション */
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .btn-main {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .btn-main:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn-main:hover:not(:disabled) {
       background: #0081d6;
     }
 
-    .del-btn {
-      background: #fff;
+    .footer-info {
+      font-size: 11px;
       color: #999;
-      border: 1px solid #eee;
-      padding: 0 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      min-width: 32px;
-    }
-
-    .del-btn:hover {
-      color: #d00;
-      border-color: #d00;
-      background: #fff5f5;
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #ddd;
-      border-radius: 3px;
+      margin-top: 15px;
+      text-align: center;
     }
   </style>
-  <script src="popup.js" defer></script>
 </head>
 
 <body>
   <div class="header">
-    <h2>Threads職人 Popup</h2>
-    <span class="badge">V4.0</span>
+    <h2>Threads職人 Pro</h2>
+    <span class="status-badge" id="platformDisplay">読み込み中...</span>
   </div>
 
-  <div class="input-area">
-    <div class="input-row">
-      <textarea id="newDraft"
-        placeholder="JSONデータを貼り付けてください&#13;&#10;例: [{&quot;text&quot;:&quot;本文&quot;, &quot;scheduledTime&quot;:&quot;...&quot;}]"
-        rows="3"></textarea>
-      <button id="saveBtn">インポート</button>
+  <div class="image-section">
+    <div class="section-title">
+      <span>写真を選択 (最大3枚)</span>
+      <span id="countDisplay">0 / 3</span>
     </div>
-    <div class="help-text">
-      JSON形式の配列、またはオブジェクトを一括インポート可能です。
+    <div id="imageGrid" class="image-grid">
+      <!-- ここにスクレイピング結果を表示 -->
+      <div style="grid-column: span 3; padding: 40px; text-align: center; color: #ccc;">
+        ページから画像を探しています...
+      </div>
     </div>
   </div>
 
-  <div class="queue-header">
-    <span>投稿キュー</span>
-    <button id="clearAllBtn" style="border:none; background:none; color:#ccc; cursor:pointer;" title="全削除">🗑️</button>
+  <div class="actions">
+    <button id="saveBtn" class="btn-main" disabled>
+      <span>🚀</span> ボードへ保存
+    </button>
   </div>
-  <div id="listContainer"></div>
+
+  <div class="footer-info">
+    保存先: 投稿作成ボード (D, E, F列)<br>
+    <a href="#" id="resetSettings" style="color: #999; text-decoration: underline; font-size: 10px;">⚙️ 設定リセット
+      (URL再入力)</a>
+  </div>
+
+  <script src="popup.js"></script>
 </body>
 
 </html>

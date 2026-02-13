@@ -1,211 +1,195 @@
-// popup.js - Threads職人 ロジック (Japanese)
-// Version 4.2: Clean Direct Injection (No Alerts)
+// popup.js - Threads職人 Pro (Zero-based reconstruction)
+// Version 5.3: Manual Image Selection & GAS Integration
 
 document.addEventListener('DOMContentLoaded', () => {
-    const newDraftInput = document.getElementById('newDraft');
+    const platformDisplay = document.getElementById('platformDisplay');
+    const imageGrid = document.getElementById('imageGrid');
+    const countDisplay = document.getElementById('countDisplay');
     const saveBtn = document.getElementById('saveBtn');
-    const clearAllBtn = document.getElementById('clearAllBtn');
-    const listContainer = document.getElementById('listContainer');
 
-    // 初期ロード
-    loadDrafts();
+    let selectedUrls = [];
 
-    // ---------------------------------------------------------
-    // イベントリスナー
-    // ---------------------------------------------------------
-    saveBtn.addEventListener('click', handleImport);
+    // 1. アクティブタブの情報を取得して解析を開始
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs[0];
+        if (!tab) return;
 
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener('click', () => {
-            if (confirm('投稿キューを全て削除しますか？')) {
-                saveDrafts([], renderList);
-            }
-        });
-    }
+        let action = "";
+        let platformName = "不明なページ";
 
-    // ---------------------------------------------------------
-    // ロジック
-    // ---------------------------------------------------------
-    function handleImport() {
-        const inputVal = newDraftInput.value.trim();
-        if (!inputVal) return;
-
-        let newItems = [];
-
-        try {
-            let cleaned = inputVal.replace(/^```json\s*/g, '').replace(/^```\s*/g, '').replace(/```$/g, '');
-            cleaned = cleaned.trim();
-
-            if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
-                const parsed = JSON.parse(cleaned);
-                let rawList = Array.isArray(parsed) ? parsed : [parsed];
-
-                newItems = rawList.map(item => ({
-                    id: Date.now() + Math.random(),
-                    text: item.text || item.body || item.content || "",
-                    scheduledTime: item.scheduledTime || null,
-                    category: item.category || ""
-                })).filter(i => i.text);
-
-            } else {
-                throw new Error("Not JSON");
-            }
-        } catch (e) {
-            console.warn("JSON Parse Failed, treating as raw text:", e);
-            newItems.push({
-                id: Date.now(),
-                text: inputVal,
-                category: ""
-            });
+        if (tab.url.includes("instagram.com")) {
+            action = "extract_instagram";
+            platformName = "Instagram";
+        } else if (tab.url.includes("threads.net")) {
+            action = "scrapePost";
+            platformName = "Threads";
+        } else if (tab.url.includes("rakuten.co.jp") || tab.url.includes("rakuten.ne.jp")) {
+            action = "extract_rakuten";
+            platformName = "楽天";
+        } else {
+            action = "general_extract";
+            platformName = "その他サイト";
         }
 
-        if (newItems.length > 0) {
-            getDrafts((currentDrafts) => {
-                const updated = [...newItems, ...currentDrafts];
-                saveDrafts(updated, () => {
-                    newDraftInput.value = '';
-                    renderList(updated);
-                });
-            });
-        }
-    }
+        platformDisplay.innerText = platformName;
 
-    // ---------------------------------------------------------
-    // メッセージ送信ロジック (v4.2 Clean)
-    // ---------------------------------------------------------
-    function sendToThreads(draft) {
-        // v4.2: ガード除去
-        // ユーザーが「Threadsを見ている」ことを信頼し、無条件で送信する。
-        // これで誤判定によるアラートは出ない。
-
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const currentTab = tabs[0];
-
-            if (!currentTab) {
-                // ここだけは技術的に送れないのでアラート
-                alert("アクティブなタブが見つかりません。");
+        // 解析依頼
+        chrome.tabs.sendMessage(tab.id, { action: action }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error("Scraping Error:", chrome.runtime.lastError);
+                imageGrid.innerHTML = '<div style="grid-column: span 3; padding: 20px; text-align: center; color: #f44;">接続エラー：ページを更新してください。</div>';
                 return;
             }
 
-            console.log("[Popup] Sending to Tab ID:", currentTab.id);
-
-            const payload = {
-                action: "insertText",
-                text: draft.text
-            };
-
-            chrome.tabs.sendMessage(currentTab.id, payload, (response) => {
-                const lastError = chrome.runtime.lastError;
-
-                if (lastError) {
-                    console.log("Content script error (injecting...):", lastError.message);
-
-                    // スクリプト注入の試行 (許可されている範囲で)
-                    chrome.scripting.executeScript({
-                        target: { tabId: currentTab.id },
-                        files: ['content.js']
-                    }, () => {
-                        setTimeout(() => {
-                            chrome.tabs.sendMessage(currentTab.id, payload);
-                        }, 200);
-                    });
-                } else {
-                    console.log("[Popup] Success!", response);
-                }
-            });
+            const images = response ? (response.imageUrls || response.images || []) : [];
+            renderScrapedData(images);
         });
-    }
+    });
 
-    // ---------------------------------------------------------
-    // ストレージ & レンダリング
-    // ---------------------------------------------------------
-    function getDrafts(cb) {
-        chrome.storage.local.get(['drafts'], (res) => cb(res.drafts || []));
-    }
-
-    function saveDrafts(data, cb) {
-        chrome.storage.local.set({ drafts: data }, () => {
-            if (cb) cb(data);
-        });
-    }
-
-    function loadDrafts() {
-        getDrafts(renderList);
-    }
-
-    function deleteDraft(id) {
-        getDrafts((drafts) => {
-            const updated = drafts.filter(d => d.id !== id);
-            saveDrafts(updated, renderList);
-        });
-    }
-
-    function renderList(drafts) {
-        listContainer.innerHTML = '';
-
-        if (!drafts || drafts.length === 0) {
-            listContainer.innerHTML = `
-                <div class="empty-state">
-                    予約リストは空です。<br>
-                    上にJSONを貼り付けてインポートしてください。
-                </div>`;
+    // 2. 画像一覧の描画
+    function renderScrapedData(images) {
+        if (images.length === 0) {
+            imageGrid.innerHTML = '<div style="grid-column: span 3; padding: 20px; text-align: center; color: #999;">画像が見つかりませんでした。</div>';
             return;
         }
 
-        const ul = document.createElement('div');
+        imageGrid.innerHTML = ""; // クリア
 
-        drafts.forEach((draft, index) => {
+        images.forEach((url, index) => {
             const item = document.createElement('div');
-            item.className = 'draft-item';
+            item.className = 'img-item';
 
-            if (index === 0) {
-                item.style.borderColor = '#0095f6';
-                item.style.background = '#f0f9ff';
-            }
+            const img = document.createElement('img');
+            img.src = url;
 
-            let metaHtml = '';
-            if (draft.scheduledTime) {
-                const d = new Date(draft.scheduledTime);
-                const timeDisp = isNaN(d) ? draft.scheduledTime :
-                    d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                metaHtml += `<div class="time-tag">📅 ${timeDisp}</div>`;
-            }
-            if (draft.category) {
-                metaHtml += `<div class="cat-tag">${draft.category}</div>`;
-            }
+            img.onerror = () => { item.style.display = 'none'; };
 
-            if (metaHtml) {
-                const metaRow = document.createElement('div');
-                metaRow.className = 'meta-row';
-                metaRow.innerHTML = metaHtml;
-                item.appendChild(metaRow);
-            }
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
 
-            const txt = document.createElement('div');
-            txt.className = 'draft-text';
-            txt.textContent = draft.text;
-            item.appendChild(txt);
+            item.appendChild(img);
+            item.appendChild(checkbox);
+            imageGrid.appendChild(item);
 
-            const actions = document.createElement('div');
-            actions.className = 'actions';
-
-            const setBtn = document.createElement('button');
-            setBtn.className = 'set-btn';
-            setBtn.innerHTML = 'セット <span style="opacity:0.6;font-size:10px;">▶</span>';
-            setBtn.onclick = () => sendToThreads(draft);
-
-            const delBtn = document.createElement('button');
-            delBtn.className = 'del-btn';
-            delBtn.textContent = '✕';
-            delBtn.onclick = () => deleteDraft(draft.id);
-
-            actions.appendChild(setBtn);
-            actions.appendChild(delBtn);
-
-            item.appendChild(actions);
-            ul.appendChild(item);
+            item.onclick = (e) => {
+                if (e.target.tagName !== 'INPUT') {
+                    checkbox.checked = !checkbox.checked;
+                }
+                handleSelection(url, checkbox.checked, item);
+            };
         });
+    }
 
-        listContainer.appendChild(ul);
+    // 3. 選択管理 (最大3枚)
+    function handleSelection(url, isChecked, element) {
+        if (isChecked) {
+            if (selectedUrls.length >= 3) {
+                alert("画像は最大3枚までです。");
+                element.querySelector('input').checked = false;
+                return;
+            }
+            if (!selectedUrls.includes(url)) {
+                selectedUrls.push(url);
+                element.classList.add('selected');
+            }
+        } else {
+            selectedUrls = selectedUrls.filter(u => u !== url);
+            element.classList.remove('selected');
+        }
+
+        updateUI();
+    }
+
+    function updateUI() {
+        countDisplay.innerText = `${selectedUrls.length} / 3`;
+        saveBtn.disabled = (selectedUrls.length === 0);
+        if (selectedUrls.length > 0) {
+            saveBtn.innerText = `🚀 ${selectedUrls.length}枚をボードへ保存`;
+        } else {
+            saveBtn.innerText = `🚀 ボードへ保存`;
+        }
+    }
+
+    // 4. 保存実行 (GAS連携)
+    saveBtn.onclick = () => {
+        saveBtn.disabled = true;
+        saveBtn.innerText = "⏳ 保存中...";
+
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
+            const data = {
+                url: tab.url,
+                imageUrls: selectedUrls,
+                text: "" // 本文抽出は行わない（指示に基づき空にする）
+            };
+
+            sendToGAS(data, (res) => {
+                if (res && res.status === "success") {
+                    alert("ボードに保存しました！");
+                    window.close(); // 保存成功したら閉じる
+                } else {
+                    alert("保存失敗: " + (res ? res.message : "接続エラー"));
+                    saveBtn.disabled = false;
+                    updateUI();
+                }
+            });
+        });
+    };
+
+    // 5. 設定リセット
+    const resetBtn = document.getElementById('resetSettings');
+    if (resetBtn) {
+        resetBtn.onclick = (e) => {
+            e.preventDefault();
+            if (confirm("GASのURL設定を削除して、再入力できるようにしますか？")) {
+                chrome.storage.local.remove('gasUrl', () => {
+                    alert("設定をリセットしました。\nもう一度「ボードへ保存」ボタンを押すと、URLの入力が求められます。");
+                    location.reload();
+                });
+            }
+        };
+    }
+
+    function sendToGAS(data, cb) {
+        chrome.storage.local.get(['gasUrl'], (res) => {
+            let url = res.gasUrl;
+            if (!url) {
+                url = prompt("GASのウェブアプリURLを入力してください：");
+                if (url) {
+                    chrome.storage.local.set({ gasUrl: url });
+                } else {
+                    cb(null);
+                    return;
+                }
+            }
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8'
+                },
+                body: JSON.stringify({ action: 'clip_instagram', data: data })
+            })
+                .then(response => {
+                    return response.text().then(text => {
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            console.error('Raw GAS Response:', text);
+                            let errorHint = text.substring(0, 100);
+                            if (text.includes('<title>')) {
+                                const titleMatch = text.match(/<title>(.*?)<\/title>/);
+                                if (titleMatch) errorHint = "GASエラー: " + titleMatch[1];
+                            }
+                            throw new Error("JSONパース失敗 (" + errorHint + ")");
+                        }
+                    });
+                })
+                .then(json => cb(json))
+                .catch(err => {
+                    console.error("GAS Error:", err);
+                    cb({ status: "error", message: err.message });
+                });
+        });
     }
 });

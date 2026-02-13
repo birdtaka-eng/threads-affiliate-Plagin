@@ -15,9 +15,6 @@ function onOpen() {
         .addItem('【分析】投稿データ更新 (Metrics)', 'updateMetrics')
         .addItem('【分析】虎の巻アップデート (Master DNA)', 'updateMasterDNA')
         .addSeparator()
-        .addItem('🏭【製造】楽天工場 (シート作成)', 'setupRakutenSheet')
-        .addItem('🏭【製造】アフィリエイト生成 (実行)', 'generateRakutenPosts')
-        .addSeparator()
         .addItem('【ヒント】表示ON', 'showTips')
         .addItem('【ヒント】表示OFF', 'hideTips')
         .addSeparator()
@@ -79,7 +76,7 @@ function onSelectionChange(e) {
 function setupAllTriggers() {
     setupLabTrigger(); // Lab.js
     setupTriggerCommon(SHEET_BOARD, "onBoardEditInstallable"); // Board.js
-    Browser.msgBox("自動化トリガーを設定しました！");
+    try { Browser.msgBox("自動化トリガーを設定しました！"); } catch (e) { }
 }
 
 function setupTriggerCommon(sheetName, functionName) {
@@ -457,79 +454,8 @@ function debugListSheets() {
 // Web API for Chrome Extension (Clip to Lab)
 // ------------------------------------------
 
-function doPost(e) {
-    // 1. Parse Request
-    let data;
-    try {
-        data = JSON.parse(e.postData.contents);
-    } catch (err) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid JSON" }))
-            .setMimeType(ContentService.MimeType.JSON);
-    }
+// doPost was removed to consolidate handles in APIHandler.js
 
-    // 2. Extract Data
-    const { text, url, author, context } = data;
-    if (!text) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "No text provided" }))
-            .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // 3. Append to Lab Sheet
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_LAB);
-    if (!sheet) {
-        setupLabSheet();
-        sheet = ss.getSheetByName(SHEET_LAB);
-    }
-
-    try {
-        // Lab Sheet Layout: [Run(A), Type(B), Context(C), Raw(D), DNA(E)]
-        // We append a new row.
-
-        // Find next empty row manually or use appendRow? 
-        // appendRow adds to bottom. Let's use insertRowAfter(3) to keep it at top if possible, 
-        // but Lab sheet reads from top down for "Run".
-        // Let's just append.
-
-        const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
-
-        // Context: Add URL and Author info
-        const metaContext = `[Source] ${url || "Unknown"}\n[Author] ${author || "Unknown"}\n[Saved] ${dateStr}`;
-        const finalContext = context ? `${context}\n---\n${metaContext}` : metaContext;
-
-        sheet.appendRow([
-            true,           // A: Run (Auto-check) -> Triggers Analysis
-            "単品",         // B: Type (Default to Single Item as requested)
-            finalContext,   // C: Context
-            text,           // D: Raw Post
-            ""              // E: DNA (Empty)
-        ]);
-
-        // Important: Flush to ensure Trigger sees the change? 
-        // Actually, script-initiated edits do NOT trigger simple onEdit, 
-        // BUT we set up "Installable Trigger" (onLabEditInstallable) which listens to 'EDIT'?
-        // No, Installable OnEdit also requires USER interaction usually, or API edits?
-        // Wait, Web App edits counts as API edits?
-        // Actually, easier way: Call analysis DIRECTLY here.
-
-        const lastRow = sheet.getLastRow();
-
-        // Trigger Analysis Immediately
-        // Note: analyzeSingleRow uses SHEET UI logic (getRange etc), which works in Web App context 
-        // IF the container is bound.
-        analyzeSingleRow(sheet, lastRow);
-
-        // Uncheck Run
-        sheet.getRange(lastRow, 1).setValue(false);
-
-        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Saved & Analyzing..." }))
-            .setMimeType(ContentService.MimeType.JSON);
-
-    } catch (err) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.message }))
-            .setMimeType(ContentService.MimeType.JSON);
-    }
-}
 
 /**
  * 🎨 Design: Apply "Midnight Glass" Theme to Sheets

@@ -230,7 +230,11 @@
         <span class="badge">V3.2</span>
     </div>
 
-    <div class="input-area">
+    <div class="input-area" style="margin-bottom: 20px;">
+        <button id="clipBtn"
+            style="width: 100%; background: #0095f6; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px;">
+            <span>📸</span> クリップ (ボードへ保存)
+        </button>
         <div class="input-row">
             <textarea id="newDraft"
                 placeholder="JSONデータを貼り付けてください&#13;&#10;例: [{&quot;text&quot;:&quot;本文&quot;, &quot;scheduledTime&quot;:&quot;...&quot;}]"
@@ -238,7 +242,7 @@
             <button id="saveBtn">インポート</button>
         </div>
         <div class="help-text">
-            JSON形式の配列、またはオブジェクトを一括インポート可能です。
+            InstagramやThreadsで投稿を開き「クリップ」を押すと、内容がボードに直接保存されます。
         </div>
     </div>
 

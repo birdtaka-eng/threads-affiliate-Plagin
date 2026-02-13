@@ -11,3 +11,4 @@
 | **`point-refactor-complete`** | 2026/01/25 11:30 | **GASリファクタリング＆API完全復旧**<br>・`Board.js`, `Lab.js` 分離完了。<br>・APIを `v1beta` に更新し、最新モデル対応。<br>・エラーハンドリング強化（セルへのエラー出力）。 | 無料枠制限(Quota)以外のプログラム的なバグを全て解消した状態。 |
 | **`point-toranomaki-fix`** | 2026/01/25 13:55 | **虎の巻DB対応完了**<br>・`Toranomaki.js` 分離。<br>・虎の巻DB（独自シート）からの学習機能実装。<br>・A列（日付）への書き込み正常化。 | 「虎の巻DB」シート必須。A列が空の行を学習対象とする。 |
 | **`point-models-updated`** | 2026/01/25 14:00 | **AIモデルリスト更新**<br>・Gemini 2.5系を含む最新モデルリストを適用。 | `Config.js` の `AI_MODELS` をユーザー環境に合わせて更新。 |
+| **`point-extension-fix-complete`** | 2026/02/13 22:30 | **拡張機能＆GAS連携の完全修復**<br>・拡張機能: UI改善、リセット機能、詳細エラー表示。<br>・GAS: 保存処理の安定化、画像表示(`=IMAGE`)対応、行追加位置の修正。 | `APIHandler.js` の堅牢化と `popup.js` の再構築完了。 |

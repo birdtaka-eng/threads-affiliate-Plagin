@@ -5,27 +5,27 @@
  */
 
 // --- 1. Sheet Names ---
-const SHEET_BOARD = "投稿作成ボード";
-const SHEET_LAB = "バズ研究所";
-const SHEET_DB = "テンプレートDB";
-const SHEET_TORANOMAKI = "虎の巻DB"; // User defined sheet
-const SHEET_SCHEDULE = "番組表";
-const SHEET_SETTINGS = "設定";
+var SHEET_BOARD = "投稿作成ボード";
+var SHEET_LAB = "バズ研究所";
+var SHEET_DB = "テンプレートDB";
+var SHEET_TORANOMAKI = "虎の巻DB"; // User defined sheet
+var SHEET_SCHEDULE = "番組表";
+var SHEET_SETTINGS = "設定";
 
 // --- 2. System Constants ---
-const APP_NAME = "Threads職人 (AI Agent)";
-const SHOW_DEV_TOOLS = true;
+var APP_NAME = "Threads職人 (AI Agent)";
+var SHOW_DEV_TOOLS = true;
 
 // --- 3. Gemini Models ---
-const AI_MODELS = [
+var AI_MODELS = [
    "gemini-2.0-flash-exp",
    "gemini-1.5-flash",
    "gemini-1.5-pro"
 ];
-const DEFAULT_MODEL = "gemini-1.5-flash";
+var DEFAULT_MODEL = "gemini-1.5-flash";
 
 // --- 4. Layout Definitions (Buzz Lab) ---
-const LAB_CONFIG = {
+var LAB_CONFIG = {
    // Row 1: Description
    description: "【使い方】\n1. 「Raw Post」にバズった投稿の本文を貼り付けます。\n2. 「🚀 Run」にチェックを入れるとAIが分析を開始します。\n3. 結果(DNA)が右側に出力され、自動的に「テンプレートDB」に登録されます。",
 
@@ -71,7 +71,7 @@ const LAB_CONFIG = {
 };
 
 // --- Humor Library (for Analysis) ---
-const HUMOR_LIBRARY = `
+var HUMOR_LIBRARY = `
 1. The Absurd List (3段落ち)
    Structure: "Normal A, Normal B, [Absurd C]"
 2. Specific Hyperbole (具体的すぎる誇張)
