@@ -194,14 +194,37 @@
     <!-- Action Panel (Dynamic) -->
     <div id="action-panel">
         <span class="master-badge" id="master-uid">MASTER DETECTED</span>
+
+        <!-- Controls -->
+        <!-- Controls (Flex Wrap for safety) -->
+        <div
+            style="margin-bottom:8px; font-size:11px; color:var(--text-secondary); display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px;">
+            <label style="cursor:pointer; display:flex; align-items:center; gap:4px; white-space:nowrap;">
+                <input type="checkbox" id="openUrlCheck" checked style="accent-color:var(--accent);"
+                    onchange="updateUrlStatus()">
+                <span>Open URL</span>
+            </label>
+            <button id="copyPromptBtn" onclick="copyPromptText()"
+                style="display:none; background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; white-space:nowrap;">
+                📝 Copy Prompt
+            </button>
+        </div>
+
         <button id="goBtn" class="btn-action" onclick="runMasterFlow()">
             <span>🚀 Copy & Go</span>
             <span id="img-badge" class="img-count-badge">0 IMG</span>
         </button>
 
+        <!-- NEW: Download All Button (Hidden by default) -->
+        <div class="row" style="margin-top:5px;">
+            <button id="downloadAllBtn" class="secondary-btn" style="display:none; background:#444;">
+                <span>📥 Download All (For Drag&Drop)</span>
+            </button>
+        </div>
+
         <!-- Image Preview -->
         <div id="preview-container"
-            style="display:none; margin-top:10px; border:1px dashed var(--glass-border); padding:8px; border-radius:4px; max-height:200px; overflow-y:auto;">
+            style="display:none; margin-top:10px; border:1px dashed var(--glass-border); padding:8px; border-radius:4px; max-height:300px; overflow-y:auto;">
             <!-- Images will be injected here -->
         </div>
 
@@ -211,7 +234,7 @@
     <!-- Editor Header -->
     <div class="header">
         <span class="title">AI Cockpit // Editor <span
-                style="font-size:9px; background:#334155; padding:2px 4px; border-radius:3px;">v2.1</span></span>
+                style="font-size:9px; background:var(--accent); padding:2px 4px; border-radius:3px; color:white;">v2.5-STABLE</span></span>
         <div id="status-indicator">
             <span class="status-dot" id="dot"></span>
             <span id="status-text">Ready</span>
@@ -239,7 +262,8 @@
         let currentText = "";
         let currentMaster = null;
         let currentImages = [];
-        let masterGems = {};
+        let currentRow = 0; // New: Selected row
+        let currentPromptText = ""; // New
 
         // New: Preloaded Blobs for Instant Copy (User Gesture Safety)
         let preloadedBlobs = [];
@@ -251,27 +275,43 @@
             if (footer) footer.textContent = msg;
         }
 
-        // --- Polling ---
-        setInterval(pollContext, 1000);
+        // --- Polling (Sequential to avoid TransportError) ---
+        let isPolling = false;
+        setTimeout(pollContext, 1000);
 
         function pollContext() {
+            if (isPolling) return; // Prevent overlapping
+
             // Don't poll while user is typing vigorously
             const editor = document.getElementById('editor');
-            if (document.activeElement === editor && editor.value !== currentText) return;
+            if (document.activeElement === editor && editor.value !== currentText) {
+                setTimeout(pollContext, 1000);
+                return;
+            }
 
+            isPolling = true;
             google.script.run
-                .withSuccessHandler(renderUI)
-                .withFailureHandler(e => updateDebug("Poll Error: " + e.message))
+                .withSuccessHandler(data => {
+                    renderUI(data);
+                    isPolling = false;
+                    setTimeout(pollContext, 1000);
+                })
+                .withFailureHandler(e => {
+                    updateDebug("Poll Error: " + e.message);
+                    isPolling = false;
+                    setTimeout(pollContext, 2000); // Wait longer on error
+                })
                 .getSidebarContent();
         }
 
         function renderUI(data) {
             try {
                 if (!data) return;
+                currentRow = data.row || 0; // Track row
 
                 // Debug Update
                 const timestamp = new Date().toLocaleTimeString();
-                updateDebug(`[${timestamp}] Mode: ${data.mode} | Row: ${data.row || '-'}`);
+                updateDebug(`[${timestamp}] Mode: ${data.mode} | Row: ${data.row || '-'} | ${data.debugInfo || ''}`);
 
                 if (data.mode === 'error') {
                     updateDebug("Server Error: " + data.message);
@@ -322,8 +362,17 @@
                             else if (targetKey === "Rewrite") btn.style.backgroundColor = "#f59e0b";
                             else btn.style.backgroundColor = "#6366f1";
 
+                            // Prompt Button Logic
+                            currentPromptText = data.promptText || "";
+                            const promptBtn = document.getElementById('copyPromptBtn');
+                            if (currentPromptText) {
+                                promptBtn.style.display = "inline-block";
+                            } else {
+                                promptBtn.style.display = "none";
+                            }
+
                             // Trigger Preload!
-                            preloadImages();
+                            preloadImages(data.hasCollage);
                         }
                     } else {
                         // INVALID MASTER
@@ -346,18 +395,66 @@
         }
 
         // --- Preload Logic ---
-        function preloadImages() {
+        function preloadImages(hasCollage) {
+            currentImageIndex = 0; // Reset index on new load
             const btn = document.getElementById('goBtn');
+            const dlBtn = document.getElementById('downloadAllBtn');
             const previewContainer = document.getElementById('preview-container');
             const statusFn = (msg) => document.getElementById('action-status').textContent = msg;
 
-            // Reset
-            preloadedBlobs = [];
-            previewContainer.innerHTML = '<div style="font-size:10px; color:var(--text-secondary); margin-bottom:4px;">Click to Copy / Drag & Drop</div>';
+            // Reset Content Safely
+            while (previewContainer.firstChild) previewContainer.removeChild(previewContainer.firstChild);
+
+            const label = document.createElement('div');
+            label.style.fontSize = '10px';
+            label.style.color = 'var(--text-secondary)';
+            label.style.marginBottom = '4px';
+            label.textContent = hasCollage ? '✨ Combined Collage detected' : 'Click to Copy / Drag & Drop';
+            previewContainer.appendChild(label);
+
             previewContainer.style.display = 'block';
+            if (dlBtn) dlBtn.style.display = 'none'; // Hide initially
             isPreloading = true;
 
-            if (currentImages.length === 0) {
+            // If collage exists, show a button to load it (to avoid heavy polling)
+            if (hasCollage) {
+                const loadBtn = document.createElement('button');
+                loadBtn.textContent = "🖼 Load Combined Collage";
+                loadBtn.className = 'btn-action';
+                loadBtn.style.padding = '8px';
+                loadBtn.style.fontSize = '11px';
+                loadBtn.style.marginTop = '4px';
+                loadBtn.onclick = async () => {
+                    statusFn("⏳ Fetching collage data...");
+                    google.script.run
+                        .withSuccessHandler(res => {
+                            if (res && res.data) {
+                                const collageImg = document.createElement('img');
+                                collageImg.src = "data:" + res.mimeType + ";base64," + res.data;
+                                collageImg.className = 'preview-item';
+                                collageImg.style.border = '2px solid var(--accent)';
+                                collageImg.title = "Combined Collage - Click to Copy";
+                                collageImg.onclick = async () => {
+                                    try {
+                                        const blob = await fetch(collageImg.src).then(r => r.blob());
+                                        const item = new ClipboardItem({ [res.mimeType]: blob });
+                                        await navigator.clipboard.write([item]);
+                                        statusFn("✅ Combined Collage Copied!");
+                                    } catch (e) { statusFn("❌ Copy failed: " + e.message); }
+                                };
+                                previewContainer.appendChild(collageImg);
+                                loadBtn.style.display = 'none';
+                                statusFn("✅ Collage loaded!");
+                            } else {
+                                statusFn("❌ Collage data empty.");
+                            }
+                        })
+                        .getCollageBase64(currentRow);
+                };
+                previewContainer.appendChild(loadBtn);
+            }
+
+            if (currentImages.length === 0 && !hasCollage) {
                 btn.disabled = false;
                 btn.querySelector('span').textContent = "🚀 Open (No Img)";
                 statusFn("Ready to open");
@@ -374,12 +471,12 @@
             currentImages.forEach((url, index) => {
                 google.script.run
                     .withSuccessHandler(async (result) => {
-                        if (result && result.base64) {
+                        if (result && result.data) {
                             try {
                                 // Create Image Element
                                 const imgPrefix = "data:" + result.mimeType + ";base64,";
                                 const img = document.createElement('img');
-                                img.src = imgPrefix + result.base64;
+                                img.src = imgPrefix + result.data;
                                 img.className = 'preview-item';
                                 img.title = "Ready to Copy";
 
@@ -431,7 +528,7 @@
                         loadedCount++;
                         checkDone();
                     })
-                    .getImageBase64(url);
+                    .fetchImageAsBase64(url);
             });
 
             function checkDone() {
@@ -442,46 +539,119 @@
 
                     const successCount = preloadedBlobs.filter(b => b).length;
                     statusFn(successCount > 0 ? "✅ Ready! Click to Copy & Go" : "⚠️ Load Failed. Open Only?");
+
+                    // Enable Download Button
+                    if (dlBtn) {
+                        dlBtn.style.display = 'block';
+                        dlBtn.onclick = () => downloadAllImages(preloadedBlobs);
+                    }
                 }
             }
         }
 
+
+        // --- Bulk Download Function ---
+        function downloadAllImages(blobs) {
+            const statusFn = (msg) => document.getElementById('action-status').textContent = msg;
+            if (!blobs || blobs.length === 0) {
+                statusFn("No images to download.");
+                return;
+            }
+            statusFn("📥 Downloading " + blobs.length + " images...");
+
+            blobs.forEach((item, idx) => {
+                if (!item || !item.blob) return;
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(item.blob);
+                a.download = `threads_img_${idx + 1}.png`; // Force PNG
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href); // Clean up the object URL
+            });
+            statusFn("✅ Download initiated.");
+        }
+
         // --- Action Flow (Single Image Revert) ---
+        // --- Action Flow (Manual Relay) ---
+        let currentImageIndex = 0;
+
         async function runMasterFlow() {
             if (!currentMaster || isPreloading) return;
 
             const btn = document.getElementById('goBtn');
             const statusFn = (msg) => document.getElementById('action-status').textContent = msg;
             const targetUrl = masterGems[currentMaster];
+            const badge = document.getElementById('img-badge');
+            const openUrl = document.getElementById('openUrlCheck').checked;
 
-            // 1. Write Single Image to Clipboard (The "Working" Version)
-            if (preloadedBlobs.length > 0) {
-                try {
-                    // Try the first valid image
-                    const item = preloadedBlobs.find(i => i && i.blob);
-
-                    if (item) {
-                        statusFn("📸 Copying First Image...");
-                        const clipboardItem = new ClipboardItem({ [item.mimeType]: item.blob });
-                        await navigator.clipboard.write([clipboardItem]);
-                        statusFn("✅ Copied! Opening...");
-                    } else {
-                        statusFn("⚠️ No Valid Image Blob");
-                    }
-                } catch (e) {
-                    console.error(e);
-                    statusFn("⚠️ Copy Error: " + e.message);
-                    alert("Copy Failed: " + e.message);
-                }
-            } else {
+            // Safety Check
+            if (preloadedBlobs.length === 0) {
                 statusFn("⚠️ No Images Loaded");
+                return;
             }
 
-            // 2. Open Window and Auto Paste
-            setTimeout(() => {
-                const finalUrl = targetUrl.includes('#') ? targetUrl : targetUrl + "#auto_paste";
-                window.open(finalUrl, '_blank');
-            }, 800);
+            // --- Logic: Copy Current Index ---
+            try {
+                const item = preloadedBlobs[currentImageIndex];
+                if (item && item.blob) {
+                    statusFn(`📸 Copying Image ${currentImageIndex + 1}/${preloadedBlobs.length}...`);
+
+                    const clipboardItem = new ClipboardItem({ [item.mimeType]: item.blob });
+                    await navigator.clipboard.write([clipboardItem]);
+
+                    statusFn(`✅ Image ${currentImageIndex + 1} Copied! Paste it!`);
+                } else {
+                    statusFn(`⚠️ Image ${currentImageIndex + 1} Missing/Error`);
+                }
+            } catch (e) {
+                console.error(e);
+                statusFn("⚠️ Copy Error: " + e.message);
+                alert("Copy Failed: " + e.message);
+                return;
+            }
+
+            // --- Behavior: First Image vs Others ---
+            if (currentImageIndex === 0) {
+                // First Image: Open Tab ONLY if checkbox is checked
+                if (openUrl) {
+                    setTimeout(() => {
+                        const finalUrl = targetUrl.includes('#') ? targetUrl : targetUrl + "#auto_paste";
+                        window.open(finalUrl, '_blank');
+                    }, 500);
+                    statusFn(`✅ Copied Img 1 & Opened URL!`);
+                } else {
+                    statusFn(`✅ Copied Img 1 (No URL opened)`);
+                }
+            }
+
+            // --- Advance Step ---
+            currentImageIndex++;
+
+            if (currentImageIndex < preloadedBlobs.length) {
+                // More images pending
+                btn.style.backgroundColor = "#f59e0b"; // Orange
+                btn.querySelector('span').textContent = "➡️ Next Image (" + (currentImageIndex + 1) + "/" + preloadedBlobs.length + ")";
+                statusFn("👉 Paste, then come back & click Next");
+            } else {
+                // All done
+                btn.style.backgroundColor = "#10b981"; // Green
+                btn.querySelector('span').textContent = "✅ All Sent (Reset)";
+                statusFn("🎉 All images sent!");
+
+                // Reset after delay or next click
+                btn.onclick = resetFlow;
+            }
+        }
+
+        function resetFlow() {
+            currentImageIndex = 0;
+            const btn = document.getElementById('goBtn');
+            btn.style.backgroundColor = "#6366f1"; // Indigo
+            btn.querySelector('span').textContent = "🚀 Copy & Go";
+            document.getElementById('img-badge').textContent = currentImages.length + " IMG";
+            document.getElementById('action-status').textContent = "Ready to start again";
+            btn.onclick = runMasterFlow;
         }
 
         // Utility: Create Vertical Collage from Image Elements
@@ -562,7 +732,35 @@
             const dot = document.getElementById('dot');
             dot.className = "status-dot " + dotClass;
         }
+        async function copyPromptText() {
+            if (!currentPromptText) return;
+            try {
+                await navigator.clipboard.writeText(currentPromptText);
+                document.getElementById('action-status').textContent = "✅ Prompt Copied! Paste it.";
+            } catch (e) {
+                document.getElementById('action-status').textContent = "⚠️ Copy Failed: " + e.message;
+            }
+        }
+
+        async function copyPromptText() {
+            if (!currentPromptText) return;
+            try {
+                await navigator.clipboard.writeText(currentPromptText);
+                document.getElementById('action-status').textContent = "✅ Prompt Copied! Paste it.";
+            } catch (e) {
+                document.getElementById('action-status').textContent = "⚠️ Copy Failed: " + e.message;
+            }
+        }
+
+        function updateUrlStatus() {
+            const isChecked = document.getElementById('openUrlCheck').checked;
+            updateDebug("URL Mode: " + (isChecked ? "ON (Open Tab)" : "OFF (Copy Only)"));
+        }
+
+        // Event listener for the checkbox
+        document.getElementById('openUrlCheck').addEventListener('change', updateUrlStatus);
     </script>
 </body>
 
 </html>
+```

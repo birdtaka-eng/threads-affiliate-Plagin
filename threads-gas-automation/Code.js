@@ -7,15 +7,21 @@
 /**
  * メニュー作成
  */
+// Last Updated: 2026-02-16 00:15
 function onOpen() {
+    try {
+        // Diagnostic: Check if script is updated
+        // SpreadsheetApp.getActive().toast("Threads職人 v2.5 準備完了", "System", 3);
+    } catch (e) { }
+
     // 1. Main User Menu
-    SpreadsheetApp.getUi().createMenu('🤖 Threads職人 (v2)')
+    SpreadsheetApp.getUi().createMenu('🤖 Threads職人 (v2.6-SCREENSHOT)')
         .addItem('【作成】投稿一括生成 (全タイプ)', 'generateUnifiedPosts')
         .addItem('【作成】まとめネタ作成 (選択合体)', 'generateSummaryPost')
         .addSeparator()
         .addItem('★ G列プルダウン強制復活', 'forceSetupDropdown')
         .addItem('🚀 師匠へ (Copy & Go)', 'showMasterModal')
-        .addItem('🔧 ボード修復 (G列メニュー復活)', 'applyMasterValidation') // Added here
+        .addItem('🔧 ボード修復 (G列メニュー復活)', 'applyMasterValidation')
         .addSeparator()
         .addItem('【放送】手動放送テスト (今放送すべきものを実行)', 'runBroadcast')
         .addItem('【分析】投稿データ更新 (Metrics)', 'updateMetrics')
@@ -25,6 +31,9 @@ function onOpen() {
         .addItem('【ヒント】表示OFF', 'hideTips')
         .addSeparator()
         .addItem('👁️ ドラフトビューワーを開く', 'showSidebar')
+        .addSeparator()
+        .addItem('⚙️ 自動分析トリガー設定', 'setupAllTriggers')
+        .addItem('🔍【診断】トリガー動作確認', 'checkTriggerStatus')
         .addToUi();
 
     // 2. Dev/Setup Menu
@@ -68,6 +77,28 @@ function onEdit(e) {
 }
 
 /**
+ * 手動テスト用：選択中の行で合体画像を生成
+ */
+function runManualCollageTest() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getActiveSheet();
+    const range = ss.getActiveRange();
+    const row = range.getRow();
+
+    if (row < 4) {
+        Browser.msgBox("4行目以降を選択してください。");
+        return;
+    }
+
+    try {
+        generateRowCollage(sheet, row);
+        Browser.msgBox("処理完了。画像が表示されない場合は、URLを確認してください。");
+    } catch (e) {
+        Browser.msgBox("エラー発生: " + e.message);
+    }
+}
+
+/**
  * トリガー機能: 選択範囲変更時に行の高さを自動調整 (Dispatcher)
  */
 function onSelectionChange(e) {
@@ -85,7 +116,27 @@ function onSelectionChange(e) {
 function setupAllTriggers() {
     setupLabTrigger(); // Lab.js
     setupTriggerCommon(SHEET_BOARD, "onBoardEditInstallable"); // Board.js
-    try { Browser.msgBox("自動化トリガーを設定しました！"); } catch (e) { }
+
+    // Forced authorization check
+    try {
+        UrlFetchApp.fetch("https://google.com");
+        DriveApp.getRootFolder();
+        SlidesApp.create("temp");
+    } catch (e) { }
+
+    Browser.msgBox("✅ 自動化トリガーの設定が完了しました！\n\n今後、D〜F列を編集すると右下に通知が出て、自動で画像が合体されます。");
+}
+
+/**
+ * トリガーの現在の状態を診断
+ */
+function checkTriggerStatus() {
+    const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
+    if (handlers.indexOf("onBoardEditInstallable") !== -1) {
+        Browser.msgBox("✅ 診断結果: 正常\n\n自動合体トリガーはすでに登録されています。D〜F列を編集して右下に通知が出るか確認してください。");
+    } else {
+        Browser.msgBox("❌ 診断結果: 未登録\n\n自動合体トリガーが見つかりません。「自動合体を有効にする」ボタンをもう一度押してください。");
+    }
 }
 
 function setupTriggerCommon(sheetName, functionName) {
@@ -107,63 +158,86 @@ function setupTriggerCommon(sheetName, functionName) {
 // ------------------------------------------
 
 function showSidebar() {
-    var html = HtmlService.createHtmlOutputFromFile('sidebar')
-        .setTitle('AI Cockpit v2.1') // Update Badge
-        .setWidth(300);
+    var html = HtmlService.createHtmlOutputFromFile('sidebar_v4')
+        .setTitle('AI Cockpit v2.6.4 (DIAG)')
+        .setWidth(330);
     SpreadsheetApp.getUi().showSidebar(html);
 }
 
 /**
  * Sidebar Polling Function (State Manager)
- * サイドバーから1秒ごとに呼ばれ、現在の選択セルの状態を返します。
+ * Extremely lightweight: No getImages() allowed here.
  */
 function getSidebarContent() {
     try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const sheet = ss.getActiveSheet();
         const range = ss.getActiveRange();
-
         if (!range) return { mode: 'empty' };
 
         const row = range.getRow();
-        const col = range.getColumn();
         const sheetName = sheet.getName();
         const cellValue = range.getValue();
-
-        // Mode 1: Board Sheet - Master Selection (Column G = 7)
-        // Ensure constants exist, otherwise fallback
         const targetSheetName = (typeof SHEET_BOARD !== 'undefined') ? SHEET_BOARD : "投稿作成ボード";
 
         if (sheetName === targetSheetName && row >= 3) {
-            // G列(7)情報取得
-            const masterName = sheet.getRange(row, 7).getValue(); // Col G
+            let masterName = String(sheet.getRange(row, 7).getValue()).trim();
+            let settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+            let promptText = "";
+            let debugPromptSource = "None";
 
-            // 画像URL取得
-            const imgRange = sheet.getRange(row, 4, 1, 3);
-            const rawValues = imgRange.getValues()[0];
-            const rawFormulas = imgRange.getFormulas()[0];
-
-            const images = [];
-            for (let i = 0; i < 3; i++) {
-                let url = "";
-                let val = rawValues[i];
-                let formula = rawFormulas[i];
-
-                if (val && String(val).startsWith('http')) url = String(val);
-                else if (formula && formula.includes('IMAGE')) {
-                    const match = formula.match(/IMAGE\s*\(\s*"([^"]+)"/i);
-                    if (match && match[1]) url = match[1];
+            if (masterName === "Poison") {
+                if (settingsSheet) {
+                    const val = settingsSheet.getRange("B20").getValue();
+                    if (val) { promptText = val; debugPromptSource = "Settings"; }
                 }
-                if (url) images.push(url);
+                if (!promptText && typeof PROMPT_POISON !== 'undefined') {
+                    promptText = PROMPT_POISON;
+                    debugPromptSource = "Config (Poison)";
+                }
             }
+            if (masterName === "ROOM") {
+                if (settingsSheet) {
+                    const val = settingsSheet.getRange("B21").getValue();
+                    if (val) { promptText = val; debugPromptSource = "Settings"; }
+                }
+                if (!promptText && typeof PROMPT_ROOM !== 'undefined') {
+                    promptText = PROMPT_ROOM;
+                    debugPromptSource = "Config (ROOM)";
+                }
+            }
+            if (masterName === "Mix") {
+                if (settingsSheet) {
+                    const val = settingsSheet.getRange("B22").getValue();
+                    if (val) { promptText = val; debugPromptSource = "Settings"; }
+                }
+                if (!promptText && typeof PROMPT_MIX !== 'undefined') {
+                    promptText = PROMPT_MIX;
+                    debugPromptSource = "Config (Mix)";
+                }
+            }
+
+            // --- Collage Detection (High-Speed Marker-Only) ---
+            let hasCollage = false;
+            try {
+                const targetCell = sheet.getRange(row, 8);
+                const formula = targetCell.getFormula();
+                const v = String(targetCell.getValue());
+                // Detection by Marker or IMAGE formula
+                if (v.includes("READY") || formula.includes("IMAGE(")) {
+                    hasCollage = true;
+                }
+            } catch (e) { }
 
             return {
                 mode: 'board_master',
                 text: String(cellValue),
                 row: row,
                 masterName: masterName,
-                imageUrls: images,
-                masterGems: (typeof MASTER_GEMS !== 'undefined') ? MASTER_GEMS : {}
+                masterGems: (typeof MASTER_GEMS !== 'undefined') ? MASTER_GEMS : {},
+                promptText: promptText,
+                debugInfo: `R:${row} | ${hasCollage ? 'Marker Detected' : 'No Marker'}`,
+                hasCollage: hasCollage
             };
         }
 
@@ -175,6 +249,24 @@ function getSidebarContent() {
         };
     } catch (e) {
         return { mode: 'error', message: e.toString() + " Stack: " + e.stack };
+    }
+}
+
+/**
+ * Helper to fetch image bytes and return Base64
+ * Used for AI content generation (D-F images)
+ */
+function fetchImageAsBase64(url) {
+    try {
+        const response = UrlFetchApp.fetch(url);
+        const blob = response.getBlob();
+        return {
+            data: Utilities.base64Encode(blob.getBytes()),
+            mimeType: blob.getContentType()
+        };
+    } catch (e) {
+        console.error("fetchImageAsBase64 error: " + e.message);
+        return null;
     }
 }
 
@@ -199,6 +291,9 @@ function setupSettingsSheet() {
     let existingToken = null;
     let existingModel = "gemini-2.5-flash";
     let existingPersona = "";
+    let existingPoison = "";
+    let existingRoom = "";
+    let existingMix = "";
 
     try {
         existingApiKey = sheet.getRange("B2").getValue();
@@ -206,6 +301,9 @@ function setupSettingsSheet() {
         existingToken = sheet.getRange("B4").getValue();
         existingModel = sheet.getRange("B5").getValue();
         existingPersona = sheet.getRange("B6").getValue();
+        existingPoison = sheet.getRange("B20").getValue();
+        existingRoom = sheet.getRange("B21").getValue();
+        existingMix = sheet.getRange("B22").getValue();
     } catch (e) { }
 
     sheet.clear();
@@ -234,7 +332,24 @@ function setupSettingsSheet() {
 
     // B9: Master Style (AI Generated)
     sheet.getRange("A9").setValue("Master Style (文体・リズム)");
+    sheet.getRange("A9").setValue("Master Style (文体・リズム)");
     sheet.getRange("A9").setNote("バズ研究所から抽出された、具体的な「書き方・リズム」の定義書です。");
+
+    // --- Special Prompts Area (B20~) ---
+    sheet.getRange("A19").setValue("【Special Prompts (コピー用)】");
+    sheet.getRange("A19").setFontWeight("bold").setBackground("#c9daf8");
+
+    sheet.getRange("A20").setValue("Prompt: Poison (毒舌)");
+    sheet.getRange("B20").setValue(existingPoison || (typeof PROMPT_POISON !== 'undefined' ? PROMPT_POISON : ""));
+    sheet.getRange("B20").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+
+    sheet.getRange("A21").setValue("Prompt: ROOM (Sales)");
+    sheet.getRange("B21").setValue(existingRoom || (typeof PROMPT_ROOM !== 'undefined' ? PROMPT_ROOM : ""));
+    sheet.getRange("B21").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+
+    sheet.getRange("A22").setValue("Prompt: Mix (Unified)");
+    sheet.getRange("B22").setValue(existingMix || (typeof PROMPT_MIX !== 'undefined' ? PROMPT_MIX : ""));
+    sheet.getRange("B22").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
 
     Browser.msgBox("設定シートをリセットしました！\nB6: あなたの願い(種)\nB8: AIが育てた最強人格\nB9: 文体スタイル\nこれらが連携して動作します。");
 }
@@ -468,32 +583,7 @@ function callGeminiSafe(apiKey, prompt, images) {
     }
 }
 
-/**
- * Fetch image from URL and convert to Base64
- */
-function fetchImageAsBase64(url) {
-    try {
-        if (!url || !url.startsWith("http")) return null;
 
-        const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-        if (response.getResponseCode() !== 200) {
-            console.warn(`Failed to fetch image: ${url} (Status: ${response.getResponseCode()})`);
-            return null;
-        }
-
-        const blob = response.getBlob();
-        const mimeType = blob.getContentType();
-        const base64 = Utilities.base64Encode(blob.getBytes());
-
-        return {
-            mimeType: mimeType,
-            data: base64
-        };
-    } catch (e) {
-        console.warn(`Error fetching image: ${url} - ${e.message}`);
-        return null;
-    }
-}
 
 function testConnection() {
     const apiKey = getGeminiApiKey();

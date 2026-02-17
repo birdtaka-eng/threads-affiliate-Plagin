@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --accent: #6366f1;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --success: #22c55e;
+            --warning: #eab308;
+            --error: #ef4444;
+        }
+
+        body {
+            margin: 0;
+            padding: 16px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        #action-panel {
+            display: none;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .master-badge {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--accent);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-action:hover:not(:disabled) {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #475569 !important;
+        }
+
+        .img-count-badge {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .editor-container {
+            flex-grow: 1;
+            position: relative;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            padding: 12px;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+            line-height: 1.5;
+            box-sizing: border-box;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--text-secondary);
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .status-dot.active {
+            background-color: var(--success);
+            box-shadow: 0 0 5px var(--success);
+        }
+
+        .status-dot.saving {
+            background-color: var(--warning);
+        }
+
+        .status-dot.error {
+            background-color: var(--error);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .preview-item {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            cursor: copy;
+            border: 2px solid var(--accent);
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        .preview-item:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="action-panel">
+        <span class="master-badge" id="master-uid">MASTER DETECTED</span>
+
+        <div
+            style="margin-bottom:8px; font-size:11px; color:var(--text-secondary); display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px;">
+            <label style="cursor:pointer; display:flex; align-items:center; gap:4px; white-space:nowrap;">
+                <input type="checkbox" id="openUrlCheck" checked style="accent-color:var(--accent);"
+                    onchange="updateUrlStatus()">
+                <span>Open URL</span>
+            </label>
+            <button id="copyPromptBtn" onclick="copyPromptText()"
+                style="display:none; background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:4px; padding:2px 8px; cursor:pointer; font-size:10px; white-space:nowrap;">
+                📝 Copy Prompt
+            </button>
+        </div>
+
+        <button id="goBtn" class="btn-action" onclick="runMasterFlow()">
+            <span>🚀 Copy & Go</span>
+            <span id="img-badge" class="img-count-badge">0 IMG</span>
+        </button>
+
+        <div id="preview-container"
+            style="display:none; margin-top:10px; border:1px dashed var(--glass-border); padding:8px; border-radius:4px; max-height:300px; overflow-y:auto;">
+        </div>
+        <div id="action-status" style="font-size:11px; margin-top:5px; min-height:15px; color:#cbd5e1;"></div>
+    </div>
+
+    <div class="header">
+        <span class="title">AI Cockpit // Editor <span
+                style="font-size:9px; background:var(--accent); padding:2px 4px; border-radius:3px; color:white;">v2.5.7-STABLE</span></span>
+        <div id="status-indicator">
+            <span class="status-dot" id="dot"></span>
+            <span id="status-text">Ready</span>
+        </div>
+    </div>
+
+    <div class="editor-container">
+        <textarea id="editor" placeholder="Select a cell..."></textarea>
+    </div>
+
+    <div class="footer">
+        <span style="opacity:0.5">Auto-save enabled</span>
+        <button onclick="saveContent()"
+            style="background:transparent; border:1px solid var(--glass-border); color:var(--text-secondary); border-radius:4px; padding:4px 8px; cursor:pointer;">Save</button>
+    </div>
+
+    <div id="debug-footer"
+        style="font-size:9px; color:#475569; text-align:right; margin-top:8px; font-family:monospace;">Initializing...
+    </div>
+
+    <script>
+        // --- State ---
+        let currentText = "";
+        let currentMaster = null;
+        let currentRow = 0;
+        let currentPromptText = "";
+        let preloadedBlobs = [];
+        let lastSignature = "";
+        let pollTimer = null;
+        let masterGems = {};
+        let isFetching = false; // Sequential Polling Lock
+
+        function updateDebug(msg) {
+            const footer = document.getElementById('debug-footer');
+            if (footer) footer.textContent = msg;
+        }
+
+        // --- Polling (Strict Sequential) ---
+        let isPolling = false;
+        startPolling();
+
+        function startPolling() {
+            if (pollTimer) clearTimeout(pollTimer);
+            pollTimer = setTimeout(pollContext, 1000);
+        }
+
+        function pollContext() {
+            // NEVER run if already polling or fetching a collage
+            if (isPolling || isFetching) {
+                startPolling();
+                return;
+            }
+
+            const editor = document.getElementById('editor');
+            if (document.activeElement === editor && editor.value !== currentText) {
+                startPolling();
+                return;
+            }
+
+            isPolling = true;
+            google.script.run
+                .withSuccessHandler(data => {
+                    renderUI(data);
+                    isPolling = false;
+                    pollTimer = setTimeout(pollContext, 3000);
+                })
+                .withFailureHandler(e => {
+                    updateDebug("Poll Error: " + e.message);
+                    isPolling = false;
+                    pollTimer = setTimeout(pollContext, 5000);
+                })
+                .getSidebarContent();
+        }
+
+        function renderUI(data) {
+            try {
+                const rowChanged = currentRow !== data.row;
+                const newCollageAppeared = data.hasCollage && preloadedBlobs.length === 0;
+
+                if (rowChanged || newCollageAppeared) {
+                    currentRow = data.row || 0;
+                    lastSignature = (data.row || 0) + ":" + (data.hasCollage || false);
+                    autoLoadCollage(data.hasCollage);
+                }
+
+                const timestamp = new Date().toLocaleTimeString();
+                updateDebug(`[${timestamp}] M:${data.masterName || '-'} | R:${data.row || '-'} | ${data.debugInfo || ''}`);
+
+                if (data.mode === 'error') return;
+
+                const editor = document.getElementById('editor');
+                if (data.text !== undefined && data.text !== currentText) {
+                    if (document.activeElement !== editor) {
+                        editor.value = data.text;
+                        currentText = data.text;
+                        updateStatus("Synced", "active");
+                    }
+                }
+
+                const panel = document.getElementById('action-panel');
+                const editorElems = document.querySelectorAll('.header, .editor-container, .footer');
+                const masterUid = document.getElementById('master-uid');
+                const btn = document.getElementById('goBtn');
+
+                if (data.mode === 'board_master' && data.masterName) {
+                    editorElems.forEach(el => el.style.display = 'none');
+                    let mName = data.masterName;
+                    masterGems = data.masterGems || {};
+                    let targetKey = Object.keys(masterGems).find(k => k.toLowerCase() === String(mName).trim().toLowerCase());
+
+                    if (targetKey) {
+                        if (currentMaster !== targetKey) {
+                            currentMaster = targetKey;
+                            masterUid.textContent = "To: " + targetKey + " 師匠";
+                            panel.style.display = "block";
+                            if (targetKey === "Poison") btn.style.backgroundColor = "#ef4444";
+                            else if (targetKey === "Var") btn.style.backgroundColor = "#10b981";
+                            else if (targetKey === "Rewrite") btn.style.backgroundColor = "#f59e0b";
+                            else btn.style.backgroundColor = "#6366f1";
+
+                            currentPromptText = data.promptText || "";
+                            document.getElementById('copyPromptBtn').style.display = currentPromptText ? "inline-block" : "none";
+                        }
+                    }
+                } else {
+                    panel.style.display = "none";
+                    editorElems.forEach(el => el.style.display = 'flex');
+                    currentMaster = null;
+                }
+            } catch (e) { updateDebug("UI Error: " + e.message); }
+        }
+
+        let fetchAttemptedRow = -1;
+
+        async function autoLoadCollage(hasCollage) {
+            const btn = document.getElementById('goBtn');
+            const previewContainer = document.getElementById('preview-container');
+            const statusFn = (msg) => document.getElementById('action-status').textContent = msg;
+
+            while (previewContainer.firstChild) previewContainer.removeChild(previewContainer.firstChild);
+
+            if (!hasCollage) {
+                preloadedBlobs = [];
+                btn.disabled = false;
+                btn.querySelector('span').textContent = "🚀 Copy & Go";
+                btn.querySelector('#img-badge').textContent = "0 IMG";
+                statusFn("コラージュ未作成です。(U列チェックで生成)");
+                previewContainer.style.display = 'none';
+                fetchAttemptedRow = -1; // Reset latch
+                return;
+            }
+
+            // ONE-SHOT LATCH: Stop repeat attempts on same row
+            if (fetchAttemptedRow === currentRow) {
+                if (preloadedBlobs.length > 0) return; // Keep existing
+                if (!isFetching) return; // Already tried and finished
+            }
+
+            // LOCK POLLING
+            isFetching = true;
+            fetchAttemptedRow = currentRow;
+
+            btn.disabled = true;
+            btn.querySelector('#img-badge').textContent = "WAIT";
+            btn.querySelector('span').textContent = "⏳ 画像を取得中...";
+            statusFn("🪄 コラージュを取得しています...");
+            previewContainer.style.display = 'block';
+
+            google.script.run
+                .withSuccessHandler(async (res) => {
+                    if (res && res.data) {
+                        try {
+                            const collageImg = document.createElement('img');
+                            collageImg.src = "data:" + res.mimeType + ";base64," + res.data;
+                            collageImg.className = 'preview-item';
+                            collageImg.title = "Click to Copy Manually";
+
+                            const resp = await fetch(collageImg.src);
+                            const blob = await resp.blob();
+                            preloadedBlobs = [{ blob: blob, mimeType: res.mimeType }];
+
+                            collageImg.onclick = async () => {
+                                const item = new ClipboardItem({ [res.mimeType]: blob });
+                                await navigator.clipboard.write([item]);
+                                statusFn("✅ クリップボードにコピーしました！");
+                            };
+
+                            previewContainer.appendChild(collageImg);
+                            btn.disabled = false;
+                            btn.querySelector('#img-badge').textContent = "READY";
+                            btn.querySelector('span').textContent = "🚀 Copy & Go (Collage)";
+                            statusFn("✅ 取得完了 (Gemini貼付OK)");
+                        } catch (e) { statusFn("❌ 読込エラー: " + e.message); }
+                    } else {
+                        statusFn("❌ " + (res && res.error ? res.error : "画像が見つかりません。"));
+                        btn.disabled = false;
+                        btn.querySelector('span').textContent = "🚀 Open Only";
+                    }
+                    isFetching = false; // RELEASE LOCK
+                })
+                .withFailureHandler(e => {
+                    statusFn("❌ 通信エラー: " + e.message);
+                    isFetching = false; // RELEASE LOCK
+                })
+                .getCollageBase64(currentRow);
+        }
+
+        async function runMasterFlow() {
+            if (isFetching) return;
+            const btn = document.getElementById('goBtn');
+            const statusFn = (msg) => document.getElementById('action-status').textContent = msg;
+            const targetUrl = masterGems[currentMaster] || "";
+            const openUrl = document.getElementById('openUrlCheck').checked;
+
+            if (preloadedBlobs.length > 0) {
+                try {
+                    const item = preloadedBlobs[0];
+                    const clipboardItem = new ClipboardItem({ [item.mimeType]: item.blob });
+                    await navigator.clipboard.write([clipboardItem]);
+                    statusFn("✅ Collage Copied!");
+                } catch (e) { statusFn("⚠️ Copy Error: " + e.message); }
+            }
+
+            if (openUrl && targetUrl) {
+                setTimeout(() => {
+                    const finalUrl = targetUrl.includes('#') ? targetUrl : targetUrl + "#auto_paste";
+                    window.open(finalUrl, '_blank');
+                }, 300);
+            }
+        }
+
+        document.getElementById('editor').addEventListener('input', () => updateStatus("Editing...", "none"));
+
+        function saveContent() {
+            const val = document.getElementById('editor').value;
+            updateStatus("Saving...", "saving");
+            google.script.run.withSuccessHandler(() => {
+                currentText = val;
+                updateStatus("Saved", "active");
+            }).updateSidebarContent(val);
+        }
+
+        function updateStatus(text, dotClass) {
+            document.getElementById('status-text').textContent = text;
+            const dot = document.getElementById('dot');
+            dot.className = "status-dot " + dotClass;
+        }
+
+        async function copyPromptText() {
+            if (!currentPromptText) return;
+            try {
+                await navigator.clipboard.writeText(currentPromptText);
+                document.getElementById('action-status').textContent = "✅ Prompt Copied!";
+            } catch (e) { document.getElementById('action-status').textContent = "❌ Copy failed"; }
+        }
+
+        function updateUrlStatus() {
+            updateDebug("URL Mode: " + (document.getElementById('openUrlCheck').checked ? "ON" : "OFF"));
+        }
+    </script>
+</body>
+
+</html>

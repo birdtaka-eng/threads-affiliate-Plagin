@@ -6,6 +6,10 @@
 /**
  * 【設定】投稿ボード作成 (リセット)
  */
+
+/**
+ * 【設定】投稿ボード作成 (リセット)
+ */
 function setupBoardSheet() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheetName = SHEET_BOARD;
@@ -20,18 +24,32 @@ function setupBoardSheet() {
     sheet.getRange("A1:Z1000").clearDataValidations();
     sheet.getRange("A1:Z1000").clearFormat();
 
-    // 2. ヘッダー (1行目)
+    // --- NEW: Row 1 Prompt Area ---
+    // User requested "Prompt in the 1st line".
+    // We will merge A1:U1 and put the "Mix" prompt there for easy copying.
+    var promptCell = sheet.getRange("A1:U1");
+    promptCell.merge();
+    promptCell.setValue(typeof PROMPT_MIX !== 'undefined' ? PROMPT_MIX : "Prompt Loading...");
+    promptCell.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP); // Wrap text
+    promptCell.setVerticalAlignment("top");
+    promptCell.setBackground("#fff2cc"); // Light yellow/orange for attention
+    promptCell.setFontSize(10);
+    // Auto-row height for prompt? Maybe fixed height to avoid taking too much space.
+    // User said "Slide down", suggesting insertion.
+    sheet.setRowHeight(1, 100); // Give it some space
+
+    // 2. ヘッダー (2行目)
     // A: ON AIR, B: No, C: Type, D: Photo 1, E: Photo 2, F: Photo 3, G: Topic, H: Output, I: System ID, J: Views, K: Likes, L: Replies, M: Reposts, N: Rate, O: Judge, P: DNA
     var headers = [
         ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "Select Master (師匠選択)", "Output (決定稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Drafts Source", "Draft 1", "Draft 2", "Draft 3", "🚀 Create"]
     ];
 
-    sheet.getRange("A1:U1").setValues(headers);
-    sheet.getRange("A1:U1").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A1:U1").setFontWeight("bold");
-    sheet.getRange("A1:U1").setHorizontalAlignment("center");
+    sheet.getRange("A2:U2").setValues(headers); // Shifted to Row 2
+    sheet.getRange("A2:U2").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A2:U2").setFontWeight("bold");
+    sheet.getRange("A2:U2").setHorizontalAlignment("center");
 
-    // 3. ガイド行 (2行目)
+    // 3. ガイド行 (3行目)
     var guides = [
         "チェックボックス", "No", "↓Type", "[Auto1]", "[Auto2]", "[Auto3]",
         "↓使用する師匠を選択",
@@ -40,30 +58,30 @@ function setupBoardSheet() {
         "←ここにAI分析結果が出ます",
         "", "", "", "", "チェックで生成"
     ];
-    sheet.getRange("A2:U2").setValues([guides]);
-    sheet.getRange("A2:U2").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.setRowHeight(2, 60);
+    sheet.getRange("A3:U3").setValues([guides]); // Shifted to Row 3
+    sheet.getRange("A3:U3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.setRowHeight(3, 60);
 
-    // 4. データエリア設定 (3行目以降)
-    sheet.getRange("A3:U1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A3:U1000").setVerticalAlignment("top");
-    sheet.setRowHeight(1, 40);
-    sheet.setFrozenRows(2);
+    // 4. データエリア設定 (4行目以降)
+    sheet.getRange("A4:U1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A4:U1000").setVerticalAlignment("top");
+    sheet.setRowHeight(2, 40); // Header height
+    sheet.setFrozenRows(3);    // Freeze top 3 rows
 
     // 5. バリデーション & 幅調整
     // A: ON AIR Checkbox
     var checkboxOnAir = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("A3:A100").setDataValidation(checkboxOnAir);
+    sheet.getRange("A4:A100").setDataValidation(checkboxOnAir);
 
     // U: Create Checkbox
     var checkboxCreate = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("U3:U100").setDataValidation(checkboxCreate);
+    sheet.getRange("U4:U100").setDataValidation(checkboxCreate);
 
     // C: Type Rule
     var ruleType = SpreadsheetApp.newDataValidation()
         .requireValueInList(["単品", "日常", "有益", "自己紹介", "Free", "まとめ"], true)
         .setAllowInvalid(false).build();
-    sheet.getRange("C3:C100").setDataValidation(ruleType);
+    sheet.getRange("C4:C100").setDataValidation(ruleType);
 
     // Widths
     sheet.setColumnWidth(1, 60);  // ON AIR
@@ -74,9 +92,9 @@ function setupBoardSheet() {
     sheet.setColumnWidth(6, 100); // Photo 3
     // G: Master Select Rule (Updated for Click-to-Gem)
     var ruleMaster = SpreadsheetApp.newDataValidation()
-        .requireValueInList(["Basic", "Var", "Rewrite", "Poison"], true)
+        .requireValueInList(["Basic", "Var", "Rewrite", "Poison", "ROOM", "Mix"], true)
         .setAllowInvalid(true).build(); // Allow invalid for legacy text compatibility
-    sheet.getRange("G3:G100").setDataValidation(ruleMaster);
+    sheet.getRange("G4:G100").setDataValidation(ruleMaster);
 
     // Widths
     sheet.setColumnWidth(1, 60);  // ON AIR
@@ -102,7 +120,7 @@ function setupBoardSheet() {
     sheet.hideColumns(17, 4); // Q, R, S, T
 
     try {
-        Browser.msgBox("投稿作成ボード(統合版)の準備ができました！\nD・E・F列に画像、P列に分析結果が集約されます。");
+        Browser.msgBox("投稿作成ボード(Pro版)の準備ができました！\\n1行目にプロンプトを表示しました。コピーして師匠へペーストしてください。");
     } catch (e) {
         // API実行時はスキップ
         console.log("Setup completed (Headless mode)");
@@ -119,15 +137,31 @@ function applyMasterValidation() {
 
     // G: Master Select Rule
     var ruleMaster = SpreadsheetApp.newDataValidation()
-        .requireValueInList(["Basic", "Var", "Rewrite", "Poison"], true)
-        .setAllowInvalid(true).build();
-    sheet.getRange("G3:G100").setDataValidation(ruleMaster);
+        .requireValueInList(["Basic", "Var", "Rewrite", "Poison", "ROOM", "Mix"], true)
+        .setAllowInvalid(false).build();
+    sheet.getRange("G3:G1000").setDataValidation(ruleMaster);
 
     // Header & Guide Update
     sheet.getRange("G1").setValue("Select Master (師匠選択)");
     sheet.getRange("G2").setValue("↓使用する師匠を選択");
 
     Browser.msgBox("G列のドロップダウンを修復しました！");
+}
+
+/**
+ * 【強制実行用】G列のドロップダウンをMix入りに書き換える
+ */
+function FORCE_UPDATE_DROPDOWN() {
+    var sheet = SpreadsheetApp.getActiveSheet();
+    var rule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(["Basic", "Var", "Rewrite", "Poison", "ROOM", "Mix"], true)
+        .setAllowInvalid(false)
+        .build();
+
+    // Apply to G4:G1000 ("Select Master")
+    sheet.getRange("G4:G1000").setDataValidation(rule);
+
+    Browser.msgBox("✅ 強制アップデート完了！\\nG列のドロップダウンに「Mix」が入っているか確認してください。");
 }
 
 /**
@@ -152,12 +186,12 @@ function generateSummaryPost() {
     }
 
     const lastRow = sheet.getLastRow();
-    if (lastRow < 4) {
+    if (lastRow < 5) { // Needs at least 2 checked items, so checks start from row 4
         try { Browser.msgBox("データがありません。"); } catch (e) { }
         return;
     }
 
-    const range = sheet.getRange(4, 1, lastRow - 3, 7);
+    const range = sheet.getRange(4, 1, lastRow - 3, 7); // Start from Row 4
     const values = range.getValues();
 
     let selectedContents = [];
@@ -246,9 +280,9 @@ function updateMetrics() {
     const { token } = creds;
 
     const lastRow = boardSheet.getLastRow();
-    if (lastRow < 3) return;
+    if (lastRow < 4) return;
 
-    const range = boardSheet.getRange(3, 1, lastRow - 2, 16);
+    const range = boardSheet.getRange(4, 1, lastRow - 3, 16);
     const data = range.getValues();
     let updateCount = 0;
 
@@ -281,7 +315,7 @@ function updateMetrics() {
                 else if (views > 500 && rate > 3.0) judge = "🎯良";
                 else if (views > 100) judge = "👀";
 
-                const targetRow = i + 3;
+                const targetRow = i + 4;
                 boardSheet.getRange(targetRow, 11).setValue(views);
                 boardSheet.getRange(targetRow, 12).setValue(likes);
                 boardSheet.getRange(targetRow, 13).setValue(replies);
@@ -361,7 +395,7 @@ function generatePostsCommon(sheetName, targetRow) {
 
     // --- 4. Target Identification ---
     const lastRow = sheet.getLastRow();
-    if (lastRow < 3) return;
+    if (lastRow < 4) return;
 
     // Column Config (Ref: LAYOUT_MASTER.md)
     var colOnAir = 1;
@@ -376,11 +410,11 @@ function generatePostsCommon(sheetName, targetRow) {
 
     var targets = [];
     if (targetRow) {
-        if (targetRow < 3) return;
-        targets.push(targetRow - 3);
+        if (targetRow < 4) return;
+        targets.push(targetRow - 4);
     } else {
         // Range up to colCreate (21)
-        var data = sheet.getRange(3, 1, lastRow - 2, colCreate).getValues();
+        var data = sheet.getRange(4, 1, lastRow - 3, colCreate).getValues();
         for (let i = 0; i < data.length; i++) {
             var row = data[i];
             var check = row[colCreate - 1]; // U: Create trigger
@@ -403,12 +437,12 @@ function generatePostsCommon(sheetName, targetRow) {
     }
 
     // --- 5. Generation Loop ---
-    var fullData = sheet.getRange(3, 1, lastRow - 2, colCreate).getValues();
+    var fullData = sheet.getRange(4, 1, lastRow - 3, colCreate).getValues();
     var count = 0;
 
     for (const dataIndex of targets) {
         try {
-            const rowIndex = dataIndex + 3;
+            const rowIndex = dataIndex + 4;
             const dataRow = fullData[dataIndex];
             const type = dataRow[colType - 1];
             const humor = dataRow[colHumor - 1];
@@ -489,6 +523,7 @@ Output ONLY the post content.
 
             if (result) {
                 const parts = result.split("///").filter(s => s.trim().length > 0);
+
                 let drafts = ["", "", ""];
                 parts.forEach((p, idx) => { if (idx < 3) drafts[idx] = p.replace(/^案\d+\s*/, "").trim(); });
 
@@ -503,7 +538,7 @@ Output ONLY the post content.
                 count++;
             }
         } catch (e) {
-            sheet.getRange(dataIndex + 3, colOutput).setValue("Error: " + e.message);
+            sheet.getRange(dataIndex + 4, colOutput).setValue("Error: " + e.message);
         }
     }
 
@@ -523,7 +558,7 @@ function handleBoardEdit(e) {
     var col = range.getColumn();
     var rowIndex = range.getRow();
 
-    if (rowIndex < 3) return;
+    if (rowIndex < 4) return;
 
     if (col === 9) {
         var selectorValue = range.getValue(); // "案1", "案2", "案3"
@@ -551,13 +586,24 @@ function handleBoardEdit(e) {
  */
 function onBoardEditInstallable(e) {
     if (!e) return;
+
+    // 0. Absolute First Diagnostic (MsgBox)
+    // Browser.msgBox("トリガー起動検知！これが出れば設定は成功しています。");
+
     var range = e.range;
     var sheet = range.getSheet();
-    if (sheet.getName() !== SHEET_BOARD) return;
-
+    var ss = e.source;
+    var sheetName = sheet.getName();
     var col = range.getColumn();
     var row = range.getRow();
-    if (row < 3) return;
+
+    // 1. Reliable Toast using e.source
+    try {
+        ss.toast("⚡️ 分析・合体トリガー検知 (Sheet: " + sheetName + " / Col: " + col + ")", "System", 3);
+    } catch (err) { }
+
+    if (sheetName !== SHEET_BOARD) return;
+    if (row < 4) return;
 
     // 1. Create Checkbox (Column U = 21)
     if (col === 21) {
@@ -567,13 +613,169 @@ function onBoardEditInstallable(e) {
         }
     }
 
+    // 1.5. Auto-Collage Trigger (Columns D, E, F = 4, 5, 6)
+    // DISABLED: Moved to Chrome Extension Screenshot Flow (v2.6.5+)
+    /*
+    if (col >= 4 && col <= 6 && row >= 4) {
+        generateRowCollage(sheet, row);
+    }
+    */
+
     // 2. DNA Auto-Analysis (Column G = 7)
-    if (col === 7) {
+    if (col === 7 && row >= 4) {
         var val = range.getValue();
         var dna = sheet.getRange(row, 16).getValue(); // Col P
         if (val && String(val).length > 20 && !dna) {
             analyzeSingleRowBoard(sheet, row);
         }
+    }
+}
+
+/**
+ * Stage 1: 複数画像を1枚に合体してシートに配置する
+ */
+/**
+ * Stage 1: 複数画像を1枚に合体してシートに配置する (Production Horizontal Version)
+ */
+function generateRowCollage(sheet, row) {
+    if (row < 4) return;
+    console.log("--- Starting Horizontal Collage Generation for Row: " + row + " ---");
+
+    var images = [];
+    var imageRange = sheet.getRange(row, 4, 1, 3); // D, E, F
+    var vals = imageRange.getValues()[0];
+    var formulas = imageRange.getFormulas()[0];
+
+    // Debug Toast
+    // SpreadsheetApp.getActive().toast("Scan D-F values: " + JSON.stringify(vals).substring(0, 50), "Debug", 3);
+
+    // 1. Extract URLs
+    for (var i = 0; i < 3; i++) {
+        var v = vals[i];
+        var f = formulas[i];
+        var url = "";
+
+        if (typeof v === "string" && v.startsWith("http")) {
+            url = v;
+        } else if (f && f.toUpperCase().indexOf("IMAGE") !== -1) {
+            // Support both "http..." and 'http...'
+            var match = f.match(/["'](https?:\/\/[^"']+)["']/i);
+            if (match) url = match[1];
+        }
+        if (url) images.push(url);
+    }
+
+    if (images.length === 0) {
+        SpreadsheetApp.getActive().toast("⚠️ 画像URLが見つかりません(0件)", "合体プロセス", 5);
+        return;
+    }
+
+    SpreadsheetApp.getActive().toast("🔍 画像URLを" + images.length + "件検知しました... (D-F: " + row + ")", "合体プロセス", 5);
+
+    try {
+        // --- 1. Fetch Blobs ---
+        var blobs = [];
+        images.forEach((url, idx) => {
+            try {
+                SpreadsheetApp.getActive().toast((idx + 1) + "枚目の画像を読み込み中...", "合体プロセス", 3);
+                var response = UrlFetchApp.fetch(url);
+                if (response.getResponseCode() === 200) {
+                    blobs.push(response.getBlob());
+                }
+            } catch (e) {
+                console.error("Fetch error: " + e.message);
+                SpreadsheetApp.getActive().toast("⚠️ 画像(" + (idx + 1) + ")の取得に失敗: " + e.message, "警告", 5);
+            }
+        });
+
+        if (blobs.length === 0) {
+            SpreadsheetApp.getActive().toast("❌ 有効な画像データを取得できませんでした。", "中止", 5);
+            return;
+        }
+
+        // --- 2. Create Merged Image (Horizontal) using Google Slides ---
+        SpreadsheetApp.getActive().toast("🛠 スライドで合成画像を生成中...", "合体プロセス", 5);
+        var tempPresentation = SlidesApp.create("TempCollageH_" + new Date().getTime());
+        var presentationId = tempPresentation.getId();
+        var slide = tempPresentation.getSlides()[0];
+        slide.getShapes().forEach(s => s.remove());
+
+        var pageWidth = tempPresentation.getPageWidth();
+        var pageHeight = tempPresentation.getPageHeight();
+
+        var spacing = 10;
+        var availableWidth = pageWidth - (spacing * (blobs.length + 1));
+        var imgWidth = availableWidth / blobs.length;
+
+        blobs.forEach((blob, idx) => {
+            var img = slide.insertImage(blob);
+            var ratio = img.getWidth() / img.getHeight();
+
+            var targetW = imgWidth;
+            var targetH = targetW / ratio;
+
+            if (targetH > pageHeight - 20) {
+                targetH = pageHeight - 20;
+                targetW = targetH * ratio;
+            }
+
+            img.setWidth(targetW);
+            img.setHeight(targetH);
+            img.setTop((pageHeight - targetH) / 2);
+            img.setLeft(spacing + idx * (imgWidth + spacing));
+        });
+
+        tempPresentation.saveAndClose();
+
+        // --- 3. Export Slide as PNG ---
+        SpreadsheetApp.getActive().toast("📤 画像として書き出し(PNG)中...", "合体プロセス", 5);
+        var exportUrl = "https://docs.google.com/presentation/d/" + presentationId + "/export/png";
+        var token = ScriptApp.getOAuthToken();
+        var options = { headers: { Authorization: "Bearer " + token }, muteHttpExceptions: true };
+        var exportResp = UrlFetchApp.fetch(exportUrl, options);
+        if (exportResp.getResponseCode() !== 200) {
+            SpreadsheetApp.getActive().toast("❌ スライド変換失敗: " + exportResp.getContentText(), "エラー", 5);
+            return;
+        }
+
+        var collageBlob = exportResp.getBlob().setName("collage_h_row_" + row + ".png");
+
+        // --- 4. Cleanup Old Images and Insert New (Floating for Blob Access) ---
+        SpreadsheetApp.getActive().toast("🖼 シートに貼り付け中...", "合体プロセス", 3);
+
+        // H列(8列目)の対象セルと画像をリセット
+        const targetCell = sheet.getRange(row, 8);
+        targetCell.setValue("🖼️ READY").setFontColor("#94a3b8").setFontSize(9).setHorizontalAlignment("center");
+
+        sheet.getImages().forEach(img => {
+            try {
+                let anchor = img.getAnchorCell();
+                if (anchor.getRow() === row && anchor.getColumn() === 8) {
+                    img.remove();
+                }
+            } catch (e) { }
+        });
+
+        // Insert exactly anchored to (8, row)
+        const insertedImg = sheet.insertImage(collageBlob, 8, row);
+
+        // Adjust size to fit row height nicely
+        const rowHeight = sheet.getRowHeight(row);
+        const sH = insertedImg.getHeight();
+        const sW = insertedImg.getWidth();
+        const targetH = rowHeight - 4;
+        const scale = targetH / sH;
+
+        insertedImg.setWidth(sW * scale);
+        insertedImg.setHeight(targetH);
+        insertedImg.setTop(insertedImg.getTop() + 2); // Minor vertical centering
+
+        // --- 5. Cleanup Drive ---
+        DriveApp.getFileById(presentationId).setTrashed(true);
+        SpreadsheetApp.getActive().toast("✅ 合体完了！(" + Math.round(sW * scale) + "x" + targetH + ")", "Threads職人", 5);
+
+    } catch (e) {
+        console.error("Horizontal Collage Error: " + e.message);
     }
 }
 
@@ -649,7 +851,7 @@ function handleBoardSelectionChange(e) {
 
     // 対象列: G, H, P (7, 8, 16)
     var targetCols = [7, 8, 16];
-    var isTarget = (row >= 3 && targetCols.indexOf(col) !== -1);
+    var isTarget = (row >= 4 && targetCols.indexOf(col) !== -1);
 
     var props = PropertiesService.getUserProperties();
     var lastRowKey = 'LAST_EXPANDED_ROW_' + sheet.getSheetId();
