@@ -24,27 +24,12 @@ function setupBoardSheet() {
     sheet.getRange("A1:Z1000").clearDataValidations();
     sheet.getRange("A1:Z1000").clearFormat();
 
-    // --- NEW: Row 1 Prompt Area ---
-    // User requested "Prompt in the 1st line".
-    // We will merge A1:U1 and put the "Mix" prompt there for easy copying.
-    var promptCell = sheet.getRange("A1:U1");
-    promptCell.merge();
-    promptCell.setValue(typeof PROMPT_MIX !== 'undefined' ? PROMPT_MIX : "Prompt Loading...");
-    promptCell.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP); // Wrap text
-    promptCell.setVerticalAlignment("top");
-    promptCell.setBackground("#fff2cc"); // Light yellow/orange for attention
-    promptCell.setFontSize(10);
-    // Auto-row height for prompt? Maybe fixed height to avoid taking too much space.
-    // User said "Slide down", suggesting insertion.
-    sheet.setRowHeight(1, 100); // Give it some space
-
-    // 2. ヘッダー (2行目)
-    // A: ON AIR, B: No, C: Type, D: Photo 1, E: Photo 2, F: Photo 3, G: Topic, H: Output, I: System ID, J: Views, K: Likes, L: Replies, M: Reposts, N: Rate, O: Judge, P: DNA
+    // 2. ヘッダー行 (2行目)
     var headers = [
-        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "Select Master (師匠選択)", "Output (決定稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Drafts Source", "Draft 1", "Draft 2", "Draft 3", "🚀 Create"]
+        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "ROOM Content (ROOM投稿用)", "Threads Post (Threads投稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Drafts Source", "Draft 1", "Draft 2", "Draft 3", "🚀 Create"]
     ];
 
-    sheet.getRange("A2:U2").setValues(headers); // Shifted to Row 2
+    sheet.getRange("A2:U2").setValues(headers);
     sheet.getRange("A2:U2").setBackground("#ffe599"); // Yellow
     sheet.getRange("A2:U2").setFontWeight("bold");
     sheet.getRange("A2:U2").setHorizontalAlignment("center");
@@ -52,13 +37,13 @@ function setupBoardSheet() {
     // 3. ガイド行 (3行目)
     var guides = [
         "チェックボックス", "No", "↓Type", "[Auto1]", "[Auto2]", "[Auto3]",
-        "↓使用する師匠を選択",
+        "↓ここでROOM用文章をコピペ",
         "←ここにAIが書いた文章が出ます",
         "⛔ ID", "閲覧数", "いいね", "返信", "引用/再投稿", "反応率", "判定",
         "←ここにAI分析結果が出ます",
         "", "", "", "", "チェックで生成"
     ];
-    sheet.getRange("A3:U3").setValues([guides]); // Shifted to Row 3
+    sheet.getRange("A3:U3").setValues([guides]);
     sheet.getRange("A3:U3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
     sheet.setRowHeight(3, 60);
 
@@ -90,20 +75,17 @@ function setupBoardSheet() {
     sheet.setColumnWidth(4, 100); // Photo 1
     sheet.setColumnWidth(5, 100); // Photo 2
     sheet.setColumnWidth(6, 100); // Photo 3
-    // G: Master Select Rule (Updated for Click-to-Gem)
-    var ruleMaster = SpreadsheetApp.newDataValidation()
-        .requireValueInList(["Basic", "Var", "Rewrite", "Poison", "ROOM", "Mix"], true)
-        .setAllowInvalid(true).build(); // Allow invalid for legacy text compatibility
-    sheet.getRange("G4:G100").setDataValidation(ruleMaster);
+    // G: ROOM Content
+    sheet.getRange("G4:G100").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
 
     // Widths
     sheet.setColumnWidth(1, 60);  // ON AIR
     sheet.setColumnWidth(2, 40);  // No
     sheet.setColumnWidth(3, 80);  // Type
-    sheet.setColumnWidth(4, 100); // Photo 1
-    sheet.setColumnWidth(5, 100); // Photo 2
-    sheet.setColumnWidth(6, 100); // Photo 3
-    sheet.setColumnWidth(7, 150); // Select Master (Was Topic)
+    sheet.setColumnWidth(4, 150); // Photo 1 (Larger width)
+    sheet.setColumnWidth(5, 150); // Photo 2 (Larger width)
+    sheet.setColumnWidth(6, 150); // Photo 3 (Larger width)
+    sheet.setColumnWidth(7, 300); // ROOM Content (Wider for text)
     sheet.setColumnWidth(8, 400); // Output
     sheet.setColumnWidth(9, 50);  // System ID
 
@@ -116,52 +98,16 @@ function setupBoardSheet() {
     sheet.setColumnWidth(15, 60); // Judge
     sheet.setColumnWidth(16, 200); // DNA
 
+
     // Hide Drafts
     sheet.hideColumns(17, 4); // Q, R, S, T
 
     try {
-        Browser.msgBox("投稿作成ボード(Pro版)の準備ができました！\\n1行目にプロンプトを表示しました。コピーして師匠へペーストしてください。");
+        Browser.msgBox("投稿作成ボード(Pro版)の準備ができました！");
     } catch (e) {
         // API実行時はスキップ
         console.log("Setup completed (Headless mode)");
     }
-}
-
-/**
- * 【緊急】G列のドロップダウンのみを適用（データは消さない）
- */
-function applyMasterValidation() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_BOARD);
-    if (!sheet) return;
-
-    // G: Master Select Rule
-    var ruleMaster = SpreadsheetApp.newDataValidation()
-        .requireValueInList(["Basic", "Var", "Rewrite", "Poison", "ROOM", "Mix"], true)
-        .setAllowInvalid(false).build();
-    sheet.getRange("G3:G1000").setDataValidation(ruleMaster);
-
-    // Header & Guide Update
-    sheet.getRange("G1").setValue("Select Master (師匠選択)");
-    sheet.getRange("G2").setValue("↓使用する師匠を選択");
-
-    Browser.msgBox("G列のドロップダウンを修復しました！");
-}
-
-/**
- * 【強制実行用】G列のドロップダウンをMix入りに書き換える
- */
-function FORCE_UPDATE_DROPDOWN() {
-    var sheet = SpreadsheetApp.getActiveSheet();
-    var rule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(["Basic", "Var", "Rewrite", "Poison", "ROOM", "Mix"], true)
-        .setAllowInvalid(false)
-        .build();
-
-    // Apply to G4:G1000 ("Select Master")
-    sheet.getRange("G4:G1000").setDataValidation(rule);
-
-    Browser.msgBox("✅ 強制アップデート完了！\\nG列のドロップダウンに「Mix」が入っているか確認してください。");
 }
 
 /**

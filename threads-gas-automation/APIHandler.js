@@ -20,6 +20,11 @@ function handleApiRequest(e) {
     };
 
     try {
+        // === DEBUG: Log raw request ===
+        var rawLog = "postData=" + (e.postData ? e.postData.contents : "none") +
+            " | params=" + JSON.stringify(e.parameter || {});
+        debugLog("[RAW] " + rawLog);
+
         // 1. Parse Action
         var action = "";
         var payload = {};
@@ -65,7 +70,7 @@ function handleApiRequest(e) {
                 }
                 break;
             case "ping":
-                result = { status: "success", message: "API Connectivity OK", version: "v2.6" };
+                result = { status: "success", message: "API Connectivity OK", version: "v6.9.0" };
                 break;
             default:
                 result = { status: "success", message: "Threads職人 API Ready", received: action };
@@ -154,71 +159,175 @@ function apiRunGeneration(payload) {
  * 拡張機能からの情報をボードに保存する
  */
 function saveClipToBoard(data) {
-    var text = data.text;
-    var imageUrls = data.imageUrls || []; // Array of up to 3
-    var url = data.url;
-    var author = data.author;
-    var context = data.context;
+    debugLog("saveClipToBoard STARTED");
 
-    // Fallback if only single imageUrl is provided
-    if (data.imageUrl && imageUrls.length === 0) {
-        imageUrls = [data.imageUrl];
+    var action = data.action || 'mixed';
+    debugLog("Action parsed: " + action);
+
+    try {
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        debugLog("Active spreadsheet fetched.");
+        var sheet = ss.getSheetByName(SHEET_BOARD);
+        debugLog("Sheet fetched: " + (sheet ? "yes" : "no"));
+
+        if (!sheet) {
+            debugLog("Sheet not found, calling setupBoardSheet...");
+            setupBoardSheet(); // Safety
+            sheet = ss.getSheetByName(SHEET_BOARD);
+            debugLog("Sheet setup complete.");
+        }
+    } catch (sheetErr) {
+        debugLog("Error fetching sheet: " + sheetErr.message);
+        throw sheetErr;
     }
 
-    if (!text && imageUrls.length === 0) {
-        throw new Error(`No data provided. (Text: ${text ? "Yes" : "No"}, Images: ${imageUrls.length})`);
+    // v6.8.0: Split Actions
+    var action = data.action || 'mixed';
+
+    // A: ON AIR, B: No, C: Type, D-F: Images, G: ROOM, H: Threads
+    var imageUrls = data.imageUrls || [];
+    var roomText = data.roomText || "";
+    var threadsText = data.threadsText || "";
+
+    var rowData = [];
+
+    // --- CASE 1: Save Images Only ---
+    if (action === 'save_images') {
+        // [FALSE, "", "単品", Img1, Img2, Img3, "", ""]
+        rowData = [
+            false,
+            "",
+            "単品", // Type
+            imageUrls[0] ? `=IMAGE("${imageUrls[0]}")` : "",
+            imageUrls[1] ? `=IMAGE("${imageUrls[1]}")` : "",
+            imageUrls[2] ? `=IMAGE("${imageUrls[2]}")` : "",
+            "", // G: Empty
+            ""  // H: Empty
+        ];
+    }
+    // --- CASE 2: Save Text Only ---
+    else if (action === 'save_text') {
+        debugLog("Building rowData for save_text...");
+        // [FALSE, "", "単品", RoomText, ThreadsText, "", "", ""] 
+        rowData = [
+            false,
+            "",
+            "単品", // Type
+            "", // D: Empty
+            "", // E: Empty
+            "", // F: Empty
+            roomText, // G: ROOM Text
+            threadsText  // H: Threads Text
+        ];
+    }
+    // --- CASE 3: Legacy / Fallback ---
+    else {
+        // [FALSE, "", "単品", Img..., RoomText+Meta, ThreadsText]
+        var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
+        var metaInfo = "";
+        if (data.url) metaInfo += "\n[Source] " + data.url;
+        metaInfo += "\n[Saved] " + today;
+
+        var roomContent = roomText;
+        if (roomContent) roomContent += "\n\n";
+        roomContent += metaInfo;
+
+        rowData = [
+            false, "", "単品",
+            imageUrls[0] ? `=IMAGE("${imageUrls[0]}")` : "",
+            imageUrls[1] ? `=IMAGE("${imageUrls[1]}")` : "",
+            imageUrls[2] ? `=IMAGE("${imageUrls[2]}")` : "",
+            roomContent,
+            threadsText
+        ];
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_BOARD);
+    debugLog("Finding target row...");
+    // Find Target Row (First Empty Col C)
+    var lastRow = sheet.getLastRow() || 1;
+    var startRow = 8;
 
-    // If Board is missing, setup it (Safety)
-    if (!sheet) {
-        setupBoardSheet();
-        sheet = ss.getSheetByName(SHEET_BOARD);
-    }
-
-    var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
-    var metaInfo = "[Source] " + (url || "Unknown") + "\n[Author] " + (author || "Unknown") + "\n[Saved] " + dateStr;
-    var fullTopic = text ? (text + "\n\n" + metaInfo) : metaInfo;
-
-    // A: ON AIR, B: No, C: Type, D: Photo 1, E: Photo 2, F: Photo 3, G: Topic
-    // Find the first empty row based on Column C (Type)
-    var lastRow = sheet.getLastRow();
+    // --- Merge Logic: Check if we can append to the last used row ---
+    // If the last used row has Type "単品", let's see if we can merge.
+    var merged = false;
     var targetRow = lastRow + 1;
 
-    // Scan from row 3 downwards to find the first empty "Type" cell
-    // (To avoid appending after 100 pre-formatted rows)
-    var typeColumn = sheet.getRange(3, 3, lastRow, 1).getValues(); // Column C
-    for (var i = 0; i < typeColumn.length; i++) {
-        if (!typeColumn[i][0]) {
-            targetRow = i + 3;
-            break;
+    // Scan for the last used row and first empty row
+    var firstEmptyRow = startRow;
+    var lastUsedRow = -1;
+
+    if (lastRow >= startRow) {
+        var range = sheet.getRange("C" + startRow + ":H" + (lastRow + 1));
+        var values = range.getValues();
+
+        for (var i = 0; i < values.length; i++) {
+            if (!values[i][0]) { // Type (Col C) is empty
+                firstEmptyRow = startRow + i;
+                break;
+            } else {
+                lastUsedRow = startRow + i;
+            }
+        }
+
+        // Check if we can merge with the last used row
+        if (lastUsedRow >= startRow) {
+            var lastType = values[lastUsedRow - startRow][0]; // Col C
+            var lastImg1 = values[lastUsedRow - startRow][1]; // Col D
+            var lastRoom = values[lastUsedRow - startRow][4]; // Col G
+            var lastThreads = values[lastUsedRow - startRow][5]; // Col H
+
+            if (lastType === "単品") {
+                if (action === 'save_text' && !lastRoom && !lastThreads && lastImg1) {
+                    // Last row has images but no text -> Merge Text
+                    targetRow = lastUsedRow;
+                    merged = true;
+                    // Keep existing images, update text
+                    rowData[3] = sheet.getRange(targetRow, 4).getFormula() || sheet.getRange(targetRow, 4).getValue(); // D
+                    rowData[4] = sheet.getRange(targetRow, 5).getFormula() || sheet.getRange(targetRow, 5).getValue(); // E
+                    rowData[5] = sheet.getRange(targetRow, 6).getFormula() || sheet.getRange(targetRow, 6).getValue(); // F
+                    debugLog("Merging save_text into existing row " + targetRow);
+                } else if (action === 'save_images' && !lastImg1 && (lastRoom || lastThreads)) {
+                    // Last row has text but no images -> Merge Images
+                    targetRow = lastUsedRow;
+                    merged = true;
+                    // Keep existing text, update images
+                    rowData[6] = lastRoom; // G
+                    rowData[7] = lastThreads; // H
+                    debugLog("Merging save_images into existing row " + targetRow);
+                }
+            }
         }
     }
 
-    // A: ON AIR, B: No, C: Type, D: Photo 1, E: Photo 2, F: Photo 3, G: Topic
-    var rowData = [[
-        false,              // A: ON AIR
-        "",                 // B: No
-        "単品",             // C: Type
-        imageUrls[0] ? `=IMAGE("${imageUrls[0]}")` : "", // D: Photo 1
-        imageUrls[1] ? `=IMAGE("${imageUrls[1]}")` : "", // E: Photo 2
-        imageUrls[2] ? `=IMAGE("${imageUrls[2]}")` : "", // F: Photo 3
-        fullTopic,          // G: Assets (Topic)
-        ""                  // H: Output
-    ]];
-
-    sheet.getRange(targetRow, 1, 1, 8).setValues(rowData);
-
-    // Trigger Analysis (DNA) in Col P
-    try {
-        analyzeSingleRowBoard(sheet, targetRow);
-    } catch (e) {
-        console.error("Analysis trigger failed: " + e.message);
+    if (!merged) {
+        targetRow = firstEmptyRow;
+        debugLog("Creating new row at " + targetRow);
     }
 
-    return { status: "success", message: "Saved to Board!", row: targetRow };
+    debugLog("Writing data to row: " + targetRow + ", length: " + rowData.length);
+    // Write Data
+    try {
+        sheet.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
+        // ★ 画像を大きく見せるために行の高さを広げる (150px)
+        sheet.setRowHeight(targetRow, 150);
+        debugLog("Data written successfully.");
+    } catch (writeErr) {
+        debugLog("Write Error: " + writeErr.message);
+        throw writeErr;
+    }
+
+    // Trigger Analysis (DNA) if needed - optional for just images? 
+    // Let's run it anyway to be safe, or maybe skip for images?
+    // "Type" column change might trigger onEdit if user edits it later.
+    // For now, let's NOT run analysis automatically for just images/text to keep it fast, 
+    // unless user explicitly requests "Generate".
+    // Actually existing code ran `analyzeSingleRowBoard`.
+    // Let's keep running it ONLY if it's text (generating tags etc?) or legacy.
+    // But wait, DNA analysis usually needs Title/URL which we might not have in `save_text` logic?
+    // `save_text` has no URL/Title in payload (only inputs).
+    // So let's skip automatic analysis for split actions for now to avoid errors.
+
+    return { status: "success", message: "Saved!", row: targetRow };
 }
 
 /**
