@@ -26,13 +26,13 @@ function setupBoardSheet() {
 
     // 2. ヘッダー行 (2行目)
     var headers = [
-        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "ROOM Content (ROOM投稿用)", "Threads Post (Threads投稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Drafts Source", "Draft 1", "Draft 2", "Draft 3", "🚀 Create"]
+        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "ROOM Content (ROOM投稿用)", "Threads Post (Threads投稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)"]
     ];
 
-    sheet.getRange("A2:U2").setValues(headers);
-    sheet.getRange("A2:U2").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A2:U2").setFontWeight("bold");
-    sheet.getRange("A2:U2").setHorizontalAlignment("center");
+    sheet.getRange("A2:P2").setValues(headers);
+    sheet.getRange("A2:P2").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A2:P2").setFontWeight("bold");
+    sheet.getRange("A2:P2").setHorizontalAlignment("center");
 
     // 3. ガイド行 (3行目)
     var guides = [
@@ -40,16 +40,15 @@ function setupBoardSheet() {
         "↓ここでROOM用文章をコピペ",
         "←ここにAIが書いた文章が出ます",
         "⛔ ID", "閲覧数", "いいね", "返信", "引用/再投稿", "反応率", "判定",
-        "←ここにAI分析結果が出ます",
-        "", "", "", "", "チェックで生成"
+        "←ここにAI分析結果が出ます"
     ];
-    sheet.getRange("A3:U3").setValues([guides]);
-    sheet.getRange("A3:U3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A3:P3").setValues([guides]);
+    sheet.getRange("A3:P3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
     sheet.setRowHeight(3, 60);
 
     // 4. データエリア設定 (4行目以降)
-    sheet.getRange("A4:U1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A4:U1000").setVerticalAlignment("top");
+    sheet.getRange("A4:P1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A4:P1000").setVerticalAlignment("top");
     sheet.setRowHeight(2, 40); // Header height
     sheet.setFrozenRows(3);    // Freeze top 3 rows
 
@@ -57,10 +56,6 @@ function setupBoardSheet() {
     // A: ON AIR Checkbox
     var checkboxOnAir = SpreadsheetApp.newDataValidation().requireCheckbox().build();
     sheet.getRange("A4:A100").setDataValidation(checkboxOnAir);
-
-    // U: Create Checkbox
-    var checkboxCreate = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-    sheet.getRange("U4:U100").setDataValidation(checkboxCreate);
 
     // C: Type Rule
     var ruleType = SpreadsheetApp.newDataValidation()
@@ -97,10 +92,6 @@ function setupBoardSheet() {
     sheet.setColumnWidth(14, 60); // Rate
     sheet.setColumnWidth(15, 60); // Judge
     sheet.setColumnWidth(16, 200); // DNA
-
-
-    // Hide Drafts
-    sheet.hideColumns(17, 4); // Q, R, S, T
 
     try {
         Browser.msgBox("投稿作成ボード(Pro版)の準備ができました！");
@@ -348,10 +339,6 @@ function generatePostsCommon(sheetName, targetRow) {
     var colType = 3;
     var colTopic = 7;
     var colOutput = 8;
-    var colDraft1 = 17;
-    var colDraft2 = 18;
-    var colDraft3 = 19;
-    var colCreate = 21;
     var colHumor = 4; // 仮定：LAYOUT_MASTERにないのでPhoto1と被らないよう配慮が必要だが、既存ロジックが参照しているため。
 
     var targets = [];
@@ -359,17 +346,14 @@ function generatePostsCommon(sheetName, targetRow) {
         if (targetRow < 4) return;
         targets.push(targetRow - 4);
     } else {
-        // Range up to colCreate (21)
-        var data = sheet.getRange(4, 1, lastRow - 3, colCreate).getValues();
+        // Range up to colOutput (8)
+        var data = sheet.getRange(4, 1, lastRow - 3, colOutput).getValues();
         for (let i = 0; i < data.length; i++) {
             var row = data[i];
-            var check = row[colCreate - 1]; // U: Create trigger
             var topic = row[colTopic - 1];  // G: Topic
             var output = row[colOutput - 1]; // H: Output
 
-            if (check === true) {
-                targets.push(i);
-            } else if (topic && !output && row[colType - 1] !== 'まとめ') {
+            if (topic && !output && row[colType - 1] !== 'まとめ') {
                 targets.push(i);
             }
         }
@@ -383,7 +367,7 @@ function generatePostsCommon(sheetName, targetRow) {
     }
 
     // --- 5. Generation Loop ---
-    var fullData = sheet.getRange(4, 1, lastRow - 3, colCreate).getValues();
+    var fullData = sheet.getRange(4, 1, lastRow - 3, colOutput).getValues();
     var count = 0;
 
     for (const dataIndex of targets) {
@@ -468,19 +452,8 @@ Output ONLY the post content.
             const result = callGeminiSafe(apiKey, prompt, encodedImages);
 
             if (result) {
-                const parts = result.split("///").filter(s => s.trim().length > 0);
-
-                let drafts = ["", "", ""];
-                parts.forEach((p, idx) => { if (idx < 3) drafts[idx] = p.replace(/^案\d+\s*/, "").trim(); });
-
-                sheet.getRange(rowIndex, colDraft1).setValue(drafts[0]);
-                sheet.getRange(rowIndex, colDraft2).setValue(drafts[1]);
-                sheet.getRange(rowIndex, colDraft3).setValue(drafts[2]);
-
-                var combinedOutput = `【案1】\n${drafts[0]}\n\n【案2】\n${drafts[1]}\n\n【案3】\n${drafts[2]}`;
-                sheet.getRange(rowIndex, colOutput).setValue(combinedOutput);
-                // Selector logic removed/simplified
-                sheet.getRange(rowIndex, colCreate).setValue(false);
+                // Just output the directly generated text to the Output column
+                sheet.getRange(rowIndex, colOutput).setValue(result.trim());
                 count++;
             }
         } catch (e) {
@@ -494,37 +467,10 @@ Output ONLY the post content.
 }
 
 /**
- * Handle onEdit for Board Sheet (Selector)
+ * Handle onEdit for Board Sheet (Selector) - Removed Draft Selection
  */
 function handleBoardEdit(e) {
-    var sheet = e.source.getActiveSheet();
-    var range = e.range;
-
-    // A: ON AIR (1) or Selector (9)
-    var col = range.getColumn();
-    var rowIndex = range.getRow();
-
-    if (rowIndex < 4) return;
-
-    if (col === 9) {
-        var selectorValue = range.getValue(); // "案1", "案2", "案3"
-        var content = "";
-        if (selectorValue === "案1") {
-            content = sheet.getRange(rowIndex, 17).getValue(); // Draft 1 (Q)
-        } else if (selectorValue === "案2") {
-            content = sheet.getRange(rowIndex, 18).getValue(); // Draft 2 (R)
-        } else if (selectorValue === "案3") {
-            content = sheet.getRange(rowIndex, 19).getValue(); // Draft 3 (S)
-        } else if (selectorValue === "すべて") {
-            var d1 = sheet.getRange(rowIndex, 17).getValue();
-            var d2 = sheet.getRange(rowIndex, 18).getValue();
-            var d3 = sheet.getRange(rowIndex, 19).getValue();
-            content = "【案1】\n" + d1 + "\n\n【案2】\n" + d2 + "\n\n【案3】\n" + d3;
-        } else {
-            return;
-        }
-        sheet.getRange(rowIndex, 8).setValue(content); // Output (H)
-    }
+    // Draft selection logic has been removed.
 }
 
 /**
@@ -550,14 +496,6 @@ function onBoardEditInstallable(e) {
 
     if (sheetName !== SHEET_BOARD) return;
     if (row < 4) return;
-
-    // 1. Create Checkbox (Column U = 21)
-    if (col === 21) {
-        if (range.getValue() === true) {
-            generatePostsCommon(SHEET_BOARD, row);
-            range.setValue(false);
-        }
-    }
 
     // 1.5. Auto-Collage Trigger (Columns D, E, F = 4, 5, 6)
     // DISABLED: Moved to Chrome Extension Screenshot Flow (v2.6.5+)
