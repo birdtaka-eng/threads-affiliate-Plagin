@@ -104,6 +104,63 @@ function setupBoardSheet() {
 }
 
 /**
+ * 投稿データ更新 (Metrics)
+ */
+function updateMetrics() {
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+        if (!settingsSheet) return;
+
+        const token = String(settingsSheet.getRange("B4").getValue()).trim();
+        if (!token) {
+            Browser.msgBox("エラー: 設定シートにAPI Tokenが入力されていません。");
+            return;
+        }
+
+        const boardSheet = ss.getSheetByName(SHEET_BOARD);
+        if (!boardSheet) return;
+
+        const lastRow = Math.max(boardSheet.getLastRow(), 4);
+        if (lastRow < 4) return;
+
+        const boardData = boardSheet.getRange(`A4:P${lastRow}`).getValues();
+
+        let updatedCount = 0;
+
+        for (let i = 0; i < boardData.length; i++) {
+            const mediaId = String(boardData[i][8]).trim(); // Column I (System ID)
+
+            if (mediaId && mediaId.length > 5 && mediaId !== "undefined") {
+                // Fetch metrics
+                const res = getThreadsMetricsAPI(mediaId, token);
+                if (res.success && res.metrics) {
+                    // J=10, K=11, L=12, M=13
+                    const rowNum = i + 4;
+                    boardSheet.getRange(rowNum, 10).setValue(res.metrics.views || 0);
+                    boardSheet.getRange(rowNum, 11).setValue(res.metrics.likes || 0);
+                    boardSheet.getRange(rowNum, 12).setValue(res.metrics.replies || 0);
+                    boardSheet.getRange(rowNum, 13).setValue(res.metrics.reposts || 0);
+
+                    // Simple Engagement Rate calculation (Likes+Replies / Views)
+                    if (res.metrics.views > 0) {
+                        const rate = ((res.metrics.likes + res.metrics.replies) / res.metrics.views);
+                        boardSheet.getRange(rowNum, 14).setValue(rate).setNumberFormat("0.0%"); // N
+                    }
+
+                    updatedCount++;
+                }
+            }
+        }
+
+        Browser.msgBox(`更新完了\n${updatedCount}件の投稿データを最新に更新しました！`);
+
+    } catch (e) {
+        Browser.msgBox("エラー: " + e.message);
+    }
+}
+
+/**
  * 【作成】投稿一括生成 (全タイプ)
  */
 function generateUnifiedPosts() {
@@ -198,10 +255,19 @@ ${combinedContent}
  * 自動放送実行 (Scheduled Broadcast)
  */
 function runScheduledBroadcast() {
+    let internalLog = [];
+    const _log = (msg) => {
+        internalLog.push(msg);
+        debugLog(msg);
+    };
+
     try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
         const scheduleSheet = ss.getSheetByName(SHEET_SCHEDULE);
-        if (!scheduleSheet) return;
+        if (!scheduleSheet) {
+            _log("[Abort] 番組表シートが見つかりません。");
+            return internalLog.join("\\n");
+        }
 
         const now = new Date();
         const hour = now.getHours();
@@ -214,39 +280,77 @@ function runScheduledBroadcast() {
         const day = now.getDay();
         const dayColIndex = day === 0 ? 9 : day + 2; // C=3(Mon) .. I=9(Sun)
 
+        _log(`[Schedule] Starting check for Slot: ${targetTimeStr}, DayIndex: ${dayColIndex}`);
+
         // Only process each unique Date+Time slot once
         const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd");
         const uniqueSlotId = `${dateStr}_${targetTimeStr}`;
         const props = PropertiesService.getScriptProperties();
         if (props.getProperty("LAST_PROCESSED_SLOT") === uniqueSlotId) {
-            return; // Already processed this slot
+            _log(`[Abort] すでに処理済みのスロットです: ${uniqueSlotId}`);
+            return internalLog.join("\\n");
         }
 
         // 1. Find the target Genre in Schedule
-        const times = scheduleSheet.getRange("B2:B11").getValues();
-        let targetRowIndex = -1;
+        const lastRowSchedule = Math.max(scheduleSheet.getLastRow(), 2);
+        const times = scheduleSheet.getRange(2, 2, lastRowSchedule - 1, 1).getDisplayValues(); // B2:B...
+
+        let parsedTimes = [];
         for (let i = 0; i < times.length; i++) {
-            if (String(times[i][0]).includes(targetTimeStr)) { // Loose match for time string
-                targetRowIndex = i + 2;
-                break;
+            if (times[i][0]) parsedTimes.push(times[i][0]);
+        }
+        _log(`[Schedule] (Debug) Found times in sheet: ${parsedTimes.join(", ")}`);
+
+        let targetRowIndex = -1;
+        const targetMinStr = min < 30 ? "00" : "30";
+        for (let i = 0; i < times.length; i++) {
+            const cellVal = String(times[i][0]).trim();
+            if (!cellVal) continue;
+
+            let match = cellVal.match(/(\d{1,2})(?:[:時]\s*(\d{1,2}))?/);
+            if (match) {
+                let cellHour = parseInt(match[1], 10);
+                let cellMin = match[2] ? parseInt(match[2], 10) : 0;
+
+                if (cellVal.toUpperCase().includes("PM") && cellHour < 12) cellHour += 12;
+                if (cellVal.toUpperCase().includes("AM") && cellHour === 12) cellHour = 0;
+
+                let targetMinNum = min < 30 ? 0 : 30;
+
+                _log(`[Schedule] (Debug) Checking cell: "${cellVal}" => interpreted as ${cellHour}:${cellMin} (Target is ${hour}:${targetMinNum})`);
+
+                if (cellHour === hour && cellMin === targetMinNum) {
+                    targetRowIndex = i + 2;
+                    break;
+                }
+            } else {
+                if (cellVal.includes(targetTimeStr) || cellVal.includes(`${hour}:${targetMinStr}`)) {
+                    targetRowIndex = i + 2;
+                    break;
+                }
             }
         }
 
         if (targetRowIndex === -1) {
-            return; // Not a scheduled time
+            _log(`[Schedule] Abort: Current time ${targetTimeStr} is not defined in the Schedule sheet.`);
+            return internalLog.join("\\n"); // Not a scheduled time
         }
 
         const genre = scheduleSheet.getRange(targetRowIndex, dayColIndex).getValue();
         if (!genre) {
+            _log(`[Schedule] Abort: No genre mapped for time ${targetTimeStr} at day column ${dayColIndex}.`);
             props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId); // Mark as done (empty slot)
-            return;
+            return internalLog.join("\\n");
         }
 
-        debugLog(`[Schedule] Triggered slot ${uniqueSlotId} for Genre: ${genre}`);
+        _log(`[Schedule] Triggered slot ${uniqueSlotId} for Genre: ${genre}`);
 
         // 2. Find Candidate in Board
         const boardSheet = ss.getSheetByName(SHEET_BOARD);
-        if (!boardSheet) return;
+        if (!boardSheet) {
+            _log("[Abort] 投稿作成ボードが見つかりません。");
+            return internalLog.join("\\n");
+        }
 
         const lastRow = Math.max(boardSheet.getLastRow(), 4);
         const boardData = boardSheet.getRange(`A4:Q${lastRow}`).getValues();
@@ -278,51 +382,66 @@ function runScheduledBroadcast() {
         }
 
         if (oldestRow === -1) {
-            debugLog(`[Schedule] No ON AIR materials for genre '${genre}'`);
+            _log(`[Schedule] No ON AIR materials for genre '${genre}'`);
             props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId);
-            return;
+            return internalLog.join("\\n");
         }
 
-        // 3. Send Broadcast
-        debugLog(`[Schedule] Selected Row ${oldestRow}, calling API...`);
-        const payload = {
-            threadsText: selectedData[7] || "", // H column
-            images: []
-        };
-
-        // Images D, E, F
-        for (let i = 3; i <= 5; i++) {
-            if (selectedData[i]) {
-                const b64 = fetchImageAsBase64(selectedData[i]);
-                if (b64) payload.images.push(b64);
-            }
+        // 3. Fetch Settings (UserID, Token)
+        const settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+        if (!settingsSheet) {
+            _log(`[Schedule] Error: Settings sheet missing.`);
+            return internalLog.join("\\n");
         }
 
-        const apiUrl = "http://localhost:3000/api/post"; // TODO: Read from Settings if needed
-        const options = {
-            method: "post",
-            contentType: "application/json",
-            payload: JSON.stringify(payload),
-            muteHttpExceptions: true
-        };
+        const userId = String(settingsSheet.getRange("B3").getValue()).trim();
+        const token = String(settingsSheet.getRange("B4").getValue()).trim();
 
-        try {
-            const response = UrlFetchApp.fetch(apiUrl, options);
-            debugLog(`[Schedule] API Response: ${response.getResponseCode()}`);
+        if (!userId || !token) {
+            _log(`[Schedule] Error: User ID or Token is empty in Settings.`);
+            return internalLog.join("\\n");
+        }
 
-            // 4. Update Board to track the rotation
-            if (response.getResponseCode() === 200 || response.getResponseCode() === 201) {
-                boardSheet.getRange(oldestRow, 17).setValue(new Date()); // Column Q
-            }
-        } catch (netErr) {
-            debugLog(`[Schedule] API Network Error: ${netErr.message}`);
+        // 4. Send Broadcast to official Threads API
+        _log(`[Schedule] Selected Row ${oldestRow}, calling Official API...`);
+        const threadsText = selectedData[7] || ""; // H column
+
+        // Extract Image URL: Handle both raw URLs and =IMAGE("url") formulas
+        let firstImageUrl = selectedData[3] || ""; // D column (Photo 1 URL)
+        let formulaD = boardSheet.getRange(oldestRow, 4).getFormula();
+        if (formulaD && formulaD.toUpperCase().includes("IMAGE")) {
+            let match = formulaD.match(/["'](https?:\/\/[^"']+)["']/i);
+            if (match) firstImageUrl = match[1];
+        } else if (typeof firstImageUrl === 'string' && firstImageUrl.startsWith('=IMAGE')) {
+            let match = firstImageUrl.match(/["'](https?:\/\/[^"']+)["']/i);
+            if (match) firstImageUrl = match[1];
+        } else if (typeof firstImageUrl === 'string' && firstImageUrl.startsWith('http')) {
+            // Already a valid URL
+        } else {
+            firstImageUrl = ""; // clear if not valid
+        }
+
+        // Note: The Official Graph API media_type=IMAGE requires a publicly accessible URL, not base64.
+        const res = postToThreadsAPI(userId, token, threadsText, firstImageUrl);
+
+        if (res.success) {
+            _log(`[Schedule] Success! Media ID: ${res.mediaId}`);
+            // Update System ID (Column I)
+            boardSheet.getRange(oldestRow, 9).setValue(res.mediaId);
+            // Update Last Broadcast (Column Q)
+            boardSheet.getRange(oldestRow, 17).setValue(new Date());
+        } else {
+            _log(`[Schedule] API Payload Failed: ${res.error}`);
         }
 
         // Always mark as processed to avoid retry loop within the same 30-min window
         props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId);
 
+        return internalLog.join("\\n");
+
     } catch (e) {
-        debugLog("[Schedule] Error: " + e.message);
+        _log("[Schedule] Fatal Error: " + e.message);
+        return internalLog.join("\\n");
     }
 }
 
@@ -330,8 +449,14 @@ function runScheduledBroadcast() {
  * 手動放送用 (Menu Trigger)
  */
 function runBroadcast() {
-    runScheduledBroadcast();
-    Browser.msgBox("現在の時刻に合わせて放送ルールの確認と実行処理を行いました。\\n対象があればNext.jsに送信されています。");
+    // Force clear the lock for manual testing
+    PropertiesService.getScriptProperties().deleteProperty("LAST_PROCESSED_SLOT");
+
+    // 実行結果のログを受け取る
+    const logStr = runScheduledBroadcast();
+
+    // 無言で終了しないよう、何が起きたかをそのまま画面に出す
+    Browser.msgBox("実行ログ:\\n" + (logStr || "何も実行されませんでした。"));
 }
 
 /**
