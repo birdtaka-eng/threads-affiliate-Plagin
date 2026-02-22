@@ -406,23 +406,30 @@ function runScheduledBroadcast() {
         _log(`[Schedule] Selected Row ${oldestRow}, calling Official API...`);
         const threadsText = selectedData[7] || ""; // H column
 
-        // Extract Image URL: Handle both raw URLs and =IMAGE("url") formulas
-        let firstImageUrl = selectedData[3] || ""; // D column (Photo 1 URL)
-        let formulaD = boardSheet.getRange(oldestRow, 4).getFormula();
-        if (formulaD && formulaD.toUpperCase().includes("IMAGE")) {
-            let match = formulaD.match(/["'](https?:\/\/[^"']+)["']/i);
-            if (match) firstImageUrl = match[1];
-        } else if (typeof firstImageUrl === 'string' && firstImageUrl.startsWith('=IMAGE')) {
-            let match = firstImageUrl.match(/["'](https?:\/\/[^"']+)["']/i);
-            if (match) firstImageUrl = match[1];
-        } else if (typeof firstImageUrl === 'string' && firstImageUrl.startsWith('http')) {
-            // Already a valid URL
-        } else {
-            firstImageUrl = ""; // clear if not valid
+        // Extract Image URLs from D, E, F columns max 3 images
+        let imageUrlsToPost = [];
+        for (let colOffset = 4; colOffset <= 6; colOffset++) { // D=4, E=5, F=6
+            let rawUrl = selectedData[colOffset - 1] || "";
+            let formula = boardSheet.getRange(oldestRow, colOffset).getFormula();
+
+            let extractedUrl = "";
+            if (formula && formula.toUpperCase().includes("IMAGE")) {
+                let match = formula.match(/["'](https?:\/\/[^"']+)["']/i);
+                if (match) extractedUrl = match[1];
+            } else if (typeof rawUrl === 'string' && rawUrl.startsWith('=IMAGE')) {
+                let match = rawUrl.match(/["'](https?:\/\/[^"']+)["']/i);
+                if (match) extractedUrl = match[1];
+            } else if (typeof rawUrl === 'string' && rawUrl.startsWith('http')) {
+                extractedUrl = rawUrl;
+            }
+
+            if (extractedUrl) {
+                imageUrlsToPost.push(extractedUrl);
+            }
         }
 
-        // Note: The Official Graph API media_type=IMAGE requires a publicly accessible URL, not base64.
-        const res = postToThreadsAPI(userId, token, threadsText, firstImageUrl);
+        // Note: The Official Graph API media_type=IMAGE requires a publicly accessible URL(s).
+        const res = postToThreadsAPI(userId, token, threadsText, imageUrlsToPost);
 
         if (res.success) {
             _log(`[Schedule] Success! Media ID: ${res.mediaId}`);

@@ -4,14 +4,14 @@
  */
 
 /**
- * Posts text and optional images to Threads via the official Graph API.
+ * Posts text and optional images (up to 10) to Threads via the official Graph API.
  * @param {string} userId - The Meta developer User ID for Threads
  * @param {string} token - The long-lived access token
  * @param {string} text - The post text
- * @param {string} imageUrl - (Optional) Publicly queryable image URL. Note: Only one image per single container is supported without carousel.
+ * @param {string|string[]} imageUrls - (Optional) Publicly queryable image URL(s). Can be a string or array of strings.
  * @returns {object} - { success: boolean, mediaId: string, error: string }
  */
-function postToThreadsAPI(userId, token, text, imageUrl) {
+function postToThreadsAPI(userId, token, text, imageUrls) {
     try {
         if (!userId || !token) {
             return { success: false, error: "Settings: UserID or Token is missing." };
@@ -19,35 +19,115 @@ function postToThreadsAPI(userId, token, text, imageUrl) {
 
         const baseUrl = `https://graph.threads.net/v1.0/${userId}/threads`;
 
-        // 1. Create Media Container
-        let containerPayload = {
-            access_token: token,
-            text: text
-        };
+        let urls = [];
+        if (imageUrls) {
+            urls = Array.isArray(imageUrls) ? imageUrls : [imageUrls];
+            urls = urls.filter(url => url && typeof url === 'string' && url.trim() !== "");
+        }
 
-        if (imageUrl) {
-            containerPayload.media_type = "IMAGE";
-            containerPayload.image_url = imageUrl;
+        let creationId = null;
+
+        if (urls.length === 0) {
+            // 1a. Text Only Container
+            let containerPayload = { access_token: token, text: text, media_type: "TEXT" };
+            const containerOptions = { method: "post", contentType: "application/json", payload: JSON.stringify(containerPayload), muteHttpExceptions: true };
+            const containerRes = UrlFetchApp.fetch(baseUrl, containerOptions);
+            const containerJson = JSON.parse(containerRes.getContentText());
+
+            if (containerRes.getResponseCode() !== 200) {
+                debugLog(`[ThreadsAPI] Text Container Error: ${JSON.stringify(containerJson)}`);
+                return { success: false, error: "Failed to create text container: " + (containerJson.error ? containerJson.error.message : "Unknown") };
+            }
+            creationId = containerJson.id;
+
+        } else if (urls.length === 1) {
+            // 1b. Single Image Container
+            let containerPayload = { access_token: token, text: text, media_type: "IMAGE", image_url: urls[0] };
+            const containerOptions = { method: "post", contentType: "application/json", payload: JSON.stringify(containerPayload), muteHttpExceptions: true };
+            const containerRes = UrlFetchApp.fetch(baseUrl, containerOptions);
+            const containerJson = JSON.parse(containerRes.getContentText());
+
+            if (containerRes.getResponseCode() !== 200) {
+                debugLog(`[ThreadsAPI] Single Image Container Error: ${JSON.stringify(containerJson)}`);
+                return { success: false, error: "Failed to create image container: " + (containerJson.error ? containerJson.error.message : "Unknown") };
+            }
+            creationId = containerJson.id;
+
         } else {
-            containerPayload.media_type = "TEXT";
+            // 1c. Carousel Container
+            // Step A: Create Item Containers for each image (must have is_carousel_item: true)
+            let childrenIds = [];
+            for (let i = 0; i < urls.length; i++) {
+                // Encode payload as URL parameters since some Graph API endpoints prefer application/x-www-form-urlencoded
+                // However, application/json is standard. We will stick to json but ensure is_carousel_item is boolean
+                let itemPayload = {
+                    access_token: token,
+                    media_type: "IMAGE",
+                    image_url: urls[i],
+                    is_carousel_item: true
+                };
+
+                const itemOptions = {
+                    method: "post",
+                    contentType: "application/json",
+                    payload: JSON.stringify(itemPayload),
+                    muteHttpExceptions: true
+                };
+
+                const itemRes = UrlFetchApp.fetch(baseUrl, itemOptions);
+                const itemJson = JSON.parse(itemRes.getContentText());
+
+                if (itemRes.getResponseCode() !== 200) {
+                    debugLog(`[ThreadsAPI] Carousel Item ${i} Error: ${JSON.stringify(itemJson)}`);
+                    return { success: false, error: `Failed to create carousel item ${i}: ` + (itemJson.error ? itemJson.error.message : "Unknown") };
+                }
+                childrenIds.push(itemJson.id);
+            }
+
+            // Step B: Create Carousel Parent Container
+            // Graph API expects `children` to be an array or a comma-separated string depending on strictness. 
+            // The official docs often show an array for JSON bodies.
+            let carouselPayload = {
+                access_token: token,
+                media_type: "CAROUSEL",
+                text: text,
+                children: childrenIds // Pass as array in JSON
+            };
+            const carouselOptions = {
+                method: "post",
+                contentType: "application/json",
+                payload: JSON.stringify(carouselPayload),
+                muteHttpExceptions: true
+            };
+
+            const carouselRes = UrlFetchApp.fetch(baseUrl, carouselOptions);
+            const carouselJson = JSON.parse(carouselRes.getContentText());
+
+            if (carouselRes.getResponseCode() !== 200) { // If array fails, fallback to comma string could be considered, but API docs say array for JSON
+                debugLog(`[ThreadsAPI] Carousel Container Error: ${JSON.stringify(carouselJson)}`);
+
+                // Fallback attempt: some endpoints strictly want stringified array or comma separation
+                debugLog(`[ThreadsAPI] Retrying Carousel Parent with comma-separated string...`);
+                carouselPayload.children = childrenIds.join(',');
+                const fallbackOptions = {
+                    method: "post",
+                    contentType: "application/json",
+                    payload: JSON.stringify(carouselPayload),
+                    muteHttpExceptions: true
+                };
+                const fallbackRes = UrlFetchApp.fetch(baseUrl, fallbackOptions);
+                const fallbackJson = JSON.parse(fallbackRes.getContentText());
+
+                if (fallbackRes.getResponseCode() !== 200) {
+                    debugLog(`[ThreadsAPI] Fallback Carousel Container Error: ${JSON.stringify(fallbackJson)}`);
+                    return { success: false, error: "Failed to create carousel container: " + (fallbackJson.error ? fallbackJson.error.message : "Unknown") };
+                }
+                creationId = fallbackJson.id;
+            } else {
+                creationId = carouselJson.id;
+            }
         }
 
-        const containerOptions = {
-            method: "post",
-            contentType: "application/json",
-            payload: JSON.stringify(containerPayload),
-            muteHttpExceptions: true
-        };
-
-        const containerRes = UrlFetchApp.fetch(baseUrl, containerOptions);
-        const containerJson = JSON.parse(containerRes.getContentText());
-
-        if (containerRes.getResponseCode() !== 200) {
-            debugLog(`[ThreadsAPI] Container Error: ${JSON.stringify(containerJson)}`);
-            return { success: false, error: "Failed to create container: " + (containerJson.error ? containerJson.error.message : "Unknown") };
-        }
-
-        const creationId = containerJson.id;
         debugLog(`[ThreadsAPI] Container Created: ${creationId}`);
 
         // 2. Publish Media Container
