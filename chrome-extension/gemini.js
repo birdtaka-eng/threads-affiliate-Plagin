@@ -87,71 +87,308 @@ async function handleAiPaste(images, prompt) {
     }
 }
 
-// --- Result Monitoring & Scraping ---
-let lastProcessedText = "";
+// --- Phase 2: Persona Prompt Injection & Monitoring (Split Flow) ---
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "run_gemini_setup") {
+        handleSetupFlow(request.persona);
+        sendResponse({ success: true });
+        return true;
+    }
+    if (request.action === "run_gemini_product") {
+        handleProductFlow(request.persona, request.productData);
+        sendResponse({ success: true });
+        return true;
+    }
+});
 
-setInterval(() => {
-    monitorResults();
-}, 3000);
+async function handleSetupFlow(personaId) {
+    console.log(`[Threads職人] Starting SETUP flow for: ${personaId}`);
 
-async function monitorResults() {
-    const stopButton = document.querySelector('button[aria-label="Stop generation"]');
-    if (stopButton) {
-        console.log("[Threads職人] Gemini is generating...");
+    const res = await chrome.storage.local.get(['unifiedPrompt']);
+    let prompt = res.unifiedPrompt;
+
+    if (!prompt) {
+        prompt = getSetupPrompt(personaId);
+    }
+
+    await injectAndSend(prompt);
+}
+
+async function handleProductFlow(personaId, product) {
+    console.log(`[Threads職人] Starting PRODUCT flow for: ${personaId}`);
+
+    // 1. Prepare Prompt (Text)
+    const prompt = getProductPrompt(product);
+
+    // 2. Prepare Images (Base64 from BG or Fallback to URLs)
+    const images = product.images || product.imageUrls || [];
+
+    // 3. Inject (Images + Text)
+    if (images.length > 0) {
+        await injectImagesAndText(images, prompt);
+    } else {
+        await injectAndSend(prompt);
+    }
+
+    // 4. Start Monitoring
+    monitorGeneration(personaId);
+}
+
+async function injectImagesAndText(images, text) {
+    console.log("[Threads職人] Injecting Images + Text...", images.length);
+    const editor = await waitForEditor();
+    if (!editor) return;
+
+    editor.focus();
+
+    try {
+        const dt = new DataTransfer();
+
+        // A. Add Images
+        for (let i = 0; i < images.length; i++) {
+            try {
+                const imgData = images[i];
+                let blob;
+
+                if (imgData.startsWith('data:')) {
+                    // Base64 to Blob
+                    const res = await fetch(imgData);
+                    blob = await res.blob();
+                } else {
+                    // URL Fallback (Likely to fail in ContentScript if CORS)
+                    const res = await fetch(imgData);
+                    blob = await res.blob();
+                }
+
+                const file = new File([blob], `image_${i}.png`, { type: "image/png" });
+                dt.items.add(file);
+            } catch (e) {
+                console.error("Failed to process image:", i, e);
+            }
+        }
+
+        // B. Add Text
+        dt.setData("text/plain", text);
+
+        // C. Dispatch Paste
+        const pasteEvent = new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: dt
+        });
+        editor.dispatchEvent(pasteEvent);
+        console.log("[Threads職人] Image Paste Dispatched.");
+
+        // Wait for upload?
+        await new Promise(r => setTimeout(r, 2000));
+
+    } catch (e) {
+        console.error("Image injection failed:", e);
+        // Fallback to text only
+        injectTextViaPaste(editor, text);
+    }
+
+    await clickSendButton();
+}
+
+async function injectAndSend(prompt) {
+    // 1. Find Editor
+    const editor = await waitForEditor();
+    if (!editor) {
+        console.error("Editor not found");
         return;
     }
 
-    // Find the last response
-    const responses = document.querySelectorAll('.message-content, .model-response-text');
-    if (responses.length === 0) return;
+    // 2. Clear & Focus
+    try { editor.focus(); } catch (e) { }
+    editor.innerHTML = '';
+    editor.innerText = '';
+    await new Promise(r => setTimeout(r, 100));
 
-    const lastResponse = responses[responses.length - 1];
-    const currentHTML = lastResponse.innerHTML;
-    const currentText = lastResponse.innerText;
+    // 3. Inject
+    const success = injectTextViaPaste(editor, prompt);
+    if (!success) {
+        editor.innerText = prompt;
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 
-    // Check if new and stable
-    if (currentText === lastProcessedText || currentText.length < 50) return;
+    // 4. Send
+    await clickSendButton();
+}
 
-    console.log("[Threads職人] New response detected. Analyzing variations...");
-    lastProcessedText = currentText;
+function injectTextViaPaste(editor, text) {
+    console.log("[Threads職人] Attempting injection...");
 
-    // Variations are often numbered 1. to 8.
-    const variations = splitVariations(lastResponse);
+    // 1. execCommand (Best Simulation)
+    try {
+        editor.focus();
+        const success = document.execCommand('insertText', false, text);
+        if (success) {
+            console.log("[Threads職人] Injection Method: execCommand (Success)");
+            return true;
+        }
+    } catch (e) {
+        console.warn("execCommand failed:", e);
+    }
 
-    if (variations.length > 0) {
-        chrome.runtime.sendMessage({
-            action: "updateVariations",
-            gemUrl: window.location.href,
-            variations: variations
+    // 2. ClipboardEvent (Synthetic Paste)
+    try {
+        const dt = new DataTransfer();
+        dt.setData("text/plain", text);
+        const pasteEvent = new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: dt
         });
+        editor.dispatchEvent(pasteEvent);
+        console.log("[Threads職人] Injection Method: ClipboardEvent (Dispatched)");
+        return true; // We assume dispatch works
+    } catch (e) {
+        console.warn("Paste event failed:", e);
+    }
+
+    // 3. Fallback: InnerText (Last Resort)
+    try {
+        console.log("[Threads職人] Injection Method: InnerText (Fallback)");
+        editor.innerText = text;
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+    } catch (e) {
+        console.error("All injection methods failed:", e);
+        return false;
     }
 }
 
-function splitVariations(rootEl) {
-    const results = [];
-    // We try to find patterns like "1. ", "2. ", etc. 
-    // Often Gemini puts them in <li> or just as text blocks.
+// --- Prompt Builders ---
+function getSetupPrompt(personaId) {
+    return `
+【共通ルール】
+・「普通の言葉」禁止：素敵、可愛い、コスパ、便利、おすすめ、楽天、安い、激安は使用禁止。
+・感情の増幅：語彙力を失う、正気を疑う、理性が飛ぶ、視覚の暴力、生活感への憎悪などを使用。
+・LaTeX禁止：数式などは使わず、プレーンなテキストと適切な改行で構成。
+・絵文字禁止（Threads投稿のみ）。
+・スレッズ投稿文には「プロフに飛べるリンク（タグ）を含んだ誘導文」を末尾に添えて、投稿を作成
+・私のプロフリンク　@purin201010
 
-    // Simplest approach: Look for blocks starting with numbers
-    const text = rootEl.innerText;
-    const items = text.split(/\n(?=[1-8]\.|\d+\.\s+)/); // Split before "1. ", "2. ", etc.
+【出力形式（厳守）】
+以下の形式で出力してください。
 
-    items.forEach(item => {
-        const clean = item.trim();
-        if (clean.length > 10 && /\d+\./.test(clean.substring(0, 5))) {
-            // Keep the HTML snippet for this part if possible
-            // For now, let's wrap the text in <p> to preserve some structure
-            results.push(clean.replace(/\n/g, '<br>'));
+---
+① パターン1
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+② パターン2
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+③ パターン3
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+④ パターン4
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+⑤ パターン5
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+⑥ パターン6
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+---
+🛒 楽天ROOM：トドメの魔力（紹介文案）
+Threadsから流入したユーザーに「あ、これ私のことだ」と思わせてポチらせる文章。
+(150文字前後)
+---
+
+【準備完了の合図】
+理解したら「準備完了：${getPersonaStyle(personaId)}」とだけ短く返してください。
+`;
+}
+
+function getProductPrompt(p) {
+    return `
+■商品情報
+URL: ${p.url}
+画像: ${p.imageUrls.join(', ')} (参照用)
+
+【指示】
+この商品の魅力を、先ほど指定した「出力形式」と「共通ルール」に従って6パターン＋ROOM紹介文で作成してください。
+`;
+}
+
+function getPersonaStyle(id) {
+    switch (id) {
+        case 'best1-6': return '王道のバズ投稿';
+        case 'best7-12': return '変化球のバズ投稿';
+        case 'poison': return '毒と偏愛のバズ投稿';
+        default: return '魅力的な投稿';
+    }
+}
+
+async function clickSendButton() {
+    await new Promise(r => setTimeout(r, 1000));
+    const btn = document.querySelector('button[aria-label="Send message"], button[aria-label="送信"]'); // Adjust for locale
+    if (btn) {
+        btn.click();
+        console.log("[Threads職人] Sent prompt.");
+    } else {
+        // Enter key fallback
+        const editor = await waitForEditor();
+        if (editor) {
+            const event = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true
+            });
+            editor.dispatchEvent(event);
         }
-    });
+    }
+}
 
-    return results.slice(0, 8); // Max 8 per sister
+function monitorGeneration(personaId) {
+    console.log(`[Threads職人] Monitoring generation for ${personaId}...`);
+
+    // Wait for "Stop" button to appear (Generating started)
+    let checkCount = 0;
+    const interval = setInterval(() => {
+        const stopBtn = document.querySelector('button[aria-label="Stop generation"], button[aria-label="生成を停止"]');
+
+        // Generating has finished (button gone) OR never started (timeout)
+        if (!stopBtn && checkCount > 5) {
+            // Check if we have a result
+            const responses = document.querySelectorAll('.message-content, .model-response-text');
+            if (responses.length > 0) {
+                const lastResponse = responses[responses.length - 1];
+                if (lastResponse.innerText.length > 50) {
+                    // Success!
+                    clearInterval(interval);
+                    console.log(`[Threads職人] Generation complete for ${personaId}. Sending result...`);
+
+                    chrome.runtime.sendMessage({
+                        action: "gemini_result",
+                        persona: personaId,
+                        html: lastResponse.innerHTML
+                    });
+                }
+            }
+        }
+        checkCount++;
+    }, 2000);
 }
 
 async function waitForEditor(retryCount = 20) {
     const selectors = [
         'div[contenteditable="true"]',
         'div[role="textbox"]',
+        'rich-textarea > div',
+        'div[aria-label="Input"]',
+        'div[aria-label="入力"]', // Japanese locale
         'textarea'
     ];
     for (let i = 0; i < retryCount; i++) {

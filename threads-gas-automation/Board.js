@@ -26,13 +26,13 @@ function setupBoardSheet() {
 
     // 2. ヘッダー行 (2行目)
     var headers = [
-        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "ROOM Content (ROOM投稿用)", "Threads Post (Threads投稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)"]
+        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "ROOM Content (ROOM投稿用)", "Threads Post (Threads投稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Last Broadcast"]
     ];
 
-    sheet.getRange("A2:P2").setValues(headers);
-    sheet.getRange("A2:P2").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A2:P2").setFontWeight("bold");
-    sheet.getRange("A2:P2").setHorizontalAlignment("center");
+    sheet.getRange("A2:Q2").setValues(headers);
+    sheet.getRange("A2:Q2").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A2:Q2").setFontWeight("bold");
+    sheet.getRange("A2:Q2").setHorizontalAlignment("center");
 
     // 3. ガイド行 (3行目)
     var guides = [
@@ -40,15 +40,16 @@ function setupBoardSheet() {
         "↓ここでROOM用文章をコピペ",
         "←ここにAIが書いた文章が出ます",
         "⛔ ID", "閲覧数", "いいね", "返信", "引用/再投稿", "反応率", "判定",
-        "←ここにAI分析結果が出ます"
+        "←ここにAI分析結果が出ます",
+        "自動記録(ループ用)"
     ];
-    sheet.getRange("A3:P3").setValues([guides]);
-    sheet.getRange("A3:P3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A3:Q3").setValues([guides]);
+    sheet.getRange("A3:Q3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
     sheet.setRowHeight(3, 60);
 
     // 4. データエリア設定 (4行目以降)
-    sheet.getRange("A4:P1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A4:P1000").setVerticalAlignment("top");
+    sheet.getRange("A4:Q1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A4:Q1000").setVerticalAlignment("top");
     sheet.setRowHeight(2, 40); // Header height
     sheet.setFrozenRows(3);    // Freeze top 3 rows
 
@@ -92,6 +93,7 @@ function setupBoardSheet() {
     sheet.setColumnWidth(14, 60); // Rate
     sheet.setColumnWidth(15, 60); // Judge
     sheet.setColumnWidth(16, 200); // DNA
+    sheet.setColumnWidth(17, 120); // Last Broadcast
 
     try {
         Browser.msgBox("投稿作成ボード(Pro版)の準備ができました！");
@@ -193,12 +195,143 @@ ${combinedContent}
 }
 
 /**
- * 放送実行 (Manual Broadcast) (Placeholder)
+ * 自動放送実行 (Scheduled Broadcast)
+ */
+function runScheduledBroadcast() {
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const scheduleSheet = ss.getSheetByName(SHEET_SCHEDULE);
+        if (!scheduleSheet) return;
+
+        const now = new Date();
+        const hour = now.getHours();
+        const min = now.getMinutes();
+
+        // Round to 00 or 30
+        const targetTimeStr = `${("0" + hour).slice(-2)}:${min < 30 ? "00" : "30"}`;
+
+        // 0=Sun, 1=Mon, ..., 6=Sat
+        const day = now.getDay();
+        const dayColIndex = day === 0 ? 9 : day + 2; // C=3(Mon) .. I=9(Sun)
+
+        // Only process each unique Date+Time slot once
+        const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd");
+        const uniqueSlotId = `${dateStr}_${targetTimeStr}`;
+        const props = PropertiesService.getScriptProperties();
+        if (props.getProperty("LAST_PROCESSED_SLOT") === uniqueSlotId) {
+            return; // Already processed this slot
+        }
+
+        // 1. Find the target Genre in Schedule
+        const times = scheduleSheet.getRange("B2:B11").getValues();
+        let targetRowIndex = -1;
+        for (let i = 0; i < times.length; i++) {
+            if (String(times[i][0]).includes(targetTimeStr)) { // Loose match for time string
+                targetRowIndex = i + 2;
+                break;
+            }
+        }
+
+        if (targetRowIndex === -1) {
+            return; // Not a scheduled time
+        }
+
+        const genre = scheduleSheet.getRange(targetRowIndex, dayColIndex).getValue();
+        if (!genre) {
+            props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId); // Mark as done (empty slot)
+            return;
+        }
+
+        debugLog(`[Schedule] Triggered slot ${uniqueSlotId} for Genre: ${genre}`);
+
+        // 2. Find Candidate in Board
+        const boardSheet = ss.getSheetByName(SHEET_BOARD);
+        if (!boardSheet) return;
+
+        const lastRow = Math.max(boardSheet.getLastRow(), 4);
+        const boardData = boardSheet.getRange(`A4:Q${lastRow}`).getValues();
+
+        let oldestRow = -1;
+        let oldestTime = null;
+        let selectedData = null;
+
+        for (let i = 0; i < boardData.length; i++) {
+            const isChecked = boardData[i][0] === true;
+            const type = boardData[i][2];
+
+            if (isChecked && type === genre) {
+                const lastBroadcast = boardData[i][16]; // Q column (0-indexed 16)
+
+                if (!lastBroadcast) {
+                    oldestRow = i + 4;
+                    selectedData = boardData[i];
+                    break; // Prioritize unbroadcasted
+                }
+
+                const lbTime = new Date(lastBroadcast).getTime();
+                if (oldestTime === null || lbTime < oldestTime) {
+                    oldestTime = lbTime;
+                    oldestRow = i + 4;
+                    selectedData = boardData[i];
+                }
+            }
+        }
+
+        if (oldestRow === -1) {
+            debugLog(`[Schedule] No ON AIR materials for genre '${genre}'`);
+            props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId);
+            return;
+        }
+
+        // 3. Send Broadcast
+        debugLog(`[Schedule] Selected Row ${oldestRow}, calling API...`);
+        const payload = {
+            threadsText: selectedData[7] || "", // H column
+            images: []
+        };
+
+        // Images D, E, F
+        for (let i = 3; i <= 5; i++) {
+            if (selectedData[i]) {
+                const b64 = fetchImageAsBase64(selectedData[i]);
+                if (b64) payload.images.push(b64);
+            }
+        }
+
+        const apiUrl = "http://localhost:3000/api/post"; // TODO: Read from Settings if needed
+        const options = {
+            method: "post",
+            contentType: "application/json",
+            payload: JSON.stringify(payload),
+            muteHttpExceptions: true
+        };
+
+        try {
+            const response = UrlFetchApp.fetch(apiUrl, options);
+            debugLog(`[Schedule] API Response: ${response.getResponseCode()}`);
+
+            // 4. Update Board to track the rotation
+            if (response.getResponseCode() === 200 || response.getResponseCode() === 201) {
+                boardSheet.getRange(oldestRow, 17).setValue(new Date()); // Column Q
+            }
+        } catch (netErr) {
+            debugLog(`[Schedule] API Network Error: ${netErr.message}`);
+        }
+
+        // Always mark as processed to avoid retry loop within the same 30-min window
+        props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId);
+
+    } catch (e) {
+        debugLog("[Schedule] Error: " + e.message);
+    }
+}
+
+/**
+ * 手動放送用 (Menu Trigger)
  */
 function runBroadcast() {
-    try {
-        Browser.msgBox("放送機能はまだ実装されていません（スケジュールシート連携予定）");
-    } catch (e) { }
+    runScheduledBroadcast();
+    Browser.msgBox("現在の時刻に合わせて放送ルールの確認と実行処理を行いました。\\n対象があればNext.jsに送信されています。");
 }
 
 /**

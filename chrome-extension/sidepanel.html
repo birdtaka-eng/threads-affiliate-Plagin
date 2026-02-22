@@ -220,6 +220,55 @@
             background: #ddd;
             border-radius: 3px;
         }
+
+        /* Image Grid Styles */
+        .image-section {
+            margin: 10px 0;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+            padding: 8px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+
+        .img-item {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .img-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .img-item.selected {
+            border-color: #0095f6;
+            box-shadow: 0 0 0 2px rgba(0, 149, 246, 0.2);
+        }
+
+        .img-item input {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            margin: 0;
+            cursor: pointer;
+        }
     </style>
     <script src="sidepanel.js" defer></script>
 </head>
@@ -227,31 +276,111 @@
 <body>
     <div class="header">
         <h2>Threads職人</h2>
-        <span class="badge">V3.2</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button id="resetBtn" title="設定リセット (GAS URL再入力)"
+                style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 0;">⚙️</button>
+            <span class="badge">V6.8.0</span>
+        </div>
     </div>
 
     <div class="input-area" style="margin-bottom: 20px;">
-        <button id="clipBtn"
-            style="width: 100%; background: #0095f6; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px;">
-            <span>📸</span> クリップ (ボードへ保存)
-        </button>
-        <div class="input-row">
-            <textarea id="newDraft"
-                placeholder="JSONデータを貼り付けてください&#13;&#10;例: [{&quot;text&quot;:&quot;本文&quot;, &quot;scheduledTime&quot;:&quot;...&quot;}]"
-                rows="3"></textarea>
-            <button id="saveBtn">インポート</button>
+        <!-- Two-Stage Gemini Control -->
+        <div
+            style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e1e4e8;">
+            <h3 style="margin: 0 0 8px 0; font-size: 13px;">🧞‍♀️ 3姉妹システム</h3>
+
+            <!-- Sync Settings -->
+            <button id="syncSettingsBtn"
+                style="width: 100%; background: #e0e0e0; color: #333; border: none; padding: 6px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; font-size: 11px;">
+                <span>🔄</span> スプレッドシートから設定(プロンプト等)を同期
+            </button>
+
+            <!-- Step 1: Preparation -->
+            <button id="wakeUpBtn"
+                style="width: 100%; background: #6c757d; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                <span>💤</span> ① 3姉妹を召喚 (まずここ)
+            </button>
+
+            <button id="sendRulesBtn"
+                style="width: 100%; background: #fd7e14; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                <span>🦄</span> ② プロンプト送信 (準備)
+            </button>
+
+            <!-- Image Selection Area -->
+            <div class="image-section" style="margin: 10px 0;">
+                <div
+                    style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; font-weight: bold;">
+                    <span>📸 写真を選択 (最大3枚)</span>
+                    <span id="countDisplay" style="color: #0095f6;">0 / 3</span>
+                </div>
+                <div id="imageGrid" class="image-grid">
+                    <div style="grid-column: span 3; padding: 20px; text-align: center; color: #ccc; font-size: 11px;">
+                        商品ページを開くとここに画像が出ます
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Execution -->
+            <button id="processProductBtn"
+                style="width: 100%; background: linear-gradient(45deg, #FF6B6B, #4ECDC4); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <span>🎁</span> ③ 商品を渡す (本番)
+            </button>
+            <!-- Removed Auto-Save Note -->
+            <div style="text-align: center; font-size: 10px; color: #e0245e; margin-top: 4px; font-weight: bold;">
+                ※処理中（約10秒）はマウスを操作しないでください
+            </div>
+
+            <div id="statusDisplay" style="font-size: 11px; margin-top: 8px; color: #666; text-align: center;"></div>
         </div>
-        <div class="help-text">
-            InstagramやThreadsで投稿を開き「クリップ」を押すと、内容がボードに直接保存されます。
+
+    </div>
+
+    <!-- Step 3: Save Images (New) -->
+    <div style="margin-top: 10px; margin-bottom: 20px;">
+        <button id="saveImagesBtn"
+            style="width: 100%; background: #20c997; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>📸</span> 画像を保存 (新規行)
+        </button>
+        <div style="font-size: 10px; color: #666; margin-top: 4px; text-align: center;">
+            ※選択した画像をD〜F列に保存します
         </div>
     </div>
 
-    <div class="queue-header">
-        <span>投稿キュー</span>
-        <button id="clearAllBtn" style="border:none; background:none; color:#ccc; cursor:pointer;"
-            title="全削除">🗑️</button>
+    <!-- Manual Input Areas -->
+    <div style="margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px;">
+
+        <!-- Threads Post Area -->
+        <div style="margin-bottom: 20px;">
+            <div
+                style="font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #333; display: flex; justify-content: space-between;">
+                <span>🧵 Threads投稿用</span>
+                <span style="font-size: 10px; color: #999;">ここに貼り付け</span>
+            </div>
+            <textarea id="postContent" placeholder="Geminiから選んだ文章をここに貼り付け..."
+                style="width: 100%; height: 120px; box-sizing: border-box; font-family: sans-serif; padding: 8px; border: 1px solid #ccc; border-radius: 4px; resize: vertical;"></textarea>
+        </div>
+
+        <!-- Rakuten ROOM Area -->
+        <div style="margin-bottom: 20px;">
+            <div
+                style="font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #c3002f; display: flex; justify-content: space-between;">
+                <span>🛒 楽天ROOM用</span>
+                <span style="font-size: 10px; color: #999;">保存用</span>
+            </div>
+            <textarea id="roomContent" placeholder="ROOMの紹介文..."
+                style="width: 100%; height: 80px; box-sizing: border-box; font-family: sans-serif; padding: 8px; border: 1px solid #ccc; border-radius: 4px; resize: vertical;"></textarea>
+        </div>
+
+        <!-- Save Text Button (Renamed) -->
+        <button id="saveTextBtn"
+            style="width: 100%; background: #0095f6; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px;">
+            <span>📝</span> 文章を保存 (新規行)
+        </button>
+        <div class="help-text">
+            上のテキストボックスの内容（Threads/ROOM）をボードに保存します。（画像は保存されません）
+        </div>
+
     </div>
-    <div id="listContainer"></div>
 </body>
 
 </html>

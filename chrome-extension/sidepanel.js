@@ -1,139 +1,363 @@
 // sidepanel.js - Threads職人 ロジック (Japanese)
-// Version 3.2: Explicit Tab ID Relay
+// Version 6.8.0: Clean Rewrite
 
 document.addEventListener('DOMContentLoaded', () => {
-    const newDraftInput = document.getElementById('newDraft');
-    const saveBtn = document.getElementById('saveBtn');
-    const clearAllBtn = document.getElementById('clearAllBtn');
+    // ---------------------------------------------------------
+    // UI Elements
+    // ---------------------------------------------------------
     const listContainer = document.getElementById('listContainer');
-    const clipBtn = document.getElementById('clipBtn');
+    const imageGrid = document.getElementById('imageGrid');
+    const countDisplay = document.getElementById('countDisplay');
+    const statusDisplay = document.getElementById('statusDisplay');
 
-    // 初期ロード
-    loadDrafts();
+    // Buttons
+    const wakeUpBtn = document.getElementById('wakeUpBtn');
+    const syncSettingsBtn = document.getElementById('syncSettingsBtn');
+    const sendRulesBtn = document.getElementById('sendRulesBtn');
+    const processProductBtn = document.getElementById('processProductBtn');
+    const saveImagesBtn = document.getElementById('saveImagesBtn');
+    const saveTextBtn = document.getElementById('saveTextBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // Inputs
+    const postContent = document.getElementById('postContent');
+    const roomContent = document.getElementById('roomContent');
+
+    // State
+    let selectedUrls = [];
 
     // ---------------------------------------------------------
-    // イベントリスナー
+    // 初期化 (Initialization)
     // ---------------------------------------------------------
-    saveBtn.addEventListener('click', handleImport);
-    if (clipBtn) clipBtn.addEventListener('click', handleClip);
+    handleScrapeImages(); // Auto-scan on load
 
-    if (clearAllBtn) {
-        clearAllBtn.addEventListener('click', () => {
-            if (confirm('投稿キューを全て削除しますか？')) {
-                saveDrafts([], renderList);
+    // ---------------------------------------------------------
+    // イベントリスナー (Event Listeners)
+    // ---------------------------------------------------------
+
+    // 3 Genies System
+    if (wakeUpBtn) wakeUpBtn.addEventListener('click', handleWakeUp);
+    if (syncSettingsBtn) syncSettingsBtn.addEventListener('click', handleSyncSettings);
+    if (sendRulesBtn) sendRulesBtn.addEventListener('click', handleSendRules);
+    if (processProductBtn) processProductBtn.addEventListener('click', handleProcessProduct);
+
+    // Save Actions (Split v6.8.0)
+    if (saveImagesBtn) saveImagesBtn.addEventListener('click', handleSaveImages);
+    if (saveTextBtn) saveTextBtn.addEventListener('click', handleSaveText);
+
+    // Settings
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (confirm("GASのURL設定をクリアしますか？\n(次回保存時に再入力が必要になります)")) {
+                chrome.storage.local.remove(['gasUrl'], () => {
+                    alert("設定をリセットしました。");
+                });
             }
         });
     }
 
-    // ---------------------------------------------------------
-    // ロジック
-    // ---------------------------------------------------------
-    function handleImport() {
-        const inputVal = newDraftInput.value.trim();
-        if (!inputVal) return;
+    // Tab Updates (Auto-Rescrape)
+    chrome.tabs.onActivated.addListener(() => {
+        handleScrapeImages();
+    });
 
-        let newItems = [];
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        if (changeInfo.status === 'complete' && tab.active) {
+            handleScrapeImages();
+        }
+    });
 
-        try {
-            let cleaned = inputVal.replace(/^```json\s*/g, '').replace(/^```\s*/g, '').replace(/```$/g, '');
-            cleaned = cleaned.trim();
+    // Gemini Result Listener
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === "result_received") {
+            console.log("Gemini finished:", request.persona);
+            updateStatus(`✅ ${request.persona} の執筆が完了しました！`, "green");
 
-            if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
-                const parsed = JSON.parse(cleaned);
-                let rawList = Array.isArray(parsed) ? parsed : [parsed];
+            if (request.html) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = request.html;
+                let generatedText = tempDiv.innerText.trim();
 
-                newItems = rawList.map(item => ({
-                    id: Date.now() + Math.random(),
-                    text: item.text || item.body || item.content || "",
-                    scheduledTime: item.scheduledTime || null,
-                    category: item.category || ""
-                })).filter(i => i.text);
-
-            } else {
-                throw new Error("Not JSON");
+                if (postContent) {
+                    if (postContent.value.length === 0) {
+                        postContent.value = generatedText;
+                    } else {
+                        postContent.value += "\n\n" + generatedText;
+                    }
+                }
             }
-        } catch (e) {
-            console.warn("JSON Parse Failed, treating as raw text:", e);
-            newItems.push({
-                id: Date.now(),
-                text: inputVal,
-                category: ""
-            });
         }
+    });
 
-        if (newItems.length > 0) {
-            getDrafts((currentDrafts) => {
-                const updated = [...newItems, ...currentDrafts];
-                saveDrafts(updated, () => {
-                    newDraftInput.value = '';
-                    renderList(updated);
-                });
-            });
-        }
-    }
-
-    function handleClip() {
+    // ---------------------------------------------------------
+    // scraping Logic
+    // ---------------------------------------------------------
+    function handleScrapeImages() {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const tab = tabs[0];
             if (!tab) return;
 
-            let action = "";
-            if (tab.url.includes("instagram.com")) {
-                action = "extract_instagram";
-            } else if (tab.url.includes("threads.net")) {
-                action = "scrapePost";
-            } else {
-                alert("Instagram または Threads の投稿ページを開いてください。");
+            // ★ Smart Scrape: Ignore Threads to preserve Rakuten Data
+            if (tab.url.includes("threads.net")) {
+                console.log("Threads detected: Keeping previous product data.");
                 return;
             }
 
-            clipBtn.disabled = true;
-            clipBtn.innerText = "⏳ 保存中...";
+            // Reset Selection on new scrape (if not Threads)
+            selectedUrls = [];
+            updateUI();
+
+            let action = "general_extract";
+            if (tab.url.includes("instagram.com")) action = "extract_instagram";
+            else if (tab.url.includes("rakuten.co.jp") || tab.url.includes("rakuten.ne.jp")) action = "extract_rakuten";
 
             chrome.tabs.sendMessage(tab.id, { action: action }, (response) => {
-                if (chrome.runtime.lastError || !response) {
-                    console.error("Clip Error:", chrome.runtime.lastError);
-                    alert("スクレイピングに失敗しました。ページを更新して再試行してください。");
-                    resetClipBtn();
+                if (chrome.runtime.lastError) {
+                    // console.log("Scrape Msg Error:", chrome.runtime.lastError);
+                    if (imageGrid) imageGrid.innerHTML = '<div style="grid-column: span 3; padding: 20px; text-align: center; color: #999; font-size:11px;">画像の取得に失敗しました<br>ページを更新してください</div>';
+                    return;
+                }
+                const images = response ? (response.imageUrls || response.images || []) : [];
+                renderScrapedData(images);
+            });
+        });
+    }
+
+    function renderScrapedData(images) {
+        if (!imageGrid) return;
+
+        if (images.length === 0) {
+            imageGrid.innerHTML = '<div style="grid-column: span 3; padding: 20px; text-align: center; color: #999; font-size:11px;">画像が見つかりませんでした</div>';
+            return;
+        }
+
+        imageGrid.innerHTML = ""; // Clear
+
+        images.forEach((url) => {
+            const item = document.createElement('div');
+            item.className = 'img-item';
+
+            const img = document.createElement('img');
+            img.src = url;
+            img.onerror = () => { item.style.display = 'none'; };
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+
+            item.appendChild(img);
+            item.appendChild(checkbox);
+            imageGrid.appendChild(item);
+
+            item.onclick = (e) => {
+                if (e.target.tagName !== 'INPUT') {
+                    checkbox.checked = !checkbox.checked;
+                }
+                handleSelection(url, checkbox.checked, item);
+            };
+        });
+    }
+
+    function handleSelection(url, isChecked, element) {
+        if (isChecked) {
+            if (selectedUrls.length >= 3) {
+                alert("画像は最大3枚までです。");
+                element.querySelector('input').checked = false;
+                return;
+            }
+            if (!selectedUrls.includes(url)) {
+                selectedUrls.push(url);
+                element.classList.add('selected');
+            }
+        } else {
+            selectedUrls = selectedUrls.filter(u => u !== url);
+            element.classList.remove('selected');
+        }
+        updateUI();
+    }
+
+    function updateUI() {
+        if (countDisplay) countDisplay.innerText = `${selectedUrls.length} / 3`;
+    }
+
+    function updateStatus(msg, color) {
+        if (statusDisplay) {
+            statusDisplay.textContent = msg;
+            statusDisplay.style.color = color || "#666";
+        }
+    }
+
+    // ---------------------------------------------------------
+    // 3 Genies Handlers
+    // ---------------------------------------------------------
+    function handleSyncSettings() {
+        updateStatus("🔄 スプレッドシートから設定を同期中...", "blue");
+        chrome.storage.local.get(['gasUrl'], (res) => {
+            let url = res.gasUrl;
+            if (!url) {
+                alert("未設定: まず画像を保存等をしてGASのURLを設定してください");
+                updateStatus("❌ 同期失敗: URL未設定", "red");
+                return;
+            }
+
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: "getSettings" })
+            })
+                .then(response => response.json())
+                .then(json => {
+                    if (json.status === "success" && json.geminiSetupPrompt) {
+                        chrome.storage.local.set({ unifiedPrompt: json.geminiSetupPrompt }, () => {
+                            updateStatus("✨ プロンプトの同期が完了しました！", "green");
+                        });
+                    } else {
+                        updateStatus("❌ 同期失敗: データが見つかりません", "red");
+                    }
+                })
+                .catch(err => {
+                    console.error("Settings Sync Error:", err);
+                    updateStatus("❌ 通信エラー: " + err.message, "red");
+                });
+        });
+    }
+    function handleWakeUp() {
+        updateStatus("💤 3姉妹を呼びに行っています...", "blue");
+        chrome.runtime.sendMessage({ action: "wake_up_gems" }, (res) => {
+            if (chrome.runtime.lastError) {
+                updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
+                return;
+            }
+            if (res && res.success) {
+                updateStatus("🌞 3姉妹が起きました！準備ができたら②を押してください。", "green");
+            } else {
+                updateStatus("❌ 起動失敗: " + (res ? res.error : "Unknown"), "red");
+            }
+        });
+    }
+
+    function handleSendRules() {
+        updateStatus("🦄 プロンプトを送信中...", "blue");
+        chrome.runtime.sendMessage({ action: "broadcast_rules" }, (res) => {
+            if (chrome.runtime.lastError) {
+                updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
+                return;
+            }
+            if (res && res.success) {
+                updateStatus("✨ 準備完了の指令を出しました！タブを確認してください。", "green");
+            } else {
+                updateStatus("❌ 送信失敗: " + (res ? res.error : "Unknown"), "red");
+            }
+        });
+    }
+
+    function handleProcessProduct() {
+        updateStatus("🔍 商品情報を取得中...", "blue");
+
+        // 1. Get Product Info from Active Tab
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
+            if (!tab || !tab.url.includes("rakuten.co.jp")) {
+                alert("楽天の商品ページを開いてから押してください。");
+                updateStatus("❌ 楽天の商品ページではありません", "red");
+                return;
+            }
+
+            // Execute script to get title/images (fallback)
+            chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: getProductData
+            }, (results) => {
+                if (!results || !results[0] || !results[0].result) {
+                    updateStatus("❌ 商品情報の取得に失敗", "red");
                     return;
                 }
 
-                // Send to GAS
-                sendToGAS(response, (res) => {
-                    if (res && res.status === "success") {
-                        alert("ボードに保存しました！");
-                    } else {
-                        alert("保存失敗: " + (res ? res.message : "接続エラー"));
+                const data = results[0].result;
+                data.url = tab.url;
+
+                // ★ Use Selected Images if available
+                if (selectedUrls.length > 0) {
+                    data.imageUrls = selectedUrls;
+                }
+
+                updateStatus("🎁 3姉妹に商品を渡し、ボードに保存中...", "blue");
+
+                // 2. Send to Background (Gemini)
+                chrome.runtime.sendMessage({
+                    action: "distribute_product",
+                    payload: data
+                }, (res) => {
+                    if (chrome.runtime.lastError) {
+                        updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
+                        return;
                     }
-                    resetClipBtn();
+
+                    if (res && res.success) {
+                        updateStatus("✨ 執筆開始！ (ボード保存も進行中...)", "green");
+                    } else {
+                        updateStatus("❌ 送信失敗: " + (res ? res.error : "Unknown"), "red");
+                    }
                 });
             });
         });
     }
 
-    function resetClipBtn() {
-        clipBtn.disabled = false;
-        clipBtn.innerHTML = "<span>📸</span> クリップ (ボードへ保存)";
+    function getProductData() {
+        // Simple scraper for Rakuten
+        const title = document.title;
+        // Images (Priority: Main Image -> Swiper -> og:image)
+        let images = [];
+        // Rakuten specific selectors
+        const mainImg = document.querySelector('.main-image img, #rakutenLimitedId_cart_main_image img');
+        if (mainImg) images.push(mainImg.src);
+
+        return {
+            title: title,
+            imageUrls: images
+        };
     }
 
+    // ---------------------------------------------------------
+    // Save Handlers (GAS)
+    // ---------------------------------------------------------
     function sendToGAS(data, cb) {
         chrome.storage.local.get(['gasUrl'], (res) => {
             let url = res.gasUrl;
             if (!url) {
-                url = prompt("GASのウェブアプリURLを入力してください：");
+                // If no URL, prompt User
+                url = prompt("GASのウェブアプリURLを入力してください：\n(デプロイIDが変わった場合はここに入力)");
                 if (url) {
+                    // Start with cleanup if user pastes full HTML or weird text? 
+                    // No, assume they paste URL.
                     chrome.storage.local.set({ gasUrl: url });
                 } else {
-                    cb(null);
+                    cb({ status: "error", message: "URL未設定" });
                     return;
                 }
             }
 
             fetch(url, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain;charset=utf-8'
+                },
                 body: JSON.stringify({ action: 'clip_instagram', data: data })
             })
-                .then(r => r.json())
+                .then(response => {
+                    return response.text().then(text => {
+                        try {
+                            return JSON.parse(text);
+                        } catch (e) {
+                            console.error('Raw GAS Response:', text);
+                            let errorHint = text.substring(0, 100);
+                            if (text.includes('<title>')) {
+                                const titleMatch = text.match(/<title>(.*?)<\/title>/);
+                                if (titleMatch) errorHint = "GASエラー: " + titleMatch[1];
+                            }
+                            throw new Error("JSONパース失敗 (" + errorHint + ")");
+                        }
+                    });
+                })
                 .then(json => cb(json))
                 .catch(err => {
                     console.error("GAS Error:", err);
@@ -142,141 +366,62 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ---------------------------------------------------------
-    // メッセージ送信ロジック (v3.2 Explicit Targeting)
-    // ---------------------------------------------------------
-    function sendToThreads(draft) {
-        // v3.2: 確実に狙い撃つ
-        // SidePanel側で「今アクティブなタブ」のIDを確定させてから、
-        // Backgroundに「このIDのタブに送ってくれ」と依頼する。
-        // これで「どのウィンドウか分からない」問題を回避する。
+    function handleSaveImages() {
+        if (!selectedUrls || selectedUrls.length === 0) {
+            alert("画像が選択されていません。保存したい画像をタップして選択してください。");
+            return;
+        }
+
+        if (saveImagesBtn) { saveImagesBtn.disabled = true; saveImagesBtn.innerText = "⏳ 保存中..."; }
 
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const currentTab = tabs[0];
+            const tab = tabs[0];
+            const data = {
+                action: 'save_images',
+                imageUrls: selectedUrls,
+                url: tab ? tab.url : ""
+            };
 
-            if (!currentTab) {
-                alert("アクティブなタブが見つかりません。");
-                return;
-            }
-
-            // URLチェック (ガード)
-            if (currentTab.url && !currentTab.url.includes("threads.net")) {
-                if (!confirm("現在開いているタブは Threads (threads.net) ではありません。\n構わずこのタブに送信しますか？")) {
-                    return;
-                }
-            }
-
-            console.log("[SidePanel] Targeting Tab ID:", currentTab.id);
-
-            // バックグラウンドに「ID指定」で依頼
-            chrome.runtime.sendMessage({
-                action: "relayInsertText",
-                text: draft.text,
-                targetTabId: currentTab.id // <--- ここでIDを指定してあげる
-            }, (response) => {
-                if (chrome.runtime.lastError) {
-                    console.error("[SidePanel] Relay failed:", chrome.runtime.lastError.message);
-                    alert("送信エラー: " + chrome.runtime.lastError.message);
-                } else if (response && response.success) {
-                    console.log("[SidePanel] Relay success!");
+            sendToGAS(data, (res) => {
+                if (res && res.status === "success") {
+                    alert("画像を保存しました！");
+                    selectedUrls = []; // Clear selection
+                    updateUI();
                 } else {
-                    console.warn("[SidePanel] Relay returned error:", response ? response.error : "Unknown");
-                    alert("送信できませんでした: " + (response ? response.error : "Unknown Error"));
+                    alert("保存失敗: " + (res ? res.message : "接続エラー"));
                 }
+                if (saveImagesBtn) { saveImagesBtn.disabled = false; saveImagesBtn.innerHTML = "<span>📸</span> 画像を保存 (新規行)"; }
             });
         });
     }
 
-    // ---------------------------------------------------------
-    // ストレージ & レンダリング
-    // ---------------------------------------------------------
-    function getDrafts(cb) {
-        chrome.storage.local.get(['drafts'], (res) => cb(res.drafts || []));
-    }
+    function handleSaveText() {
+        const tText = postContent ? postContent.value : "";
+        const rText = roomContent ? roomContent.value : "";
 
-    function saveDrafts(data, cb) {
-        chrome.storage.local.set({ drafts: data }, () => {
-            if (cb) cb(data);
-        });
-    }
-
-    function loadDrafts() {
-        getDrafts(renderList);
-    }
-
-    function deleteDraft(id) {
-        getDrafts((drafts) => {
-            const updated = drafts.filter(d => d.id !== id);
-            saveDrafts(updated, renderList);
-        });
-    }
-
-    function renderList(drafts) {
-        listContainer.innerHTML = '';
-
-        if (!drafts || drafts.length === 0) {
-            listContainer.innerHTML = `
-                <div class="empty-state">
-                    予約リストは空です。<br>
-                    上にJSONを貼り付けてインポートしてください。
-                </div>`;
+        if (!tText && !rText) {
+            alert("保存する文章がありません。Threads用またはROOM用にテキストを入力してください。");
             return;
         }
 
-        const ul = document.createElement('div');
+        if (saveTextBtn) { saveTextBtn.disabled = true; saveTextBtn.innerText = "⏳ 保存中..."; }
 
-        drafts.forEach((draft, index) => {
-            const item = document.createElement('div');
-            item.className = 'draft-item';
+        const data = {
+            action: 'save_text',
+            threadsText: tText,
+            roomText: rText
+        };
 
-            if (index === 0) {
-                item.style.borderColor = '#0095f6';
-                item.style.background = '#f0f9ff';
+        sendToGAS(data, (res) => {
+            if (res && res.status === "success") {
+                alert("文章を保存しました！");
+                if (postContent) postContent.value = "";
+                if (roomContent) roomContent.value = "";
+            } else {
+                alert("保存失敗: " + (res ? res.message : "接続エラー"));
             }
-
-            let metaHtml = '';
-            if (draft.scheduledTime) {
-                const d = new Date(draft.scheduledTime);
-                const timeDisp = isNaN(d) ? draft.scheduledTime :
-                    d.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                metaHtml += `<div class="time-tag">📅 ${timeDisp}</div>`;
-            }
-            if (draft.category) {
-                metaHtml += `<div class="cat-tag">${draft.category}</div>`;
-            }
-
-            if (metaHtml) {
-                const metaRow = document.createElement('div');
-                metaRow.className = 'meta-row';
-                metaRow.innerHTML = metaHtml;
-                item.appendChild(metaRow);
-            }
-
-            const txt = document.createElement('div');
-            txt.className = 'draft-text';
-            txt.textContent = draft.text;
-            item.appendChild(txt);
-
-            const actions = document.createElement('div');
-            actions.className = 'actions';
-
-            const setBtn = document.createElement('button');
-            setBtn.className = 'set-btn';
-            setBtn.innerHTML = 'セット <span style="opacity:0.6;font-size:10px;">▶</span>';
-            setBtn.onclick = () => sendToThreads(draft);
-
-            const delBtn = document.createElement('button');
-            delBtn.className = 'del-btn';
-            delBtn.textContent = '✕';
-            delBtn.onclick = () => deleteDraft(draft.id);
-
-            actions.appendChild(setBtn);
-            actions.appendChild(delBtn);
-
-            item.appendChild(actions);
-            ul.appendChild(item);
+            if (saveTextBtn) { saveTextBtn.disabled = false; saveTextBtn.innerHTML = "<span>📝</span> 文章を保存 (新規行)"; }
         });
-
-        listContainer.appendChild(ul);
     }
+
 });

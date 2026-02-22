@@ -105,20 +105,3 @@ var HUMOR_LIBRARY = `
    Structure: [Total Agreement/Praise] -> [Sudden Denial/Reality Check]
 `;
 
-// --- 5. Prompt Templates (for Manual Copy) ---
-var PROMPT_POISON = `画像を分析し、「毒舌・視覚の暴力・正気を疑う」等の強烈な言葉で、30-40文字の短文を作成します。末尾に必ず @purin201010 を付けます。`;
-
-var PROMPT_ROOM = `画像を分析し、「断言型」「比較型」「崇拝型」の3パターンで、購買意欲を煽る文章を作成します。`;
-
-var PROMPT_MIX = `あなたはThreadsと楽天アフィリエイトに特化した凄腕SNSマーケターです。
-以下のルールで投稿案を作成してください。
-
-1. 【Threads用：6パターン】
-・毒のある言葉（視覚の暴力、正気を疑う等）を使う
-・「素敵」「便利」などの普通な言葉は禁止
-・末尾に必ず「@purin201010」への誘導を入れる
-・各パターンの文字数制限（30〜45文字程度）を厳守
-
-2. 【ROOM用：3パターン】
-・「断言型」「比較型」「崇拝型」で作成
-・Threadsから来た人の熱量を決済に繋げる強い言葉選び`;

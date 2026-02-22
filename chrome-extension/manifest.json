@@ -1,19 +1,25 @@
 {
     "manifest_version": 3,
     "name": "Threads職人 Pro",
-    "version": "5.6",
+    "version": "6.8.0",
     "description": "あらゆるサイトから画像を手動選択できる最新の投稿支援ツール",
     "permissions": [
         "storage",
         "activeTab",
-        "scripting"
+        "scripting",
+        "sidePanel"
     ],
     "host_permissions": [
         "*://*/*"
     ],
     "action": {
-        "default_popup": "popup.html",
         "default_title": "Threads職人を開く"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "side_panel": {
+        "default_path": "sidepanel.html"
     },
     "content_scripts": [
         {
@@ -24,6 +30,14 @@
                 "content.js",
                 "instagram.js",
                 "rakuten.js"
+            ]
+        },
+        {
+            "matches": [
+                "*://gemini.google.com/*"
+            ],
+            "js": [
+                "gemini.js"
             ]
         }
     ]

@@ -19,9 +19,7 @@ function onOpen() {
         .addItem('【作成】投稿一括生成 (全タイプ)', 'generateUnifiedPosts')
         .addItem('【作成】まとめネタ作成 (選択合体)', 'generateSummaryPost')
         .addSeparator()
-        .addItem('★ G列プルダウン強制復活', 'forceSetupDropdown')
         .addItem('🚀 師匠へ (Copy & Go)', 'showMasterModal')
-        .addItem('🔧 ボード修復 (G列メニュー復活)', 'applyMasterValidation')
         .addSeparator()
         .addItem('【放送】手動放送テスト (今放送すべきものを実行)', 'runBroadcast')
         .addItem('【分析】投稿データ更新 (Metrics)', 'updateMetrics')
@@ -40,9 +38,7 @@ function onOpen() {
     const devMenu = SpreadsheetApp.getUi().createMenu('⚙️ 設定・開発'); // Renamed for clarity
 
     // User Standard Setup
-    devMenu.addItem('🔧 ボード修復 (G列メニュー復活)', 'applyMasterValidation') // Also here
-        .addSeparator()
-        .addItem('【設定】操作マニュアル更新', 'setupManualSheet')
+    devMenu.addItem('【設定】操作マニュアル更新', 'setupManualSheet')
         .addItem('【設定】全体設定シート作成 (リセット)', 'setupSettingsSheet')
         .addItem('【設定】投稿ボード作成 (リセット)', 'setupBoardSheet')
         .addItem('【設定】番組表リセット', 'setupScheduleSheet')
@@ -60,6 +56,10 @@ function onOpen() {
             .addItem('🔑【診断】API接続テスト', 'testConnection')
             .addItem('🛑【開発】モデル診断', 'debugListModels');
     }
+
+    devMenu.addSeparator()
+        .addItem('▶ 自動放送を開始する (30分毎)', 'enableScheduleTrigger')
+        .addItem('■ 自動放送を停止する', 'disableScheduleTrigger');
 
     devMenu.addToUi();
 }
@@ -181,41 +181,7 @@ function getSidebarContent() {
         const targetSheetName = (typeof SHEET_BOARD !== 'undefined') ? SHEET_BOARD : "投稿作成ボード";
 
         if (sheetName === targetSheetName && row >= 3) {
-            let masterName = String(sheet.getRange(row, 7).getValue()).trim();
-            let settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
-            let promptText = "";
-            let debugPromptSource = "None";
-
-            if (masterName === "Poison") {
-                if (settingsSheet) {
-                    const val = settingsSheet.getRange("B20").getValue();
-                    if (val) { promptText = val; debugPromptSource = "Settings"; }
-                }
-                if (!promptText && typeof PROMPT_POISON !== 'undefined') {
-                    promptText = PROMPT_POISON;
-                    debugPromptSource = "Config (Poison)";
-                }
-            }
-            if (masterName === "ROOM") {
-                if (settingsSheet) {
-                    const val = settingsSheet.getRange("B21").getValue();
-                    if (val) { promptText = val; debugPromptSource = "Settings"; }
-                }
-                if (!promptText && typeof PROMPT_ROOM !== 'undefined') {
-                    promptText = PROMPT_ROOM;
-                    debugPromptSource = "Config (ROOM)";
-                }
-            }
-            if (masterName === "Mix") {
-                if (settingsSheet) {
-                    const val = settingsSheet.getRange("B22").getValue();
-                    if (val) { promptText = val; debugPromptSource = "Settings"; }
-                }
-                if (!promptText && typeof PROMPT_MIX !== 'undefined') {
-                    promptText = PROMPT_MIX;
-                    debugPromptSource = "Config (Mix)";
-                }
-            }
+            let promptText = ""; // Reserved: will be received from sidebar in future
 
             // --- Collage Detection (High-Speed Marker-Only) ---
             let hasCollage = false;
@@ -291,9 +257,7 @@ function setupSettingsSheet() {
     let existingToken = null;
     let existingModel = "gemini-2.5-flash";
     let existingPersona = "";
-    let existingPoison = "";
-    let existingRoom = "";
-    let existingMix = "";
+    let existingSetupPrompt = null;
 
     try {
         existingApiKey = sheet.getRange("B2").getValue();
@@ -301,9 +265,7 @@ function setupSettingsSheet() {
         existingToken = sheet.getRange("B4").getValue();
         existingModel = sheet.getRange("B5").getValue();
         existingPersona = sheet.getRange("B6").getValue();
-        existingPoison = sheet.getRange("B20").getValue();
-        existingRoom = sheet.getRange("B21").getValue();
-        existingMix = sheet.getRange("B22").getValue();
+        existingSetupPrompt = sheet.getRange("B11").getValue();
     } catch (e) { }
 
     sheet.clear();
@@ -332,26 +294,62 @@ function setupSettingsSheet() {
 
     // B9: Master Style (AI Generated)
     sheet.getRange("A9").setValue("Master Style (文体・リズム)");
-    sheet.getRange("A9").setValue("Master Style (文体・リズム)");
     sheet.getRange("A9").setNote("バズ研究所から抽出された、具体的な「書き方・リズム」の定義書です。");
 
-    // --- Special Prompts Area (B20~) ---
-    sheet.getRange("A19").setValue("【Special Prompts (コピー用)】");
-    sheet.getRange("A19").setFontWeight("bold").setBackground("#c9daf8");
+    sheet.getRange("A10").setValue("【固定プロンプト】");
+    sheet.getRange("A10").setFontWeight("bold").setBackground("#cfe2f3");
 
-    sheet.getRange("A20").setValue("Prompt: Poison (毒舌)");
-    sheet.getRange("B20").setValue(existingPoison || (typeof PROMPT_POISON !== 'undefined' ? PROMPT_POISON : ""));
-    sheet.getRange("B20").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A11").setValue("システムプロンプト\n(共通ルール＆出力形式)");
+    const defaultSetupPrompt = `【共通ルール】
+・「普通の言葉」禁止：素敵、可愛い、コスパ、便利、おすすめ、楽天、安い、激安は使用禁止。
+・感情の増幅：語彙力を失う、正気を疑う、理性が飛ぶ、視覚の暴力、生活感への憎悪などを使用。
+・LaTeX禁止：数式などは使わず、プレーンなテキストと適切な改行で構成。
+・絵文字禁止（Threads投稿のみ）。
+・スレッズ投稿文には「プロフに飛べるリンク（タグ）を含んだ誘導文」を末尾に添えて、投稿を作成
+・私のプロフリンク　@purin201010
 
-    sheet.getRange("A21").setValue("Prompt: ROOM (Sales)");
-    sheet.getRange("B21").setValue(existingRoom || (typeof PROMPT_ROOM !== 'undefined' ? PROMPT_ROOM : ""));
-    sheet.getRange("B21").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+【出力形式（厳守）】
+以下の形式で出力してください。
 
-    sheet.getRange("A22").setValue("Prompt: Mix (Unified)");
-    sheet.getRange("B22").setValue(existingMix || (typeof PROMPT_MIX !== 'undefined' ? PROMPT_MIX : ""));
-    sheet.getRange("B22").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+---
+① パターン1
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
 
-    Browser.msgBox("設定シートをリセットしました！\nB6: あなたの願い(種)\nB8: AIが育てた最強人格\nB9: 文体スタイル\nこれらが連携して動作します。");
+② パターン2
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+③ パターン3
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+④ パターン4
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+⑤ パターン5
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+⑥ パターン6
+(本文)
+プロフに飛べるリンク（タグ）を含んだ誘導文
+
+---
+🛒 楽天ROOM：トドメの魔力（紹介文案）
+Threadsから流入したユーザーに「あ、これ私のことだ」と思わせてポチらせる文章。
+(150文字前後)
+---`;
+
+    if (existingSetupPrompt) {
+        sheet.getRange("B11").setValue(existingSetupPrompt);
+    } else {
+        sheet.getRange("B11").setValue(defaultSetupPrompt);
+    }
+    sheet.getRange("B11").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+
+    Browser.msgBox("設定シートをリセットしました！\nB6: あなたの願い(種)\nB8: AIが育てた最強人格\nB9: 文体スタイル\nB11: システムプロンプト\nこれらが連携して動作します。");
 }
 
 function setupScheduleSheet() {
@@ -705,34 +703,8 @@ function applyPremiumTheme() {
     Browser.msgBox("✨ Design Upgrade: 'Midnight Glass' UI and Clean Sheets applied!");
 }
 
-/**
- * Handle GET requests (for Extension Data Retrieval)
- */
-function doGet(e) {
-    var params = e.parameter;
-    var action = params.action;
-    var result = {};
+// doGet was moved to APIHandler.js to consolidate all entry points.
 
-    try {
-        if (!action) throw new Error("No action specified");
-
-        // Routing to APIHandler.js functions
-        // Since APIHandler functions (apiGetMasterInfo) are global in GAS
-        if (action === "getMasterInfo") {
-            result = apiGetMasterInfo(params);
-        } else if (action === "getSettings") {
-            result = apiGetSettings(); // Assuming this exists or will exist
-        } else {
-            throw new Error("Unknown action: " + action);
-        }
-
-    } catch (err) {
-        result = { status: "error", message: err.message };
-    }
-
-    return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
-}
 
 /**
  * Show "Master Modal" for the active row (Click-to-Gem)
@@ -800,5 +772,35 @@ function getImageBase64(url) {
     } catch (e) {
         console.error(e);
         return { error: e.message };
+    }
+}
+
+// ------------------------------------------
+// Schedule Triggers
+// ------------------------------------------
+function enableScheduleTrigger() {
+    disableScheduleTrigger(true); // Silent delete
+    ScriptApp.newTrigger('runScheduledBroadcast')
+        .timeBased()
+        .everyMinutes(30)
+        .create();
+    Browser.msgBox("自動放送(30分間隔)を開始しました！\\n番組表と現在時刻を照らし合わせて自動投稿を行います。");
+}
+
+function disableScheduleTrigger(silent) {
+    const existing = ScriptApp.getProjectTriggers();
+    let deleted = false;
+    for (let i = 0; i < existing.length; i++) {
+        if (existing[i].getHandlerFunction() === 'runScheduledBroadcast') {
+            ScriptApp.deleteTrigger(existing[i]);
+            deleted = true;
+        }
+    }
+    if (!silent) {
+        if (deleted) {
+            Browser.msgBox("自動放送を停止しました。");
+        } else {
+            Browser.msgBox("現在、自動放送は設定されていません。");
+        }
     }
 }

@@ -129,8 +129,18 @@ function apiGetBoardData() {
 }
 
 function apiGetSettings() {
-    // Return basic config needed for UI (e.g. Models)
-    return { status: "success", models: AI_MODELS };
+    let setupPrompt = "";
+    try {
+        var ss = SpreadsheetApp.getActiveSpreadsheet();
+        var sheet = ss.getSheetByName(SHEET_SETTINGS);
+        if (sheet) {
+            setupPrompt = sheet.getRange("B11").getValue();
+        }
+    } catch (e) {
+        debugLog("Error fetching settings for API: " + e.message);
+    }
+    // Return basic config needed for UI (e.g. Models) and System Prompt
+    return { status: "success", models: AI_MODELS, geminiSetupPrompt: setupPrompt };
 }
 
 

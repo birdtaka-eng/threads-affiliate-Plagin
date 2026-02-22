@@ -148,6 +148,7 @@ function scrapeMainPost() {
 
     return {
         url: url,
+        text: text,
         imageUrls: imageUrls
     };
 }
