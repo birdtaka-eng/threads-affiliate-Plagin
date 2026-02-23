@@ -59,6 +59,9 @@ function handleApiRequest(e) {
             case "generate":
                 result = apiRunGeneration(payload);
                 break;
+            case "get_selected_images":
+                result = { status: "success", imageUrls: getStoredImageUrls() };
+                break;
             case "clip_instagram":
                 try {
                     var dataObj = payload.data || payload;
@@ -73,7 +76,7 @@ function handleApiRequest(e) {
                 result = { status: "success", message: "API Connectivity OK", version: "v6.9.0" };
                 break;
             default:
-                result = { status: "success", message: "Threads職人 API Ready", received: action };
+                result = { status: "success", message: "[DEBUG-V6.9.1] Threads職人 API Ready", received: action };
         }
 
         return ContentService.createTextOutput(JSON.stringify(result))

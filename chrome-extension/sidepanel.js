@@ -41,6 +41,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sendRulesBtn) sendRulesBtn.addEventListener('click', handleSendRules);
     if (processProductBtn) processProductBtn.addEventListener('click', handleProcessProduct);
 
+    // New: Fetch Images from Sheet
+    const fetchSheetImagesBtn = document.getElementById('fetchSheetImagesBtn');
+    if (fetchSheetImagesBtn) fetchSheetImagesBtn.addEventListener('click', handleFetchSheetImages);
+
     // Save Actions (Split v6.8.0)
     if (saveImagesBtn) saveImagesBtn.addEventListener('click', handleSaveImages);
     if (saveTextBtn) saveTextBtn.addEventListener('click', handleSaveText);
@@ -159,8 +163,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleSelection(url, isChecked, element) {
         if (isChecked) {
-            if (selectedUrls.length >= 3) {
-                alert("画像は最大3枚までです。");
+            if (selectedUrls.length >= 6) {
+                alert("画像は最大6枚までです。");
                 element.querySelector('input').checked = false;
                 return;
             }
@@ -176,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateUI() {
-        if (countDisplay) countDisplay.innerText = `${selectedUrls.length} / 3`;
+        if (countDisplay) countDisplay.innerText = `${selectedUrls.length} / 6`;
     }
 
     function updateStatus(msg, color) {
@@ -189,6 +193,66 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------------------------------------------------------
     // 3 Genies Handlers
     // ---------------------------------------------------------
+
+    async function handleFetchSheetImages() {
+        updateStatus("📋 クリップボードから画像URLを読み込んでいます...", "blue");
+
+        try {
+            const text = await navigator.clipboard.readText();
+
+            if (!text || text.trim().length === 0) {
+                updateStatus("⚠️ クリップボードが空です。Sheetsでセルを選択→Ctrl+Cしてから押してください。", "red");
+                return;
+            }
+
+            // =IMAGE("https://...") 形式から URL を抽出
+            const imageFormulaRegex = /=IMAGE\(\s*["'](https?:\/\/[^"']+)["']/gi;
+            // 直URLの場合も対応
+            const directUrlRegex = /https?:\/\/[^\s"',\n\r()]+/gi;
+
+            let urls = [];
+            let match;
+
+            // 1. まず =IMAGE("URL") 形式を探す
+            while ((match = imageFormulaRegex.exec(text)) !== null) {
+                const url = match[1].trim();
+                if (!urls.includes(url) && urls.length < 6) {
+                    urls.push(url);
+                }
+            }
+
+            // 2. 見つからなければ直URLを探す
+            if (urls.length === 0) {
+                while ((match = directUrlRegex.exec(text)) !== null) {
+                    const url = match[0].trim();
+                    if (!urls.includes(url) && urls.length < 6) {
+                        urls.push(url);
+                    }
+                }
+            }
+
+            if (urls.length === 0) {
+                updateStatus("⚠️ 画像URLが見つかりません。=IMAGE()入りのセルをCtrl+Cしてから押してください。", "red");
+                return;
+            }
+
+            selectedUrls = urls;
+            renderScrapedData(selectedUrls);
+
+            // すべてチェック済みに
+            const checkboxes = imageGrid.querySelectorAll('input[type="checkbox"]');
+            const items = imageGrid.querySelectorAll('.img-item');
+            checkboxes.forEach((cb) => cb.checked = true);
+            items.forEach((item) => item.classList.add('selected'));
+
+            updateUI();
+            updateStatus(`📸 ${selectedUrls.length}枚の画像を読み込みました！`, "green");
+
+        } catch (e) {
+            updateStatus("❌ クリップボードへのアクセス失敗: " + e.message, "red");
+        }
+    }
+
     function handleSyncSettings() {
         updateStatus("🔄 スプレッドシートから設定を同期中...", "blue");
         chrome.storage.local.get(['gasUrl'], (res) => {

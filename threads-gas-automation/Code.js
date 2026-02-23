@@ -18,6 +18,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('🤖 Threads職人 (v2.6-SCREENSHOT)')
         .addItem('【作成】投稿一括生成 (全タイプ)', 'generateUnifiedPosts')
         .addItem('【作成】まとめネタ作成 (選択合体)', 'generateSummaryPost')
+        .addItem('📊 拡張機能用: 選択セルの画像を一時保存', 'storeSelectedImageUrls')
         .addSeparator()
         .addItem('🚀 師匠へ (Copy & Go)', 'showMasterModal')
         .addSeparator()
@@ -136,6 +137,88 @@ function checkTriggerStatus() {
         Browser.msgBox("✅ 診断結果: 正常\n\n自動合体トリガーはすでに登録されています。D〜F列を編集して右下に通知が出るか確認してください。");
     } else {
         Browser.msgBox("❌ 診断結果: 未登録\n\n自動合体トリガーが見つかりません。「自動合体を有効にする」ボタンをもう一度押してください。");
+    }
+}
+
+/**
+ * 【メニュー用】シートで選択されているセルの画像URLを一時保存する
+ * スプレッドシートのメニューから手動で呼び出してから、
+ * 拡張機能のボタンを押してもらう two-step フロー
+ */
+function storeSelectedImageUrls() {
+    const sheet = SpreadsheetApp.getActiveSheet();
+    const activeRangeList = sheet.getActiveRangeList();
+    if (!activeRangeList) {
+        Browser.msgBox("❌ セルが選択されていません。画像のURLが入ったセルを選択してから再度実行してください。");
+        return;
+    }
+
+    let urls = [];
+    const ranges = activeRangeList.getRanges();
+
+    for (const range of ranges) {
+        const formulas = range.getFormulas();
+        const values = range.getValues();
+
+        for (let r = 0; r < values.length; r++) {
+            for (let c = 0; c < values[r].length; c++) {
+                let cellFormula = formulas[r][c];
+                let cellValue = values[r][c];
+
+                let extractedUrl = "";
+
+                // 1. =IMAGE("URL", 1) などの数式から抽出
+                if (cellFormula && cellFormula.toUpperCase().includes("IMAGE")) {
+                    let match = cellFormula.match(/IMAGE\(\s*["'](https?:\/\/[^"']+)["']/i);
+                    if (match) extractedUrl = match[1];
+                }
+
+                // 2. 直のURLがテキストとして入っている場合
+                if (!extractedUrl && typeof cellValue === 'string' && cellValue.trim().startsWith('http')) {
+                    extractedUrl = cellValue.trim();
+                }
+
+                // 3. セル内の一部にURLが含まれる場合 (バックアップ)
+                if (!extractedUrl && typeof cellValue === 'string' && cellValue.includes('http')) {
+                    let match = cellValue.match(/(https?:\/\/[^\s"'()]+)/i);
+                    if (match) extractedUrl = match[1];
+                }
+
+                if (extractedUrl && !urls.includes(extractedUrl)) {
+                    if (urls.length < 6) {
+                        urls.push(extractedUrl);
+                    }
+                }
+            }
+        }
+    }
+
+    if (urls.length === 0) {
+        Browser.msgBox(
+            "⚠️ 選択されたセルに画像URLが見つかりません。\n\n" +
+            "選択したセルに以下のいずれかが含まれているか確認してください:\n" +
+            "・=IMAGE(\"https://...\") という数式\n" +
+            "・直接 https://... で始まるURL"
+        );
+        return;
+    }
+
+    // PropertiesServiceに一時保存 (Webアプリから読み取れる)
+    PropertiesService.getScriptProperties().setProperty('STORED_IMAGE_URLS', JSON.stringify(urls));
+    SpreadsheetApp.getActive().toast(`✅ ${urls.length}枚の画像URLを一時保存しました！\n拡張機能のサイドバーから「📊 写真を読込」ボタンを押してください。`, "画像の準備完了", 5);
+}
+
+/**
+ * 【API連携用】PropertiesServiceに保存された画像URLを返す
+ * ChromeExtensionのdoPostから呼び出される
+ */
+function getStoredImageUrls() {
+    const stored = PropertiesService.getScriptProperties().getProperty('STORED_IMAGE_URLS');
+    if (!stored) return [];
+    try {
+        return JSON.parse(stored);
+    } catch (e) {
+        return [];
     }
 }
 
