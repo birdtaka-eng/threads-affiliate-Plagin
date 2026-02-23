@@ -157,11 +157,10 @@ async function broadcastMatomeRules() {
         throw new Error("先に「3姉妹を召喚」してください！");
     }
 
-    const MATOME_PROMPT = res.matomePrompt || `■まとめ投稿の指示（デフォルト）
-設定シートのB16にまとめ用プロンプトを記入し、「🔄 設定を同期」ボタンを押してください。
-
-【準備完了の合図】
-理解したら「まとめ投稿モード：準備完了」とだけ返してください。`;
+    const MATOME_PROMPT = res.matomePrompt;
+    if (!MATOME_PROMPT) {
+        throw new Error("まとめ用プロンプト未設定です。設定シートのB16に記入後、「🔄 設定を同期」を押してください。");
+    }
 
     for (const persona of PERSONAS) {
         const tabId = activeGemTabs[persona.id];
