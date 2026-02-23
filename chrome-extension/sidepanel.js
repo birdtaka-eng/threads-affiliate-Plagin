@@ -329,9 +329,32 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Get Product Info from Active Tab
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const tab = tabs[0];
+
+            // If we have selected images from the sheet, skip the Rakuten check
+            if (selectedUrls.length > 0 && (!tab || !tab.url.includes("rakuten.co.jp"))) {
+                // Use sheet images directly without scraping the current page
+                const data = {
+                    url: tab ? tab.url : "sheet",
+                    title: "シートから選択した画像",
+                    imageUrls: selectedUrls
+                };
+                chrome.runtime.sendMessage({ action: "process_product", data }, (res) => {
+                    if (chrome.runtime.lastError) {
+                        updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
+                        return;
+                    }
+                    if (res && res.success) {
+                        updateStatus("✅ Geminiに送りました！", "green");
+                    } else {
+                        updateStatus("❌ 送信失敗: " + (res ? res.error : "Unknown"), "red");
+                    }
+                });
+                return;
+            }
+
             if (!tab || !tab.url.includes("rakuten.co.jp")) {
-                alert("楽天の商品ページを開いてから押してください。");
-                updateStatus("❌ 楽天の商品ページではありません", "red");
+                alert("楽天の商品ページを開くか、シートから画像を選択してから押してください。");
+                updateStatus("❌ 楽天ページまたはシート画像が必要です", "red");
                 return;
             }
 
