@@ -90,7 +90,7 @@ async function handleAiPaste(images, prompt) {
 // --- Phase 2: Persona Prompt Injection & Monitoring (Split Flow) ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "run_gemini_setup") {
-        handleSetupFlow(request.persona);
+        handleSetupFlow(request.persona, request.overridePrompt);
         sendResponse({ success: true });
         return true;
     }
@@ -101,11 +101,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-async function handleSetupFlow(personaId) {
+async function handleSetupFlow(personaId, overridePrompt) {
     console.log(`[Threads職人] Starting SETUP flow for: ${personaId}`);
 
-    const res = await chrome.storage.local.get(['unifiedPrompt']);
-    let prompt = res.unifiedPrompt;
+    let prompt = overridePrompt;
+
+    if (!prompt) {
+        const res = await chrome.storage.local.get(['unifiedPrompt']);
+        prompt = res.unifiedPrompt;
+    }
 
     if (!prompt) {
         prompt = getSetupPrompt(personaId);

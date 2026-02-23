@@ -39,6 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (wakeUpBtn) wakeUpBtn.addEventListener('click', handleWakeUp);
     if (syncSettingsBtn) syncSettingsBtn.addEventListener('click', handleSyncSettings);
     if (sendRulesBtn) sendRulesBtn.addEventListener('click', handleSendRules);
+
+    // まとめ用プロンプト送信ボタン
+    const sendMatomeRulesBtn = document.getElementById('sendMatomeRulesBtn');
+    if (sendMatomeRulesBtn) sendMatomeRulesBtn.addEventListener('click', handleSendMatomeRules);
     if (processProductBtn) processProductBtn.addEventListener('click', handleProcessProduct);
 
     // New: Fetch Images from Sheet
@@ -309,16 +313,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleSendRules() {
-        updateStatus("🦄 プロンプトを送信中...", "blue");
-        chrome.runtime.sendMessage({ action: "broadcast_rules" }, (res) => {
+        updateStatus('🦄 プロンプトを送信中...', 'blue');
+        chrome.runtime.sendMessage({ action: 'broadcast_rules' }, (res) => {
             if (chrome.runtime.lastError) {
-                updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
+                updateStatus('❌ 通信エラー: ' + chrome.runtime.lastError.message, 'red');
                 return;
             }
             if (res && res.success) {
-                updateStatus("✨ 準備完了の指令を出しました！タブを確認してください。", "green");
+                updateStatus('✨ 準備完了の指令を出しました！タブを確認してください。', 'green');
             } else {
-                updateStatus("❌ 送信失敗: " + (res ? res.error : "Unknown"), "red");
+                updateStatus('❌ 送信失敗: ' + (res ? res.error : 'Unknown'), 'red');
+            }
+        });
+    }
+
+    function handleSendMatomeRules() {
+        updateStatus('📋 まとめ用プロンプトを送信中...', 'blue');
+        chrome.runtime.sendMessage({ action: 'broadcast_matome_rules' }, (res) => {
+            if (chrome.runtime.lastError) {
+                updateStatus('❌ 通信エラー: ' + chrome.runtime.lastError.message, 'red');
+                return;
+            }
+            if (res && res.success) {
+                updateStatus('✨ まとめ用の準備完了！次は写真を読み込んでⅠ…②へ。', 'green');
+            } else {
+                updateStatus('❌ 送信失敗: ' + (res ? res.error : 'Unknown'), 'red');
             }
         });
     }
