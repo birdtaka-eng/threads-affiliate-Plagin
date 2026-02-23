@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     title: "シートから選択した画像",
                     imageUrls: selectedUrls
                 };
-                chrome.runtime.sendMessage({ action: "process_product", data }, (res) => {
+                chrome.runtime.sendMessage({ action: "distribute_product", payload: data }, (res) => {
                     if (chrome.runtime.lastError) {
                         updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
                         return;
