@@ -45,6 +45,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchSheetImagesBtn = document.getElementById('fetchSheetImagesBtn');
     if (fetchSheetImagesBtn) fetchSheetImagesBtn.addEventListener('click', handleFetchSheetImages);
 
+    // New: Clear images button
+    const clearImagesBtn = document.getElementById('clearImagesBtn');
+    if (clearImagesBtn) clearImagesBtn.addEventListener('click', () => {
+        selectedUrls = [];
+        imageGrid.innerHTML = '<div style="grid-column: span 3; padding: 20px; text-align: center; color: #ccc; font-size: 11px;">商品ページを開くか、シートから画像を読み込むとここに出ます</div>';
+        updateUI();
+        updateStatus('🗑️ 写真をクリアしました', 'blue');
+    });
+
     // Save Actions (Split v6.8.0)
     if (saveImagesBtn) saveImagesBtn.addEventListener('click', handleSaveImages);
     if (saveTextBtn) saveTextBtn.addEventListener('click', handleSaveText);
@@ -195,34 +204,51 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------------------------------------------------------
 
     async function handleFetchSheetImages() {
-        updateStatus("📊 シートから画像URLを取得中...", "blue");
+        updateStatus('📊 シートから画像URLを取得中...', 'blue');
 
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const tab = tabs[0];
             if (!tab) {
-                updateStatus("❌ アクティブなタブが見つかりません", "red");
+                updateStatus('❌ アクティブなタブが見つかりません', 'red');
                 return;
             }
 
-            if (!tab.url || !tab.url.includes("docs.google.com/spreadsheets")) {
-                updateStatus("⚠️ Googleスプレッドシートを開いてから押してください", "red");
+            if (!tab.url || !tab.url.includes('docs.google.com/spreadsheets')) {
+                updateStatus('⚠️ Googleスプレッドシートを開いてから押してください', 'red');
                 return;
             }
 
-            chrome.tabs.sendMessage(tab.id, { action: "extract_sheets_images" }, (response) => {
+            chrome.tabs.sendMessage(tab.id, { action: 'extract_sheets_images' }, (response) => {
                 if (chrome.runtime.lastError) {
-                    updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
+                    updateStatus('❌ 通信エラー: ' + chrome.runtime.lastError.message, 'red');
                     return;
                 }
 
                 const urls = response ? (response.imageUrls || []) : [];
 
                 if (urls.length === 0) {
-                    updateStatus("⚠️ 画像URLが見つかりません。セルを選択してCtrl+Cしてから押してください", "red");
+                    updateStatus('⚠️ セルをクリックしてからボタンを押してください', 'red');
                     return;
                 }
 
-                selectedUrls = urls;
+                // 追記モード: 既存のselectedUrlsに追加（重複・6枚超禁止）
+                let added = 0;
+                urls.forEach(url => {
+                    if (!selectedUrls.includes(url) && selectedUrls.length < 6) {
+                        selectedUrls.push(url);
+                        added++;
+                    }
+                });
+
+                if (added === 0) {
+                    if (selectedUrls.length >= 6) {
+                        updateStatus('⚠️ 6枚上限に達しています。🗑️でクリアしてください', 'red');
+                    } else {
+                        updateStatus('⚠️ 同じ画像はすでに追加済みです', 'red');
+                    }
+                    return;
+                }
+
                 renderScrapedData(selectedUrls);
 
                 const checkboxes = imageGrid.querySelectorAll('input[type="checkbox"]');
@@ -231,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 items.forEach((item) => item.classList.add('selected'));
 
                 updateUI();
-                updateStatus(`📸 ${selectedUrls.length}枚の画像を読み込みました！`, "green");
+                updateStatus(`📸 ${selectedUrls.length}/6枚 (+${added}枚追加)`, 'green');
             });
         });
     }

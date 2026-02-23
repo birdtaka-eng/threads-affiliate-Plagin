@@ -309,15 +309,19 @@
             <!-- New Step: Fetch Images from Sheet via Clipboard -->
             <button id="fetchSheetImagesBtn"
                 style="width: 100%; background: #6f42c1; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
-                <span>📋</span> セルをCtrl+C→写真を読込
+                <span>📊</span> セルをクリック→追加読込 (最大6枚)
             </button>
 
             <!-- Image Selection Area -->
             <div class="image-section" style="margin: 10px 0;">
                 <div
                     style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; font-weight: bold;">
-                    <span>📸 写真を選択 (最大6枚)</span>
-                    <span id="countDisplay" style="color: #0095f6;">0 / 6</span>
+                    <span>📸 写真 (1枚ずつ追加・最大6枚)</span>
+                    <span style="display:flex;gap:4px;align-items:center;">
+                        <span id="countDisplay" style="color: #0095f6;">0 / 6</span>
+                        <button id="clearImagesBtn"
+                            style="background:#e0245e;color:white;border:none;border-radius:4px;padding:0 6px;font-size:11px;cursor:pointer;">🗑️</button>
+                    </span>
                 </div>
                 <div id="imageGrid" class="image-grid">
                     <div style="grid-column: span 3; padding: 20px; text-align: center; color: #ccc; font-size: 11px;">
