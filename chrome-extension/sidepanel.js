@@ -195,62 +195,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // ---------------------------------------------------------
 
     async function handleFetchSheetImages() {
-        updateStatus("📋 クリップボードから画像URLを読み込んでいます...", "blue");
+        updateStatus("📊 シートから画像URLを取得中...", "blue");
 
-        try {
-            const text = await navigator.clipboard.readText();
-
-            if (!text || text.trim().length === 0) {
-                updateStatus("⚠️ クリップボードが空です。Sheetsでセルを選択→Ctrl+Cしてから押してください。", "red");
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
+            if (!tab) {
+                updateStatus("❌ アクティブなタブが見つかりません", "red");
                 return;
             }
 
-            // =IMAGE("https://...") 形式から URL を抽出
-            const imageFormulaRegex = /=IMAGE\(\s*["'](https?:\/\/[^"']+)["']/gi;
-            // 直URLの場合も対応
-            const directUrlRegex = /https?:\/\/[^\s"',\n\r()]+/gi;
-
-            let urls = [];
-            let match;
-
-            // 1. まず =IMAGE("URL") 形式を探す
-            while ((match = imageFormulaRegex.exec(text)) !== null) {
-                const url = match[1].trim();
-                if (!urls.includes(url) && urls.length < 6) {
-                    urls.push(url);
-                }
-            }
-
-            // 2. 見つからなければ直URLを探す
-            if (urls.length === 0) {
-                while ((match = directUrlRegex.exec(text)) !== null) {
-                    const url = match[0].trim();
-                    if (!urls.includes(url) && urls.length < 6) {
-                        urls.push(url);
-                    }
-                }
-            }
-
-            if (urls.length === 0) {
-                updateStatus("⚠️ 画像URLが見つかりません。=IMAGE()入りのセルをCtrl+Cしてから押してください。", "red");
+            if (!tab.url || !tab.url.includes("docs.google.com/spreadsheets")) {
+                updateStatus("⚠️ Googleスプレッドシートを開いてから押してください", "red");
                 return;
             }
 
-            selectedUrls = urls;
-            renderScrapedData(selectedUrls);
+            chrome.tabs.sendMessage(tab.id, { action: "extract_sheets_images" }, (response) => {
+                if (chrome.runtime.lastError) {
+                    updateStatus("❌ 通信エラー: " + chrome.runtime.lastError.message, "red");
+                    return;
+                }
 
-            // すべてチェック済みに
-            const checkboxes = imageGrid.querySelectorAll('input[type="checkbox"]');
-            const items = imageGrid.querySelectorAll('.img-item');
-            checkboxes.forEach((cb) => cb.checked = true);
-            items.forEach((item) => item.classList.add('selected'));
+                const urls = response ? (response.imageUrls || []) : [];
 
-            updateUI();
-            updateStatus(`📸 ${selectedUrls.length}枚の画像を読み込みました！`, "green");
+                if (urls.length === 0) {
+                    updateStatus("⚠️ 画像URLが見つかりません。セルを選択してCtrl+Cしてから押してください", "red");
+                    return;
+                }
 
-        } catch (e) {
-            updateStatus("❌ クリップボードへのアクセス失敗: " + e.message, "red");
-        }
+                selectedUrls = urls;
+                renderScrapedData(selectedUrls);
+
+                const checkboxes = imageGrid.querySelectorAll('input[type="checkbox"]');
+                const items = imageGrid.querySelectorAll('.img-item');
+                checkboxes.forEach((cb) => cb.checked = true);
+                items.forEach((item) => item.classList.add('selected'));
+
+                updateUI();
+                updateStatus(`📸 ${selectedUrls.length}枚の画像を読み込みました！`, "green");
+            });
+        });
     }
 
     function handleSyncSettings() {

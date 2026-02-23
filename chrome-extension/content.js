@@ -78,7 +78,117 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse(data);
         return true;
     }
+    // Google Sheets specific: extract image URLs from selected cells
+    if (request.action === "extract_sheets_images") {
+        extractSheetsImageUrls().then(urls => {
+            sendResponse({ imageUrls: urls });
+        });
+        return true; // keep channel open for async
+    }
 });
+
+/**
+ * Google Sheets の選択セルから =IMAGE() の URL を抽出する
+ * 複数の戦略を順番に試みる
+ */
+async function extractSheetsImageUrls() {
+    const urls = [];
+    const seen = new Set();
+
+    function addUrl(url) {
+        if (url && url.startsWith('http') && !seen.has(url) && urls.length < 6) {
+            seen.add(url);
+            urls.push(url);
+        }
+    }
+
+    // 戦略1: 数式バーを直接読む（選択中のセルの数式を表示しているエリア）
+    const formulaBarSelectors = [
+        '.cell-input',
+        '#formula-bar-input',
+        '[id*="formulaBar"]',
+        'input[aria-label*="formula"]',
+        '.formula-bar-input',
+        // Google Sheets internal
+        '.d-k-l',
+        '[jsname="qDO5De"]',
+        '[data-initial-value]'
+    ];
+
+    for (const sel of formulaBarSelectors) {
+        const el = document.querySelector(sel);
+        if (el) {
+            const text = el.value || el.textContent || el.innerText || '';
+            const match = text.match(/=IMAGE\(\s*["'](https?:\/\/[^"']+)["']/i);
+            if (match) addUrl(match[1]);
+            else if (text.startsWith('http')) addUrl(text.trim());
+        }
+    }
+
+    // 戦略2: Sheetsのハイライト（選択）セルのDOMを検索
+    // 選択中のセルは通常 "selected" クラスまたは aria-selected="true" を持つ
+    const selectedCellSelectors = [
+        '[aria-selected="true"]',
+        '.selected-cell',
+        '.s0[class*="selected"]',
+        '.cell-input-container',
+    ];
+
+    for (const sel of selectedCellSelectors) {
+        const cells = document.querySelectorAll(sel);
+        cells.forEach(cell => {
+            // セル内のimg srcを探す
+            const imgs = cell.querySelectorAll('img');
+            imgs.forEach(img => {
+                if (img.src && img.src.startsWith('http')) {
+                    // Google プロキシURLでなければそのまま追加
+                    if (!img.src.includes('googleusercontent.com')) {
+                        addUrl(img.src);
+                    }
+                }
+            });
+            // data属性からもURL探す
+            const attrs = ['data-url', 'data-src', 'data-href', 'data-formula'];
+            attrs.forEach(attr => {
+                const val = cell.getAttribute(attr);
+                if (val) {
+                    const match = val.match(/https?:\/\/[^\s"']+/);
+                    if (match) addUrl(match[0]);
+                }
+            });
+        });
+    }
+
+    // 戦略3: clipboardのHTML (text/html MIME) からURL抽出を試みる
+    // (clipboardRead権限が有効な場合のみ動作)
+    if (urls.length === 0) {
+        try {
+            const clipItems = await navigator.clipboard.read();
+            for (const item of clipItems) {
+                if (item.types.includes('text/html')) {
+                    const blob = await item.getType('text/html');
+                    const html = await blob.text();
+                    // img src を正規表現で抽出
+                    const imgMatches = html.matchAll(/src=["'](https?:\/\/[^"']+(?:\.jpg|\.jpeg|\.png|\.webp|\.gif)[^"']*)["']/gi);
+                    for (const m of imgMatches) addUrl(m[1]);
+                    // =IMAGE("...") 形式も試みる
+                    const imageFormulaMatches = html.matchAll(/=IMAGE\(\s*["'](https?:\/\/[^"']+)["']/gi);
+                    for (const m of imageFormulaMatches) addUrl(m[1]);
+                }
+                if (item.types.includes('text/plain') && urls.length === 0) {
+                    const blob = await item.getType('text/plain');
+                    const text = await blob.text();
+                    const matches = text.matchAll(/=IMAGE\(\s*["'](https?:\/\/[^"']+)["']/gi);
+                    for (const m of matches) addUrl(m[1]);
+                }
+            }
+        } catch (_) {
+            // クリップボードアクセス失敗は無視
+        }
+    }
+
+    return urls;
+}
 
 function extractGeneralImages() {
     const url = window.location.href;
