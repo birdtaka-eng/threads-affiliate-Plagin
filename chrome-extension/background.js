@@ -90,33 +90,11 @@ async function wakeUpGems() {
     // 3. Monitor for Load Completion (via onUpdated listener below)
 }
 
-// Monitor Tab Loading for Setup Injection (Auto-Backup)
+// Monitor Tab Loading (no auto-injection — use ② buttons to send prompts manually)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    // Only check tabs we are tracking
+    // Auto-setup disabled: prompts are sent manually via ② buttons
     if (pendingSetupTabs.has(tabId) && changeInfo.status === 'complete') {
-        console.log(`[Background] Tab ${tabId} loaded. Ready/Injecting Setup...`);
-
-        // Locate Persona ID
-        chrome.storage.local.get(['activeGemTabs'], (res) => {
-            const tabs = res.activeGemTabs || {};
-            const personaId = Object.keys(tabs).find(key => tabs[key] === tabId);
-
-            if (personaId) {
-                // Auto-attempt (Backup)
-                setTimeout(() => {
-                    chrome.tabs.sendMessage(tabId, {
-                        action: "run_gemini_setup",
-                        persona: personaId
-                    }).then(() => {
-                        console.log(`[Background] Auto-Setup sent to ${personaId}`);
-                        pendingSetupTabs.delete(tabId);
-                    }).catch(e => {
-                        console.warn(`[Background] Auto-Setup failed (User can use Manual Btn):`, e);
-                        pendingSetupTabs.delete(tabId);
-                    });
-                }, 1500);
-            }
-        });
+        pendingSetupTabs.delete(tabId); // Just clean up tracking
     }
 });
 

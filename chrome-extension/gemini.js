@@ -1,21 +1,7 @@
 // --- Auto-Injection on Load ---
 (async function init() {
-    console.log("[Threads職人] Gem script initialized. Checking for auto-prompt...");
-
-    // Slight delay to let the page stabilize
-    await new Promise(r => setTimeout(r, 2000));
-
-    chrome.storage.local.get(['unifiedPrompt', 'autoInjectOnWake'], async (res) => {
-        if (res.autoInjectOnWake && res.unifiedPrompt) {
-            console.log("[Threads職人] Auto-injecting unified prompt...");
-            const editor = await waitForEditor();
-            if (editor) {
-                editor.focus();
-                // We don't have an image for initial brew, just text
-                injectTextOnly(editor, res.unifiedPrompt);
-            }
-        }
-    });
+    console.log("[Threads職人] Gem script initialized. Auto-inject disabled — use ② buttons.");
+    // Auto-inject removed: prompts are now sent manually via the ② buttons in the sidebar
 })();
 
 function injectTextOnly(editor, text) {
