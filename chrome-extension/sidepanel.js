@@ -284,8 +284,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(response => response.json())
                 .then(json => {
                     if (json.status === "success" && json.geminiSetupPrompt) {
-                        chrome.storage.local.set({ unifiedPrompt: json.geminiSetupPrompt }, () => {
-                            updateStatus("✨ プロンプトの同期が完了しました！", "green");
+                        const toStore = { unifiedPrompt: json.geminiSetupPrompt };
+                        if (json.matomePrompt) toStore.matomePrompt = json.matomePrompt;
+                        chrome.storage.local.set(toStore, () => {
+                            let msg = "✨ プロンプトの同期が完了しました！";
+                            if (json.matomePrompt) msg += "（まとめ用も更新済み）";
+                            updateStatus(msg, "green");
                         });
                     } else {
                         updateStatus("❌ 同期失敗: データが見つかりません", "red");

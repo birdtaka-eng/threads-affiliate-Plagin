@@ -133,17 +133,19 @@ function apiGetBoardData() {
 
 function apiGetSettings() {
     let setupPrompt = "";
+    let matomePrompt = "";
     try {
         var ss = SpreadsheetApp.getActiveSpreadsheet();
         var sheet = ss.getSheetByName(SHEET_SETTINGS);
         if (sheet) {
             setupPrompt = sheet.getRange("B11").getValue();
+            matomePrompt = sheet.getRange("B16").getValue(); // まとめ投稿モード用プロンプト
         }
     } catch (e) {
         debugLog("Error fetching settings for API: " + e.message);
     }
     // Return basic config needed for UI (e.g. Models) and System Prompt
-    return { status: "success", models: AI_MODELS, geminiSetupPrompt: setupPrompt };
+    return { status: "success", models: AI_MODELS, geminiSetupPrompt: setupPrompt, matomePrompt: matomePrompt };
 }
 
 

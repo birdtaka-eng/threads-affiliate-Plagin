@@ -150,36 +150,15 @@ async function broadcastRules() {
 async function broadcastMatomeRules() {
     console.log("[Background] Broadcasting Matome Rules...");
 
-    const res = await chrome.storage.local.get(['activeGemTabs']);
+    const res = await chrome.storage.local.get(['activeGemTabs', 'matomePrompt']);
     const activeGemTabs = res.activeGemTabs || {};
 
     if (Object.keys(activeGemTabs).length === 0) {
         throw new Error("先に「3姉妹を召喚」してください！");
     }
 
-    const MATOME_PROMPT = `■まとめ投稿の指示
-
-1. テーマ：（例：30歳独身、家から一歩も出ない日の相棒5選）
-2. 写真の順番と内容：
-・1枚目（表紙）：一番「視覚の暴力」な商品の写真
-・2枚目：実用性やギャップがすごい商品
-・3枚目：……（以下、全枚数分）
-3. ターゲット：（例：丁寧な暮らしに憧れて挫折したズボラ仲間）
-4. 隠し味：（例：最後の方は「おじさん化」してるリアルを混ぜて）
-
-【指示】
-この「まとめ」の魅力を、冒頭10文字で指を止めるフック全開で作成してください。
-
-💡 良い文章を作るための「3つのコツ」
-「表紙」で全てが決まる
-まとめ投稿は、1枚目で「あ、これ私のことだ」と思わせるのが勝ち。
-（例：「全人類、これ買えば解決。」 / 「丁寧な暮らし、諦めた結果。」）
-
-「カタログ」にしない、「物語」にする
-単なる商品スペックではなく、「これがあるおかげで、私のズボラが正当化される」といった自分勝手な理屈（ユーモア）を混ぜるのがThreads流。
-
-最後の一枚で「オチ」をつける
-お洒落なアイテムばかり並べて最後に「結局これが最強」と庶民的なモノを出すと、一気に親近感がわいて「この人、好きだな」＝フォローに繋がります。
+    const MATOME_PROMPT = res.matomePrompt || `■まとめ投稿の指示（デフォルト）
+設定シートのB16にまとめ用プロンプトを記入し、「🔄 設定を同期」ボタンを押してください。
 
 【準備完了の合図】
 理解したら「まとめ投稿モード：準備完了」とだけ返してください。`;
