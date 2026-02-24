@@ -11,6 +11,10 @@ var SHEET_DB = "テンプレートDB";
 var SHEET_TORANOMAKI = "虎の巻DB"; // User defined sheet
 var SHEET_SCHEDULE = "番組表";
 var SHEET_SETTINGS = "設定";
+var SHEET_SCHEDULE_A = "番組表A (ノーマル)";
+var SHEET_SCHEDULE_B = "番組表B (5と0の日)";
+var SHEET_SCHEDULE_C = "番組表C (マラソン)";
+var SHEET_SCHEDULE_D = "番組表D (スーパーSALE)";
 
 // --- 2. System Constants ---
 var APP_NAME = "Threads職人 (AI Agent)";

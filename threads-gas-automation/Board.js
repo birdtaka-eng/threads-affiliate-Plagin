@@ -263,9 +263,22 @@ function runScheduledBroadcast() {
 
     try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
-        const scheduleSheet = ss.getSheetByName(SHEET_SCHEDULE);
+
+        // Which pattern is active? (設定シートのB17: A/B/C/D)
+        const settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+        const activePattern = settingsSheet ? String(settingsSheet.getRange("B17").getValue()).trim().toUpperCase() : "A";
+        const scheduleNames = {
+            "A": SHEET_SCHEDULE_A,
+            "B": SHEET_SCHEDULE_B,
+            "C": SHEET_SCHEDULE_C,
+            "D": SHEET_SCHEDULE_D
+        };
+        const scheduleSheetName = scheduleNames[activePattern] || SHEET_SCHEDULE_A;
+        _log(`[Schedule] Active pattern: ${activePattern} → ${scheduleSheetName}`);
+
+        const scheduleSheet = ss.getSheetByName(scheduleSheetName);
         if (!scheduleSheet) {
-            _log("[Abort] 番組表シートが見つかりません。");
+            _log(`[Abort] 番組表シート「${scheduleSheetName}」が見つかりません。「番組表リセット」を実行してください。`);
             return internalLog.join("\\n");
         }
 
@@ -371,8 +384,7 @@ function runScheduledBroadcast() {
             return internalLog.join("\\n");
         }
 
-        // 3. Fetch Settings (UserID, Token)
-        const settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+        // 3. Fetch Settings (UserID, Token) - reuse settingsSheet from above
         if (!settingsSheet) {
             _log(`[Schedule] Error: Settings sheet missing.`);
             return internalLog.join("\\n");

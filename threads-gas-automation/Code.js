@@ -435,72 +435,128 @@ Threadsから流入したユーザーに「あ、これ私のことだ」と思�
     Browser.msgBox("設定シートをリセットしました！\nB6: あなたの願い(種)\nB8: AIが育てた最強人格\nB9: 文体スタイル\nB11: システムプロンプト\nこれらが連携して動作します。");
 }
 
+/**
+ * 番組表シートを全4パターン作成する
+ * 設定シートのB17で「A/B/C/D」を選んでアクティブパターンを切り替える
+ */
 function setupScheduleSheet() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetName = SHEET_SCHEDULE;
-    let sheet = ss.getSheetByName(sheetName);
-
-    if (!sheet) {
-        sheet = ss.insertSheet(sheetName);
-    }
-    sheet.clear();
-    sheet.getRange("A:D").clearDataValidations();
-
-    // --- Widths ---
-    sheet.setColumnWidth(1, 200);
-    sheet.setColumnWidth(2, 90);
-    sheet.setColumnWidth(3, 120);
-
-    // --- Instruction Cell ---
-    sheet.getRange("A1").setValue("【番組表の使い方】").setFontWeight("bold").setBackground("#fff2cc");
-    sheet.getRange("A2:A101")
-        .merge()
-        .setValue("B列に投稿時刻（例: 08:00）\nC列にジャンルを設定\n→ その時刻になると自動投稿\n最大100行まで設定可能")
-        .setBackground("#fff2cc")
-        .setVerticalAlignment("top")
-        .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-
-    // --- Column Headers ---
-    sheet.getRange("B1").setValue("投稿時刻").setFontWeight("bold")
-        .setBackground("#4a86e8").setFontColor("#ffffff").setHorizontalAlignment("center");
-    sheet.getRange("C1").setValue("ジャンル").setFontWeight("bold")
-        .setBackground("#4a86e8").setFontColor("#ffffff").setHorizontalAlignment("center");
-
-    // --- Time Dropdown: 05:00-23:55 (5分刻み) ---
-    const timeOptions = [];
-    for (let h = 5; h <= 23; h++) {
-        for (let m = 0; m < 60; m += 5) {
-            timeOptions.push(`${("0" + h).slice(-2)}:${("0" + m).slice(-2)}`);
+    const patterns = [
+        {
+            name: SHEET_SCHEDULE_A,
+            label: "A: ノーマル",
+            color: "#4a86e8",
+            // 06-09: 30分, 09-18: 60分, 18-21: 30分, 21-24: 20分 (~30投稿/日)
+            bands: [[6, 9, 30], [9, 18, 60], [18, 21, 30], [21, 24, 20]]
+        },
+        {
+            name: SHEET_SCHEDULE_B,
+            label: "B: 5と0の日",
+            color: "#6aa84f",
+            // 06-09: 15分, 09-18: 30分, 18-21: 15分, 21-24: 15分 (~54投稿/日)
+            bands: [[6, 9, 15], [9, 18, 30], [18, 21, 15], [21, 24, 15]]
+        },
+        {
+            name: SHEET_SCHEDULE_C,
+            label: "C: マラソン",
+            color: "#e69138",
+            // 朝通勤15分, 日中20分, 帰宅15分, ゴールデン10分 (~70投稿/日)
+            bands: [[6, 9, 15], [9, 18, 20], [18, 21, 15], [21, 24, 10]]
+        },
+        {
+            name: SHEET_SCHEDULE_D,
+            label: "D: スーパーSALE",
+            color: "#cc0000",
+            // 最高密度: 朝10分, 日中15分, 夕10分, ゴールデン10分 (~90投稿/日)
+            bands: [[6, 9, 10], [9, 18, 15], [18, 21, 10], [21, 24, 10]]
         }
-    }
-    const timeRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(timeOptions, true)
-        .setAllowInvalid(true)
-        .build();
-    sheet.getRange("B2:B101").setDataValidation(timeRule).setHorizontalAlignment("center");
-
-    // --- Genre Dropdown ---
-    const genreRule = SpreadsheetApp.newDataValidation()
-        .requireValueInList(["単品", "まとめ", "日常", "有益", "Free", "議論", "実体験", "自己紹介", "Promotion"], true)
-        .setAllowInvalid(false).build();
-    sheet.getRange("C2:C101").setDataValidation(genreRule).setHorizontalAlignment("center");
-
-    // --- Sample Schedule ---
-    const sampleData = [
-        ["06:00", "単品"], ["06:15", "まとめ"], ["06:30", "単品"],
-        ["07:00", "単品"], ["07:30", "まとめ"], ["08:00", "単品"],
-        ["09:00", "まとめ"], ["10:00", "単品"], ["12:00", "まとめ"],
-        ["15:00", "単品"], ["18:00", "単品"], ["19:00", "まとめ"],
-        ["20:00", "単品"], ["21:00", "単品"], ["22:00", "まとめ"],
-        ["23:00", "単品"], ["23:30", "単品"]
     ];
-    sheet.getRange(2, 2, sampleData.length, 2).setValues(sampleData);
 
-    // --- Border ---
-    sheet.getRange("B1:C101").setBorder(true, true, true, true, true, true, "#cccccc", SpreadsheetApp.BorderStyle.SOLID);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const genres = ["単品", "まとめ", "単品", "まとめ", "単品", "まとめ"];
+    const genreOptions = ["単品", "まとめ", "日常", "有益", "Free", "議論", "実体験", "自己紹介", "Promotion"];
 
-    Browser.msgBox("✅ 番組表をリニューアルしました！\nB列に時刻、C列にジャンルを設定してください（最大100行）");
+    for (const p of patterns) {
+        let sheet = ss.getSheetByName(p.name);
+        if (!sheet) {
+            sheet = ss.insertSheet(p.name);
+        }
+        sheet.clear();
+        sheet.getRange("A:D").clearDataValidations();
+        sheet.setColumnWidth(1, 200);
+        sheet.setColumnWidth(2, 90);
+        sheet.setColumnWidth(3, 120);
+
+        // Header
+        sheet.getRange("A1").setValue("【" + p.label + "】").setFontWeight("bold").setBackground("#fff2cc");
+        sheet.getRange("A2:A101").merge()
+            .setValue("B列: 投稿時刻\nC列: ジャンル\n→ この時刻に自動投稿")
+            .setBackground("#fff2cc")
+            .setVerticalAlignment("top")
+            .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+
+        sheet.getRange("B1").setValue("投稿時刻").setFontWeight("bold")
+            .setBackground(p.color).setFontColor("#ffffff").setHorizontalAlignment("center");
+        sheet.getRange("C1").setValue("ジャンル").setFontWeight("bold")
+            .setBackground(p.color).setFontColor("#ffffff").setHorizontalAlignment("center");
+
+        // Time dropdown
+        const timeOptions = [];
+        for (let h = 5; h <= 23; h++) {
+            for (let m = 0; m < 60; m += 5) {
+                timeOptions.push(`${("0" + h).slice(-2)}:${("0" + m).slice(-2)}`);
+            }
+        }
+        sheet.getRange("B2:B101")
+            .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(timeOptions, true).setAllowInvalid(true).build())
+            .setHorizontalAlignment("center");
+
+        // Genre dropdown
+        sheet.getRange("C2:C101")
+            .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(genreOptions, true).setAllowInvalid(false).build())
+            .setHorizontalAlignment("center");
+
+        // Generate time slots
+        const data = [];
+        let gIdx = 0;
+        for (const [startH, endH, interval] of p.bands) {
+            let totalMin = startH * 60;
+            const endMin = endH * 60;
+            while (totalMin < endMin && data.length < 100) {
+                const h = Math.floor(totalMin / 60);
+                const m = totalMin % 60;
+                data.push([`${("0" + h).slice(-2)}:${("0" + m).slice(-2)}`, genres[gIdx % genres.length]]);
+                gIdx++;
+                totalMin += interval;
+            }
+        }
+
+        if (data.length > 0) {
+            sheet.getRange(2, 2, data.length, 2).setValues(data);
+        }
+
+        sheet.getRange("B1:C101").setBorder(true, true, true, true, true, true, "#cccccc", SpreadsheetApp.BorderStyle.SOLID);
+    }
+
+    // Add pattern selector to 設定シート
+    const settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+    if (settingsSheet) {
+        settingsSheet.getRange("A17").setValue("🗓️ アクティブ番組表").setFontWeight("bold");
+        const rulePattern = SpreadsheetApp.newDataValidation()
+            .requireValueInList(["A", "B", "C", "D"], true).build();
+        settingsSheet.getRange("B17").setDataValidation(rulePattern).setValue("A");
+        settingsSheet.getRange("A17:B17").setBackground("#e8f0fe");
+    }
+
+    Browser.msgBox(`✅ 番組表を4パターン作成しました！
+
+A: ノーマル（~30投稿/日）
+B: 5と0の日（~54投稿/日）
+C: マラソン（~70投稿/日）
+D: スーパーSALE（~90投稿/日）
+
+設定シートのB17でアクティブパターンを切り替えてください。`);
 }
+
 
 function setupManualSheet() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
