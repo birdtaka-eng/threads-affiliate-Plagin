@@ -273,73 +273,57 @@ function runScheduledBroadcast() {
         const hour = now.getHours();
         const min = now.getMinutes();
 
-        // Round to 00 or 30
-        const targetTimeStr = `${("0" + hour).slice(-2)}:${min < 30 ? "00" : "30"}`;
+        // Match exact HH:MM (10-min trigger, so we accept ±4 min window)
+        const nowMinTotal = hour * 60 + min;
 
-        // 0=Sun, 1=Mon, ..., 6=Sat
-        const day = now.getDay();
-        const dayColIndex = day === 0 ? 9 : day + 2; // C=3(Mon) .. I=9(Sun)
+        _log(`[Schedule] Checking time: ${("0" + hour).slice(-2)}:${("0" + min).slice(-2)}`);
 
-        _log(`[Schedule] Starting check for Slot: ${targetTimeStr}, DayIndex: ${dayColIndex}`);
-
-        // Only process each unique Date+Time slot once
+        // Only process each unique Date+Time slot once (rounded to 10-min block)
         const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd");
-        const uniqueSlotId = `${dateStr}_${targetTimeStr}`;
+        const blockMin = Math.floor(min / 10) * 10;
+        const uniqueSlotId = `${dateStr}_${("0" + hour).slice(-2)}:${("0" + blockMin).slice(-2)}`;
         const props = PropertiesService.getScriptProperties();
         if (props.getProperty("LAST_PROCESSED_SLOT") === uniqueSlotId) {
             _log(`[Abort] すでに処理済みのスロットです: ${uniqueSlotId}`);
             return internalLog.join("\\n");
         }
 
-        // 1. Find the target Genre in Schedule
+        // 1. Find matching time in Schedule (B column), read genre from C column
         const lastRowSchedule = Math.max(scheduleSheet.getLastRow(), 2);
-        const times = scheduleSheet.getRange(2, 2, lastRowSchedule - 1, 1).getDisplayValues(); // B2:B...
+        const scheduleData = scheduleSheet.getRange(2, 2, lastRowSchedule - 1, 2).getDisplayValues(); // B2:C...
 
-        let parsedTimes = [];
-        for (let i = 0; i < times.length; i++) {
-            if (times[i][0]) parsedTimes.push(times[i][0]);
-        }
-        _log(`[Schedule] (Debug) Found times in sheet: ${parsedTimes.join(", ")}`);
+        _log(`[Schedule] Scanning ${scheduleData.length} schedule rows...`);
 
         let targetRowIndex = -1;
-        const targetMinStr = min < 30 ? "00" : "30";
-        for (let i = 0; i < times.length; i++) {
-            const cellVal = String(times[i][0]).trim();
-            if (!cellVal) continue;
+        let genre = "";
 
-            let match = cellVal.match(/(\d{1,2})(?:[:時]\s*(\d{1,2}))?/);
-            if (match) {
-                let cellHour = parseInt(match[1], 10);
-                let cellMin = match[2] ? parseInt(match[2], 10) : 0;
+        for (let i = 0; i < scheduleData.length; i++) {
+            const cellTime = String(scheduleData[i][0]).trim();
+            if (!cellTime) continue;
 
-                if (cellVal.toUpperCase().includes("PM") && cellHour < 12) cellHour += 12;
-                if (cellVal.toUpperCase().includes("AM") && cellHour === 12) cellHour = 0;
+            const match = cellTime.match(/(\d{1,2})[:\u6642]\s*(\d{1,2})?/);
+            if (!match) continue;
 
-                let targetMinNum = min < 30 ? 0 : 30;
+            const cellHour = parseInt(match[1], 10);
+            const cellMin = match[2] ? parseInt(match[2], 10) : 0;
+            const cellMinTotal = cellHour * 60 + cellMin;
 
-                _log(`[Schedule] (Debug) Checking cell: "${cellVal}" => interpreted as ${cellHour}:${cellMin} (Target is ${hour}:${targetMinNum})`);
-
-                if (cellHour === hour && cellMin === targetMinNum) {
-                    targetRowIndex = i + 2;
-                    break;
-                }
-            } else {
-                if (cellVal.includes(targetTimeStr) || cellVal.includes(`${hour}:${targetMinStr}`)) {
-                    targetRowIndex = i + 2;
-                    break;
-                }
+            // Match if within a 10-min window (trigger fires every 10 min)
+            if (Math.abs(cellMinTotal - nowMinTotal) <= 4) {
+                targetRowIndex = i + 2;
+                genre = scheduleData[i][1];
+                break;
             }
         }
 
         if (targetRowIndex === -1) {
-            _log(`[Schedule] Abort: Current time ${targetTimeStr} is not defined in the Schedule sheet.`);
-            return internalLog.join("\\n"); // Not a scheduled time
+            _log(`[Schedule] No scheduled slot found near current time.`);
+            return internalLog.join("\\n");
         }
 
-        const genre = scheduleSheet.getRange(targetRowIndex, dayColIndex).getValue();
         if (!genre) {
-            _log(`[Schedule] Abort: No genre mapped for time ${targetTimeStr} at day column ${dayColIndex}.`);
-            props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId); // Mark as done (empty slot)
+            _log(`[Schedule] Abort: Row ${targetRowIndex} has no genre set.`);
+            props.setProperty("LAST_PROCESSED_SLOT", uniqueSlotId);
             return internalLog.join("\\n");
         }
 
