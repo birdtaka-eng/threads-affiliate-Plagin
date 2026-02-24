@@ -63,7 +63,7 @@ function setupLabSheet() {
         if (col.width) sheet.setColumnWidth(colNum, col.width);
 
         // Validation / formatting
-        range.clearDataValidations();
+        range.setDataValidation(null);
 
         if (col.type === "CHECKBOX") {
             const rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
@@ -295,6 +295,9 @@ function analyzeSingleRow(sheet, row) {
         // Write Result
         if (result.summary) {
             dnaCell.setValue(result.summary);
+            if (result.summary.includes("Safety Lock")) {
+                SpreadsheetApp.getActive().toast("AI LockがONのため分析をスキップしました。", "Safety", 5);
+            }
         }
     } catch (e) {
         dnaCell.setValue("Error: " + e.message);

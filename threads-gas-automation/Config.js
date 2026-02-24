@@ -11,6 +11,7 @@ var SHEET_DB = "テンプレートDB";
 var SHEET_TORANOMAKI = "虎の巻DB"; // User defined sheet
 var SHEET_SCHEDULE = "番組表";
 var SHEET_SETTINGS = "設定";
+var SHEET_SETTINGS_AI_LOCK = "B19"; // New safety lock cell
 var SHEET_SCHEDULE_A = "番組表A (ノーマル)";
 var SHEET_SCHEDULE_B = "番組表B (5と0の日)";
 var SHEET_SCHEDULE_C = "番組表C (マラソン)";
@@ -22,11 +23,17 @@ var SHOW_DEV_TOOLS = true;
 
 // --- 3. Gemini Models ---
 var AI_MODELS = [
-   "gemini-2.0-flash-exp",
+   "gemini-2.0-flash-lite",
+   "gemini-2.0-flash",
+   "gemini-2.0-flash-001",
+   "gemini-2.0-flash-lite-001",
+   "gemini-2.5-flash-lite",
+   "gemini-2.5-flash",
+   "gemini-2.5-pro",
    "gemini-1.5-flash",
    "gemini-1.5-pro"
 ];
-var DEFAULT_MODEL = "gemini-1.5-flash";
+var DEFAULT_MODEL = "gemini-2.0-flash-lite";
 
 // --- 3.5 Master GEM URLs (Custom Chatbots) ---
 var MASTER_GEMS = {

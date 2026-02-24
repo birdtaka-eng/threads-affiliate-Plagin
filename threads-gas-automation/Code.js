@@ -363,8 +363,8 @@ function setupSettingsSheet() {
     sheet.getRange("A4").setValue("Threads Token");
     sheet.getRange("B4").setValue(existingToken || "Enter Token");
     sheet.getRange("A5").setValue("Gemini Model");
-    const ruleModel = SpreadsheetApp.newDataValidation().requireValueInList(["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro"], true).build();
-    sheet.getRange("B5").setDataValidation(ruleModel).setValue(existingModel || "gemini-2.5-flash");
+    const ruleModel = SpreadsheetApp.newDataValidation().requireValueInList(AI_MODELS, true).build();
+    sheet.getRange("B5").setDataValidation(ruleModel).setValue(existingModel || DEFAULT_MODEL);
     sheet.getRange("A6").setValue("User Wish (Seed Persona)");
     sheet.getRange("B6").setValue(existingPersona || "【種】なりたい自分を自由に記述\n(例: 20代OL。カフェ巡りが好きで、親しみやすい存在になりたい。)");
 
@@ -432,7 +432,12 @@ Threadsから流入したユーザーに「あ、これ私のことだ」と思�
     }
     sheet.getRange("B11").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
 
-    Browser.msgBox("設定シートをリセットしました！\nB6: あなたの願い(種)\nB8: AIが育てた最強人格\nB9: 文体スタイル\nB11: システムプロンプト\nこれらが連携して動作します。");
+    // --- AI Safety Lock (B19) ---
+    sheet.getRange("A19").setValue("🚨 AI Safety Lock (緊急停止)").setFontWeight("bold").setBackground("#f4cccc");
+    sheet.getRange("B19").setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build()).setValue(false);
+    sheet.getRange("A19").setNote("ONにすると、全てのAI(Gemini)機能が停止します。クォータ切れやテスト時に使用してください。");
+
+    Browser.msgBox("設定シートをリセットしました！\nB6: あなたの願い(種)\nB8: AIが育てた最強人格\nB9: 文体スタイル\nB11: システムプロンプト\nB19: AI安全ロック\nこれらが連携して動作します。");
 }
 
 /**
@@ -443,21 +448,21 @@ function setupScheduleSheet() {
     // 1シート横並び 4パターン
     // B,C = A:ノーマル / E,F = B:5と0の日 / H,I = C:マラソン / K,L = D:スーパーSALE
     var patterns = [
-        { label: 'A: ノーマル',      count: '~30投稿/日', color: '#4a86e8', startCol: 2,  bands: [[6,9,30],[9,18,60],[18,21,30],[21,24,20]] },
-        { label: 'B: 5と0の日',   count: '~54投稿/日', color: '#6aa84f', startCol: 5,  bands: [[6,9,15],[9,18,30],[18,21,15],[21,24,15]] },
-        { label: 'C: マラソン',     count: '~70投稿/日', color: '#e69138', startCol: 8,  bands: [[6,9,15],[9,18,20],[18,21,15],[21,24,10]] },
-        { label: 'D: スーパーSALE', count: '~90投稿/日', color: '#cc0000', startCol: 11, bands: [[6,9,10],[9,18,15],[18,21,10],[21,24,10]] }
+        { label: 'A: ノーマル', count: '~30投稿/日', color: '#4a86e8', startCol: 2, bands: [[6, 9, 30], [9, 18, 60], [18, 21, 30], [21, 24, 20]] },
+        { label: 'B: 5と0の日', count: '~54投稿/日', color: '#6aa84f', startCol: 5, bands: [[6, 9, 15], [9, 18, 30], [18, 21, 15], [21, 24, 15]] },
+        { label: 'C: マラソン', count: '~70投稿/日', color: '#e69138', startCol: 8, bands: [[6, 9, 15], [9, 18, 20], [18, 21, 15], [21, 24, 10]] },
+        { label: 'D: スーパーSALE', count: '~90投稿/日', color: '#cc0000', startCol: 11, bands: [[6, 9, 10], [9, 18, 15], [18, 21, 10], [21, 24, 10]] }
     ];
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(SHEET_SCHEDULE);
     if (!sheet) sheet = ss.insertSheet(SHEET_SCHEDULE);
     sheet.clear();
-    sheet.clearDataValidations();
+    sheet.getRange("A:M").clearDataValidations();
 
     // Spacer cols narrow, data cols normal width
-    [4, 7, 10].forEach(function(c) { sheet.setColumnWidth(c, 16); });
-    [2, 3, 5, 6, 8, 9, 11, 12].forEach(function(c) { sheet.setColumnWidth(c, 90); });
+    [4, 7, 10].forEach(function (c) { sheet.setColumnWidth(c, 16); });
+    [2, 3, 5, 6, 8, 9, 11, 12].forEach(function (c) { sheet.setColumnWidth(c, 90); });
     sheet.setColumnWidth(1, 16);
     sheet.setRowHeight(1, 48);
     sheet.setFrozenRows(2);
@@ -467,7 +472,7 @@ function setupScheduleSheet() {
     var timeOpts = [];
     for (var h = 5; h <= 23; h++) {
         for (var m = 0; m < 60; m += 5) {
-            timeOpts.push(('0'+h).slice(-2)+':'+('0'+m).slice(-2));
+            timeOpts.push(('0' + h).slice(-2) + ':' + ('0' + m).slice(-2));
         }
     }
     var timeRule = SpreadsheetApp.newDataValidation().requireValueInList(timeOpts, true).setAllowInvalid(true).build();
@@ -484,18 +489,18 @@ function setupScheduleSheet() {
         // Row 2: sub-headers
         sheet.getRange(2, sc).setValue('投稿時刻').setFontWeight('bold')
             .setBackground(p.color).setFontColor('#ffffff').setHorizontalAlignment('center');
-        sheet.getRange(2, sc+1).setValue('ジャンル').setFontWeight('bold')
+        sheet.getRange(2, sc + 1).setValue('ジャンル').setFontWeight('bold')
             .setBackground(p.color).setFontColor('#ffffff').setHorizontalAlignment('center');
         // Dropdowns
         sheet.getRange(3, sc, 100, 1).setDataValidation(timeRule).setHorizontalAlignment('center');
-        sheet.getRange(3, sc+1, 100, 1).setDataValidation(genreRule).setHorizontalAlignment('center');
+        sheet.getRange(3, sc + 1, 100, 1).setDataValidation(genreRule).setHorizontalAlignment('center');
         // Time slots
         var data = []; var gIdx = 0;
         for (var bi = 0; bi < p.bands.length; bi++) {
             var sh = p.bands[bi][0], eh = p.bands[bi][1], iv = p.bands[bi][2];
             var t = sh * 60;
             while (t < eh * 60 && data.length < 100) {
-                data.push([('0'+Math.floor(t/60)).slice(-2)+':'+('0'+(t%60)).slice(-2), genres[gIdx % genres.length]]);
+                data.push([('0' + Math.floor(t / 60)).slice(-2) + ':' + ('0' + (t % 60)).slice(-2), genres[gIdx % genres.length]]);
                 gIdx++; t += iv;
             }
         }
@@ -508,7 +513,7 @@ function setupScheduleSheet() {
     if (settingsSheet) {
         settingsSheet.getRange('A17').setValue('アクティブ番組表 ').setFontWeight('bold');
         settingsSheet.getRange('B17')
-            .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['A','B','C','D'],true).build())
+            .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['A', 'B', 'C', 'D'], true).build())
             .setValue('A');
         settingsSheet.getRange('A17:B17').setBackground('#e8f0fe');
     }
@@ -591,7 +596,7 @@ function getGeminiModel() {
             }
         }
     } catch (e) { }
-    return "gemini-2.5-flash";
+    return DEFAULT_MODEL;
 }
 
 function getGeminiApiKey() {
@@ -632,6 +637,16 @@ function getThreadsCredentials() {
  * @param {Array<{mimeType: string, data: string}>} [images] - Array of base64 images
  */
 function callGeminiSafe(apiKey, prompt, images) {
+    // --- 0. AI Lock Check ---
+    try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const setSheet = ss.getSheetByName(SHEET_SETTINGS);
+        if (setSheet && setSheet.getRange(SHEET_SETTINGS_AI_LOCK).getValue() === true) {
+            console.warn("Gemini execution blocked by AI Safety Lock.");
+            return "⚠️ AI Lock is ON. Execution skipped.";
+        }
+    } catch (e) { }
+
     const model = getGeminiModel();
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
@@ -685,7 +700,14 @@ function callGeminiSafe(apiKey, prompt, images) {
                 throw new Error(`Gemini Blocked: ${reason}`);
             }
 
-            if ([429, 500, 503].includes(responseCode)) {
+            if ([429, 403].includes(responseCode)) {
+                const retryMsg = responseCode === 429 ? "Quota Exhausted" : "Access Forbidden (Quota/Key issue)";
+                console.error(`Gemini Fatal Error (${responseCode}): ${retryMsg}`);
+                // Don't retry for quota/forbidden errors to save script time
+                throw new Error(`Gemini Safety Stop: ${retryMsg}`);
+            }
+
+            if ([500, 503].includes(responseCode)) {
                 Utilities.sleep(1000 * Math.pow(2, attempt));
                 attempt++;
                 continue;
@@ -694,6 +716,7 @@ function callGeminiSafe(apiKey, prompt, images) {
             throw new Error(`Gemini Error (${responseCode}): ${errorMsg}`);
 
         } catch (e) {
+            if (e.message.includes("Safety Stop")) throw e;
             if (attempt === maxRetries - 1) throw e;
             Utilities.sleep(1000);
             attempt++;
