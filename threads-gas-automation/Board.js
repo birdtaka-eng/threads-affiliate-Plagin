@@ -265,20 +265,17 @@ function runScheduledBroadcast() {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
 
         // Which pattern is active? (設定シートのB17: A/B/C/D)
+        // Single sheet layout: B,C=A / E,F=B / H,I=C / K,L=D (startCol = 2/5/8/11)
         const settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
         const activePattern = settingsSheet ? String(settingsSheet.getRange("B17").getValue()).trim().toUpperCase() : "A";
-        const scheduleNames = {
-            "A": SHEET_SCHEDULE_A,
-            "B": SHEET_SCHEDULE_B,
-            "C": SHEET_SCHEDULE_C,
-            "D": SHEET_SCHEDULE_D
-        };
-        const scheduleSheetName = scheduleNames[activePattern] || SHEET_SCHEDULE_A;
-        _log(`[Schedule] Active pattern: ${activePattern} → ${scheduleSheetName}`);
+        const colMap = { "A": 2, "B": 5, "C": 8, "D": 11 };
+        const timeCol = colMap[activePattern] || 2;
+        const genreCol = timeCol + 1;
+        _log(`[Schedule] Active pattern: ${activePattern} (cols ${timeCol},${genreCol})`);
 
-        const scheduleSheet = ss.getSheetByName(scheduleSheetName);
+        const scheduleSheet = ss.getSheetByName(SHEET_SCHEDULE);
         if (!scheduleSheet) {
-            _log(`[Abort] 番組表シート「${scheduleSheetName}」が見つかりません。「番組表リセット」を実行してください。`);
+            _log("[Abort] 番組表シートが見つかりません。「番組表リセット」を実行してください。");
             return internalLog.join("\\n");
         }
 
@@ -294,18 +291,19 @@ function runScheduledBroadcast() {
         // Only process each unique Date+Time slot once (rounded to 10-min block)
         const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd");
         const blockMin = Math.floor(min / 10) * 10;
-        const uniqueSlotId = `${dateStr}_${("0" + hour).slice(-2)}:${("0" + blockMin).slice(-2)}`;
+        const uniqueSlotId = `${dateStr}_${("0" + hour).slice(-2)}:${("0" + blockMin).slice(-2)}_${activePattern}`;
         const props = PropertiesService.getScriptProperties();
         if (props.getProperty("LAST_PROCESSED_SLOT") === uniqueSlotId) {
             _log(`[Abort] すでに処理済みのスロットです: ${uniqueSlotId}`);
             return internalLog.join("\\n");
         }
 
-        // 1. Find matching time in Schedule (B column), read genre from C column
-        const lastRowSchedule = Math.max(scheduleSheet.getLastRow(), 2);
-        const scheduleData = scheduleSheet.getRange(2, 2, lastRowSchedule - 1, 2).getDisplayValues(); // B2:C...
+        // 1. Find matching time in schedule column, read genre from adjacent column
+        // Data starts at row 3 (row1=title, row2=headers)
+        const lastRowSchedule = Math.max(scheduleSheet.getLastRow(), 3);
+        const scheduleData = scheduleSheet.getRange(3, timeCol, lastRowSchedule - 2, 2).getDisplayValues();
 
-        _log(`[Schedule] Scanning ${scheduleData.length} schedule rows...`);
+        _log(`[Schedule] Scanning ${scheduleData.length} rows for pattern ${activePattern}...`);
 
         let targetRowIndex = -1;
         let genre = "";
@@ -314,23 +312,22 @@ function runScheduledBroadcast() {
             const cellTime = String(scheduleData[i][0]).trim();
             if (!cellTime) continue;
 
-            const match = cellTime.match(/(\d{1,2})[:\u6642]\s*(\d{1,2})?/);
+            const match = cellTime.match(/(\d{1,2})[:時]\s*(\d{1,2})?/);
             if (!match) continue;
 
             const cellHour = parseInt(match[1], 10);
             const cellMin = match[2] ? parseInt(match[2], 10) : 0;
             const cellMinTotal = cellHour * 60 + cellMin;
 
-            // Match if within a 10-min window (trigger fires every 10 min)
             if (Math.abs(cellMinTotal - nowMinTotal) <= 4) {
-                targetRowIndex = i + 2;
+                targetRowIndex = i + 3;
                 genre = scheduleData[i][1];
                 break;
             }
         }
 
         if (targetRowIndex === -1) {
-            _log(`[Schedule] No scheduled slot found near current time.`);
+            _log(`[Schedule] No scheduled slot found near current time for pattern ${activePattern}.`);
             return internalLog.join("\\n");
         }
 
