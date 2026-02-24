@@ -114,9 +114,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const tab = tabs[0];
             if (!tab) return;
 
-            // ★ Smart Scrape: Ignore Threads to preserve Rakuten Data
-            if (tab.url.includes("threads.net")) {
-                console.log("Threads detected: Keeping previous product data.");
+            // ★ Smart Scrape: Ignore Threads & Gemini to preserve product/image data
+            if (tab.url.includes("threads.net") || tab.url.includes("gemini.google.com")) {
+                console.log("Threads/Gemini detected: Keeping previous product data.");
                 return;
             }
 
