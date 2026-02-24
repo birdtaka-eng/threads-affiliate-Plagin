@@ -1,4 +1,4 @@
-// ==========================================
+﻿// ==========================================
 // 🚀 Threads職人 (Code.js) - Controller
 // ==========================================
 
@@ -512,8 +512,7 @@ function setupScheduleSheet() {
             .setValue('A');
         settingsSheet.getRange('A17:B17').setBackground('#e8f0fe');
     }
-    Browser.msgBox(' 番組表（1シート4パターン横並び）を作成しました！
-設定シートのB17でA/B/C/Dを切り替えてください。');
+    Browser.msgBox('番組表(1シート4パターン横並び)を作成しました！ 設定シートB17でA/B/C/Dを切り替えてください。');
 }
 
 
@@ -925,3 +924,4 @@ function disableScheduleTrigger(silent) {
         }
     }
 }
+
