@@ -89,20 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (request.action === "result_received") {
             console.log("Gemini finished:", request.persona);
             updateStatus(`✅ ${request.persona} の執筆が完了しました！`, "green");
-
-            if (request.html) {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = request.html;
-                let generatedText = tempDiv.innerText.trim();
-
-                if (postContent) {
-                    if (postContent.value.length === 0) {
-                        postContent.value = generatedText;
-                    } else {
-                        postContent.value += "\n\n" + generatedText;
-                    }
-                }
-            }
+            // Auto-fill removed: Gemini results go directly to the Gemini tab
         }
     });
 
