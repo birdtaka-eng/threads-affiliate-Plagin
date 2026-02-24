@@ -22,9 +22,10 @@ function onOpen() {
         .addSeparator()
         .addItem('🚀 師匠へ (Copy & Go)', 'showMasterModal')
         .addSeparator()
+        .addSeparator()
         .addItem('【放送】手動放送テスト (今放送すべきものを実行)', 'runBroadcast')
         .addItem('【分析】投稿データ更新 (Metrics)', 'updateMetrics')
-        .addItem('【分析】虎の巻アップデート (Master DNA)', 'updateMasterDNA')
+        // .addItem('【分析】虎の巻アップデート (Master DNA)', 'updateMasterDNA') // [LEGACY]
         .addSeparator()
         .addItem('【ヒント】表示ON', 'showTips')
         .addItem('【ヒント】表示OFF', 'hideTips')
@@ -43,7 +44,7 @@ function onOpen() {
         .addItem('【設定】全体設定シート作成 (リセット)', 'setupSettingsSheet')
         .addItem('【設定】投稿ボード作成 (リセット)', 'setupBoardSheet')
         .addItem('【設定】番組表リセット', 'setupScheduleSheet')
-        .addItem('【設定】バズ研究所シート拡張', 'setupLabSheet')
+        // .addItem('【設定】バズ研究所シート拡張', 'setupLabSheet') // [LEGACY]
         .addSeparator()
         .addItem('🎨【デザイン】Midnight Glass適用', 'applyPremiumTheme')
         .addSeparator()
@@ -52,8 +53,8 @@ function onOpen() {
     // Developer Only
     if (isDevMode()) {
         devMenu.addSeparator()
-            .addItem('🛑【開発】DNA統合 (グリモワール化)', 'updateMasterDNA')
-            .addItem('🛑【開発】DB構築 (魔法の杖)', 'setupTemplateDatabase')
+            // .addItem('🛑【開発】DNA統合 (グリモワール化)', 'updateMasterDNA') // [LEGACY]
+            // .addItem('🛑【開発】DB構築 (魔法の杖)', 'setupTemplateDatabase') // [LEGACY]
             .addItem('🔑【診断】API接続テスト', 'testConnection')
             .addItem('🛑【開発】モデル診断', 'debugListModels');
     }
@@ -115,7 +116,7 @@ function onSelectionChange(e) {
  * 【設定】自動化トリガー設定 (全体)
  */
 function setupAllTriggers() {
-    setupLabTrigger(); // Lab.js
+    // setupLabTrigger(); // [LEGACY]
     setupTriggerCommon(SHEET_BOARD, "onBoardEditInstallable"); // Board.js
 
     // Forced authorization check
@@ -131,14 +132,11 @@ function setupAllTriggers() {
 /**
  * トリガーの現在の状態を診断
  */
+/* [LEGACY]
 function checkTriggerStatus() {
-    const handlers = ScriptApp.getProjectTriggers().map(t => t.getHandlerFunction());
-    if (handlers.indexOf("onBoardEditInstallable") !== -1) {
-        Browser.msgBox("✅ 診断結果: 正常\n\n自動合体トリガーはすでに登録されています。D〜F列を編集して右下に通知が出るか確認してください。");
-    } else {
-        Browser.msgBox("❌ 診断結果: 未登録\n\n自動合体トリガーが見つかりません。「自動合体を有効にする」ボタンをもう一度押してください。");
-    }
+... (Omitted)
 }
+*/
 
 /**
  * 【メニュー用】シートで選択されているセルの画像URLを一時保存する

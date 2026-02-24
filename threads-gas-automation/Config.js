@@ -6,9 +6,9 @@
 
 // --- 1. Sheet Names ---
 var SHEET_BOARD = "投稿作成ボード";
-var SHEET_LAB = "バズ研究所";
-var SHEET_DB = "テンプレートDB";
-var SHEET_TORANOMAKI = "虎の巻DB"; // User defined sheet
+// var SHEET_LAB = "バズ研究所"; // [LEGACY]
+// var SHEET_DB = "テンプレートDB"; // [LEGACY]
+// var SHEET_TORANOMAKI = "虎の巻DB"; // [LEGACY] User defined sheet
 var SHEET_SCHEDULE = "番組表";
 var SHEET_SETTINGS = "設定";
 var SHEET_SETTINGS_AI_LOCK = "B19"; // New safety lock cell
@@ -46,6 +46,7 @@ var MASTER_GEMS = {
 };
 
 // --- 4. Layout Definitions (Buzz Lab) ---
+/* [LEGACY] - Buzz Lab Config
 var LAB_CONFIG = {
    // Row 1: Description
    description: "【使い方】\n1. 「Raw Post」にバズった投稿の本文を貼り付けます。\n2. 「🚀 Run」にチェックを入れるとAIが分析を開始します。\n3. 結果(DNA)が右側に出力され、自動的に「テンプレートDB」に登録されます。",
@@ -90,29 +91,11 @@ var LAB_CONFIG = {
       }
    ]
 };
+*/
 
-// --- Humor Library (for Analysis) ---
+/* [LEGACY] - Humor Library
 var HUMOR_LIBRARY = `
-1. The Absurd List (3段落ち)
-   Structure: "Normal A, Normal B, [Absurd C]"
-2. Specific Hyperbole (具体的すぎる誇張)
-   Structure: "Not just [Adjective], but [Adjective] like [Specific Scene]"
-3. The Honest Reversal (急な裏切り/本音)
-   Structure: [Serious/Professional Statement] + [Pathetic/Lazy Reality]
-4. The "Me vs. World" Contrast (自虐)
-   Structure: "Everyone else: [Success]. Me: [Struggle]."
-5. Metaphorical Juxtaposition (異種格闘技戦)
-   Structure: "[Topic] is like [Unrelated Thing] because [Shared Trait]."
-6. The Playful Label (愛嬌のある造語)
-   Structure: [Target Attribute] -> [Playful Neologism]
-7. The Benign Violation (緩和された違反)
-   Structure: [A mild threat/taboo/insult] + [Playful context/Safety net]
-8. The Joy of Debugging (思考のバグ)
-   Structure: [Impossible Logic] + [Confident Assertion]
-9. The Insignificant Detail (どうでもいい話)
-   Structure: [Big Event] -> [Focus on tiny, irrelevant detail]
-10. The Ride & Deny (ノリツッコミ/1回肯定)
-   Structure: [Total Agreement/Praise] -> [Sudden Denial/Reality Check]
-   Structure: [Total Agreement/Praise] -> [Sudden Denial/Reality Check]
+... (Omitted for brevity)
 `;
+*/
 

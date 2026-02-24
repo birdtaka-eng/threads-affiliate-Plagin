@@ -1,3 +1,3 @@
 
 // Current Version
-var APP_VERSION = "v2.5-STABLE";
+var APP_VERSION = "v2.7-FROZEN";

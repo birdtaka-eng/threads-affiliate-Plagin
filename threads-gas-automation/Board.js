@@ -763,7 +763,8 @@ function onBoardEditInstallable(e) {
     }
     */
 
-    // 2. DNA Auto-Analysis (Column G = 7)
+    // 2. DNA Auto-Analysis (Column G = 7) [FROZEN]
+    /*
     if (col === 7 && row >= 4) {
         var val = range.getValue();
         var dna = sheet.getRange(row, 16).getValue(); // Col P
@@ -771,6 +772,7 @@ function onBoardEditInstallable(e) {
             analyzeSingleRowBoard(sheet, row);
         }
     }
+    */
 }
 
 /**
@@ -924,63 +926,14 @@ function generateRowCollage(sheet, row) {
 /**
  * 単一行分析ロジック
  */
-function analyzeSingleRowBoard(sheet, row) {
-    var apiKey = getGeminiApiKey();
-    if (!apiKey) return;
-
-    var rawPostCell = sheet.getRange(row, 7); // Col G
-    var dnaCell = sheet.getRange(row, 16);     // Col P
-
-    var rawPost = rawPostCell.getValue();
-    if (!rawPost) return;
-
-    try {
-        dnaCell.setValue("⏳ Analyzing DNA...");
-        SpreadsheetApp.flush();
-
-        var result = analyzeDojoTextBoard(apiKey, rawPost, sheet, row);
-
-        if (result.summary) {
-            dnaCell.setValue(result.summary);
-        }
-    } catch (e) {
-        dnaCell.setValue("Error: " + e.message);
-    }
+/* [FROZEN] - Legacy Analysis Logic
+function analyzeSingleRowBoard(sheet, row) { 
+    ... (Omitted) 
 }
-
-
-/**
- * AI Analysis logic for the Board (Multimodal)
- */
 function analyzeDojoTextBoard(apiKey, rawText, sheet, row) {
-    // Fetch Images from row (Col D, E, F -> 4, 5, 6)
-    var imageRange = sheet.getRange(row, 4, 1, 3); // D, E, F
-    var urls = imageRange.getValues()[0];
-    var encodedImages = [];
-
-    urls.forEach(url => {
-        if (url && String(url).startsWith("http")) {
-            var imgData = fetchImageAsBase64(url);
-            if (imgData) encodedImages.push(imgData);
-        }
-    });
-
-    var prompt = "あなたは世界最高峰のコンテンツ・ストラテジストです。\n" +
-        "以下の「SNS投稿」（テキストと添付画像）から、AI生成システムに組み込むための「構造化データ（エッセンス）」を抽出してください。\n\n" +
-        "【対象投稿テキスト】\n" + rawText + "\n\n" +
-        (encodedImages.length > 0 ? "【添付画像】\n" + encodedImages.length + "枚の画像を添付しました。画像内の文字や視覚的情報も分析に含めてください。\n\n" : "") +
-        "【抽出項目】\n" +
-        "1. General Rules (心得・戦略・フックの癖)\n" +
-        "2. Templates (そのまま使える構文テンプレート)\n" +
-        "3. Visual DNA (画像の傾向・構図・文字入れの特徴)\n\n" +
-        "必ず以下の形式で簡潔に出力してください。\n" +
-        "【DNA要約】\n(ここにルールと型と視覚的特徴をまとめる)";
-
-    var result = callGeminiSafe(apiKey, prompt, encodedImages);
-    if (!result) return { summary: "Analysis failed." };
-
-    return { summary: result };
+    ... (Omitted)
 }
+*/
 
 /**
  * Handle onSelectionChange for Board Sheet (Auto-Expanding)
