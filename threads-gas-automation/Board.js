@@ -311,17 +311,34 @@ function runScheduledBroadcast() {
         let genre = "";
 
         for (let i = 0; i < scheduleData.length; i++) {
-            const cellTime = String(scheduleData[i][0]).trim();
+            let cellTime = String(scheduleData[i][0]).trim();
             if (!cellTime) continue;
 
+            // Zenkaku to Hankaku digits & colon
+            cellTime = cellTime.replace(/[０-９]/g, function (s) {
+                return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+            }).replace('：', ':');
+
             const match = cellTime.match(/(\d{1,2})[:時]\s*(\d{1,2})?/);
-            if (!match) continue;
+            if (!match) {
+                _log(`[Schedule Debug] Row ${i + 3} Regex Failed: '${cellTime}'`);
+                continue;
+            }
 
-            const cellHour = parseInt(match[1], 10);
+            let cellHour = parseInt(match[1], 10);
             const cellMin = match[2] ? parseInt(match[2], 10) : 0;
-            const cellMinTotal = cellHour * 60 + cellMin;
 
-            if (Math.abs(cellMinTotal - nowMinTotal) <= 3) {
+            // Handle "PM" from getDisplayValues if present
+            if (cellTime.toUpperCase().includes("PM") && cellHour < 12) {
+                cellHour += 12;
+            }
+
+            const cellMinTotal = cellHour * 60 + cellMin;
+            const diff = Math.abs(cellMinTotal - nowMinTotal);
+
+            _log(`[Schedule Debug] Row ${i + 3} Parsed: ${cellHour}:${cellMin} | Diff: ${diff} mins (<= 8 required)`);
+
+            if (diff <= 8) {
                 targetRowIndex = i + 3;
                 genre = scheduleData[i][1];
                 break;
@@ -349,7 +366,7 @@ function runScheduledBroadcast() {
         }
 
         const lastRow = Math.max(boardSheet.getLastRow(), 4);
-        const boardData = boardSheet.getRange(`A4:Q${lastRow}`).getValues();
+        const boardData = boardSheet.getRange(`A4:R${lastRow}`).getValues();
 
         let oldestRow = -1;
         let oldestTime = null;
@@ -360,7 +377,7 @@ function runScheduledBroadcast() {
             const type = boardData[i][2];
 
             if (isChecked && type === genre) {
-                const lastBroadcast = boardData[i][16]; // Q column (0-indexed 16)
+                const lastBroadcast = boardData[i][17]; // R column (0-indexed 17)
 
                 if (!lastBroadcast) {
                     oldestRow = i + 4;
@@ -425,7 +442,7 @@ function runScheduledBroadcast() {
 
         let res;
 
-        if (type === "単品") {
+        if (type === "単品" && replyText.trim() !== "") {
             _log(`[Schedule] Two-Step Reply Mode (Type: 単品)`);
             let post1Images = extractedUrls[0] ? [extractedUrls[0]] : [];
             res = postToThreadsAPI(userId, token, threadsText, post1Images);
