@@ -283,14 +283,14 @@ function runScheduledBroadcast() {
         const hour = now.getHours();
         const min = now.getMinutes();
 
-        // Match exact HH:MM (10-min trigger, so we accept ±4 min window)
+        // Match exact HH:MM (5-min trigger, so we accept ±3 min window)
         const nowMinTotal = hour * 60 + min;
 
         _log(`[Schedule] Checking time: ${("0" + hour).slice(-2)}:${("0" + min).slice(-2)}`);
 
-        // Only process each unique Date+Time slot once (rounded to 10-min block)
+        // Only process each unique Date+Time slot once (rounded to 5-min block)
         const dateStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd");
-        const blockMin = Math.floor(min / 10) * 10;
+        const blockMin = Math.floor(min / 5) * 5;
         const uniqueSlotId = `${dateStr}_${("0" + hour).slice(-2)}:${("0" + blockMin).slice(-2)}_${activePattern}`;
         const props = PropertiesService.getScriptProperties();
         if (props.getProperty("LAST_PROCESSED_SLOT") === uniqueSlotId) {
@@ -319,7 +319,7 @@ function runScheduledBroadcast() {
             const cellMin = match[2] ? parseInt(match[2], 10) : 0;
             const cellMinTotal = cellHour * 60 + cellMin;
 
-            if (Math.abs(cellMinTotal - nowMinTotal) <= 4) {
+            if (Math.abs(cellMinTotal - nowMinTotal) <= 3) {
                 targetRowIndex = i + 3;
                 genre = scheduleData[i][1];
                 break;

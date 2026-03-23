@@ -44,6 +44,7 @@ function onOpen() {
         .addItem('【設定】全体設定シート作成 (リセット)', 'setupSettingsSheet')
         .addItem('【設定】投稿ボード作成 (リセット)', 'setupBoardSheet')
         .addItem('【設定】番組表リセット', 'setupScheduleSheet')
+        .addItem('【設定】テスト用番組表作成 (3段)', 'setupTestScheduleSheet')
         // .addItem('【設定】バズ研究所シート拡張', 'setupLabSheet') // [LEGACY]
         .addSeparator()
         .addItem('🎨【デザイン】Midnight Glass適用', 'applyPremiumTheme')
@@ -944,5 +945,85 @@ function disableScheduleTrigger(silent) {
             Browser.msgBox("現在、自動放送は設定されていません。");
         }
     }
+}
+
+/**
+ * テスト用番組表（3段）を作成する
+ * 5分単位で自由に設定可能
+ */
+function setupTestScheduleSheet() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(SHEET_SCHEDULE);
+    if (!sheet) sheet = ss.insertSheet(SHEET_SCHEDULE);
+    sheet.clear();
+    sheet.getRange("A:M").clearDataValidations();
+
+    // 1パターン(Aのみ)作成
+    var p = { label: 'Test: 3段カスタム', color: '#8e7cc3', startCol: 2 };
+    var sc = p.startCol;
+
+    sheet.setColumnWidth(1, 16);
+    sheet.setColumnWidth(sc, 90);
+    sheet.setColumnWidth(sc + 1, 90);
+    sheet.setRowHeight(1, 48);
+    sheet.setFrozenRows(2);
+
+    // Row 1: title
+    sheet.getRange(1, sc, 1, 2).merge()
+        .setValue('[' + p.label + ']')
+        .setFontWeight('bold').setBackground(p.color).setFontColor('#ffffff')
+        .setHorizontalAlignment('center').setVerticalAlignment('middle');
+    // Row 2: sub-headers
+    sheet.getRange(2, sc).setValue('投稿時刻').setFontWeight('bold')
+        .setBackground(p.color).setFontColor('#ffffff').setHorizontalAlignment('center');
+    sheet.getRange(2, sc + 1).setValue('ジャンル').setFontWeight('bold')
+        .setBackground(p.color).setFontColor('#ffffff').setHorizontalAlignment('center');
+
+    // Dropdowns
+    var genres = ['単品', 'まとめ', '単品'];
+    var genreOpts = ['単品', 'まとめ', '日常', '有益', 'Free', '議論', '実体験', '自己紹介', 'Promotion'];
+    var timeOpts = [];
+    for (var h = 0; h <= 23; h++) {
+        for (var m = 0; m < 60; m += 5) {
+            timeOpts.push(('0' + h).slice(-2) + ':' + ('0' + m).slice(-2));
+        }
+    }
+
+    var timeRule = SpreadsheetApp.newDataValidation().requireValueInList(timeOpts, true).setAllowInvalid(true).build();
+    var genreRule = SpreadsheetApp.newDataValidation().requireValueInList(genreOpts, true).setAllowInvalid(false).build();
+
+    sheet.getRange(3, sc, 3, 1).setDataValidation(timeRule).setHorizontalAlignment('center');
+    sheet.getRange(3, sc + 1, 3, 1).setDataValidation(genreRule).setHorizontalAlignment('center');
+
+    // 3 time slots default to next 5, 10, 15 minutes roughly
+    var now = new Date();
+    var h = now.getHours();
+    var m = now.getMinutes();
+    var startM = Math.floor(m / 5) * 5 + 5;
+
+    var data = [];
+    for (var i = 0; i < 3; i++) {
+        var tm = startM + (i * 5);
+        var th = h;
+        if (tm >= 60) {
+            th = (th + 1) % 24;
+            tm = tm % 60;
+        }
+        data.push([('0' + th).slice(-2) + ':' + ('0' + tm).slice(-2), genres[i]]);
+    }
+
+    sheet.getRange(3, sc, 3, 2).setValues(data);
+    sheet.getRange(1, sc, 5, 2).setBorder(true, true, true, true, true, true, '#cccccc', SpreadsheetApp.BorderStyle.SOLID);
+
+    // Pattern selector in 設定シート (force to A)
+    var settingsSheet = ss.getSheetByName(SHEET_SETTINGS);
+    if (settingsSheet) {
+        settingsSheet.getRange('A17').setValue('アクティブ番組表 ').setFontWeight('bold');
+        settingsSheet.getRange('B17')
+            .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['A', 'B', 'C', 'D'], true).build())
+            .setValue('A');
+        settingsSheet.getRange('A17:B17').setBackground('#e8f0fe');
+    }
+    Browser.msgBox('テスト用番組表(3段)を作成しました！ 設定マスタ(B17)も強制的にAに合わせています。時刻は5分単位でプルダウンから変更できます。');
 }
 
