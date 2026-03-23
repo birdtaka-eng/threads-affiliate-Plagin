@@ -26,30 +26,31 @@ function setupBoardSheet() {
 
     // 2. ヘッダー行 (2行目)
     var headers = [
-        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "ROOM Content (ROOM投稿用)", "Threads Post (Threads投稿)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Last Broadcast"]
+        ["ON AIR", "No", "Type", "Photo 1", "Photo 2", "Photo 3", "ROOM Content (ROOM投稿用)", "Threads Post (フック)", "Reply Post (リプライ用)", "System ID", "👁️ Views", "❤️ Likes", "💬 Replies", "🔁 Reposts", "📊 Rate", "📝 Judge", "DNA (分析)", "Last Broadcast"]
     ];
 
-    sheet.getRange("A2:Q2").setValues(headers);
-    sheet.getRange("A2:Q2").setBackground("#ffe599"); // Yellow
-    sheet.getRange("A2:Q2").setFontWeight("bold");
-    sheet.getRange("A2:Q2").setHorizontalAlignment("center");
+    sheet.getRange("A2:R2").setValues(headers);
+    sheet.getRange("A2:R2").setBackground("#ffe599"); // Yellow
+    sheet.getRange("A2:R2").setFontWeight("bold");
+    sheet.getRange("A2:R2").setHorizontalAlignment("center");
 
     // 3. ガイド行 (3行目)
     var guides = [
         "チェックボックス", "No", "↓Type", "[Auto1]", "[Auto2]", "[Auto3]",
         "↓ここでROOM用文章をコピペ",
-        "←ここにAIが書いた文章が出ます",
+        "←ここに1通目フック文章",
+        "←ここに2通目返信文章",
         "⛔ ID", "閲覧数", "いいね", "返信", "引用/再投稿", "反応率", "判定",
         "←ここにAI分析結果が出ます",
         "自動記録(ループ用)"
     ];
-    sheet.getRange("A3:Q3").setValues([guides]);
-    sheet.getRange("A3:Q3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A3:R3").setValues([guides]);
+    sheet.getRange("A3:R3").setBackground("#f3f3f3").setFontColor("#666666").setFontSize(9).setVerticalAlignment("top").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
     sheet.setRowHeight(3, 60);
 
     // 4. データエリア設定 (4行目以降)
-    sheet.getRange("A4:Q1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
-    sheet.getRange("A4:Q1000").setVerticalAlignment("top");
+    sheet.getRange("A4:R1000").setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange("A4:R1000").setVerticalAlignment("top");
     sheet.setRowHeight(2, 40); // Header height
     sheet.setFrozenRows(3);    // Freeze top 3 rows
 
@@ -83,17 +84,18 @@ function setupBoardSheet() {
     sheet.setColumnWidth(6, 150); // Photo 3 (Larger width)
     sheet.setColumnWidth(7, 300); // ROOM Content (Wider for text)
     sheet.setColumnWidth(8, 400); // Output
-    sheet.setColumnWidth(9, 50);  // System ID
+    sheet.setColumnWidth(9, 400); // Reply Post
+    sheet.setColumnWidth(10, 50);  // System ID
 
     // Metrics Widths
-    sheet.setColumnWidth(10, 60); // Views
-    sheet.setColumnWidth(11, 60); // Likes
-    sheet.setColumnWidth(12, 60); // Replies
-    sheet.setColumnWidth(13, 60); // Reposts
-    sheet.setColumnWidth(14, 60); // Rate
-    sheet.setColumnWidth(15, 60); // Judge
-    sheet.setColumnWidth(16, 200); // DNA
-    sheet.setColumnWidth(17, 120); // Last Broadcast
+    sheet.setColumnWidth(11, 60); // Views
+    sheet.setColumnWidth(12, 60); // Likes
+    sheet.setColumnWidth(13, 60); // Replies
+    sheet.setColumnWidth(14, 60); // Reposts
+    sheet.setColumnWidth(15, 60); // Rate
+    sheet.setColumnWidth(16, 60); // Judge
+    sheet.setColumnWidth(17, 200); // DNA
+    sheet.setColumnWidth(18, 120); // Last Broadcast
 
     try {
         Browser.msgBox("投稿作成ボード(Pro版)の準備ができました！");
@@ -124,28 +126,28 @@ function updateMetrics() {
         const lastRow = Math.max(boardSheet.getLastRow(), 4);
         if (lastRow < 4) return;
 
-        const boardData = boardSheet.getRange(`A4:P${lastRow}`).getValues();
+        const boardData = boardSheet.getRange(`A4:R${lastRow}`).getValues();
 
         let updatedCount = 0;
 
         for (let i = 0; i < boardData.length; i++) {
-            const mediaId = String(boardData[i][8]).trim(); // Column I (System ID)
+            const mediaId = String(boardData[i][9]).trim(); // Column J (System ID)
 
             if (mediaId && mediaId.length > 5 && mediaId !== "undefined") {
                 // Fetch metrics
                 const res = getThreadsMetricsAPI(mediaId, token);
                 if (res.success && res.metrics) {
-                    // J=10, K=11, L=12, M=13
+                    // K=11, L=12, M=13, N=14
                     const rowNum = i + 4;
-                    boardSheet.getRange(rowNum, 10).setValue(res.metrics.views || 0);
-                    boardSheet.getRange(rowNum, 11).setValue(res.metrics.likes || 0);
-                    boardSheet.getRange(rowNum, 12).setValue(res.metrics.replies || 0);
-                    boardSheet.getRange(rowNum, 13).setValue(res.metrics.reposts || 0);
+                    boardSheet.getRange(rowNum, 11).setValue(res.metrics.views || 0);
+                    boardSheet.getRange(rowNum, 12).setValue(res.metrics.likes || 0);
+                    boardSheet.getRange(rowNum, 13).setValue(res.metrics.replies || 0);
+                    boardSheet.getRange(rowNum, 14).setValue(res.metrics.reposts || 0);
 
                     // Simple Engagement Rate calculation (Likes+Replies / Views)
                     if (res.metrics.views > 0) {
                         const rate = ((res.metrics.likes + res.metrics.replies) / res.metrics.views);
-                        boardSheet.getRange(rowNum, 14).setValue(rate).setNumberFormat("0.0%"); // N
+                        boardSheet.getRange(rowNum, 15).setValue(rate).setNumberFormat("0.0%"); // O
                     }
 
                     updatedCount++;
@@ -397,41 +399,81 @@ function runScheduledBroadcast() {
 
         // 4. Send Broadcast to official Threads API
         _log(`[Schedule] Selected Row ${oldestRow}, calling Official API...`);
+        const type = selectedData[2] || ""; // C column
+        const roomContent = selectedData[6] || ""; // G column
         const threadsText = selectedData[7] || ""; // H column
+        const replyText = selectedData[8] || ""; // I column
 
-        // Extract Image URLs from D, E, F columns max 3 images
-        let imageUrlsToPost = [];
+        // Extract Images 1, 2, 3
+        let extractedUrls = [];
         for (let colOffset = 4; colOffset <= 6; colOffset++) { // D=4, E=5, F=6
             let rawUrl = selectedData[colOffset - 1] || "";
             let formula = boardSheet.getRange(oldestRow, colOffset).getFormula();
 
-            let extractedUrl = "";
+            let url = "";
             if (formula && formula.toUpperCase().includes("IMAGE")) {
                 let match = formula.match(/["'](https?:\/\/[^"']+)["']/i);
-                if (match) extractedUrl = match[1];
+                if (match) url = match[1];
             } else if (typeof rawUrl === 'string' && rawUrl.startsWith('=IMAGE')) {
                 let match = rawUrl.match(/["'](https?:\/\/[^"']+)["']/i);
-                if (match) extractedUrl = match[1];
+                if (match) url = match[1];
             } else if (typeof rawUrl === 'string' && rawUrl.startsWith('http')) {
-                extractedUrl = rawUrl;
+                url = rawUrl;
+            }
+            extractedUrls.push(url);
+        }
+
+        let res;
+
+        if (type === "単品") {
+            _log(`[Schedule] Two-Step Reply Mode (Type: 単品)`);
+            let post1Images = extractedUrls[0] ? [extractedUrls[0]] : [];
+            res = postToThreadsAPI(userId, token, threadsText, post1Images);
+
+            if (res.success) {
+                _log(`[Schedule] Success Post 1! Parent ID: ${res.mediaId}`);
+                let parentId = res.mediaId;
+
+                let post2Images = [];
+                if (extractedUrls[1]) post2Images.push(extractedUrls[1]);
+                if (extractedUrls[2]) post2Images.push(extractedUrls[2]);
+
+                if (replyText || post2Images.length > 0) {
+                    _log(`[Schedule] Creating Post 2 (Reply)...`);
+                    const res2 = postToThreadsAPI(userId, token, replyText, post2Images, parentId);
+                    if (res2.success) {
+                        _log(`[Schedule] Success Post 2 (Reply)! ID: ${res2.mediaId}`);
+                    } else {
+                        _log(`[Schedule] Post 2 Failed: ${res2.error}`);
+                    }
+                }
+            } else {
+                _log(`[Schedule] Post 1 Failed: ${res.error}`);
             }
 
-            if (extractedUrl) {
-                imageUrlsToPost.push(extractedUrl);
+        } else {
+            // Existing unified logic for others
+            let imageUrlsToPost = extractedUrls.filter(u => u !== "");
+            res = postToThreadsAPI(userId, token, threadsText, imageUrlsToPost);
+
+            if (res.success) {
+                _log(`[Schedule] Success Unified Post! Media ID: ${res.mediaId}`);
+            } else {
+                _log(`[Schedule] API Payload Failed: ${res.error}`);
             }
         }
 
-        // Note: The Official Graph API media_type=IMAGE requires a publicly accessible URL(s).
-        const res = postToThreadsAPI(userId, token, threadsText, imageUrlsToPost);
-
-        if (res.success) {
-            _log(`[Schedule] Success! Media ID: ${res.mediaId}`);
-            // Update System ID (Column I)
-            boardSheet.getRange(oldestRow, 9).setValue(res.mediaId);
-            // Update Last Broadcast (Column Q)
-            boardSheet.getRange(oldestRow, 17).setValue(new Date());
+        // Common Success Handler
+        if (res && res.success) {
+            boardSheet.getRange(oldestRow, 10).setValue(res.mediaId); // Col J System ID
+            boardSheet.getRange(oldestRow, 18).setValue(new Date()); // Col R Last Broadcast
         } else {
-            _log(`[Schedule] API Payload Failed: ${res.error}`);
+            // If res is null or not successful, log the error from the main post attempt
+            if (res && res.error) {
+                _log(`[Schedule] Final API Call Failed: ${res.error}`);
+            } else {
+                _log(`[Schedule] Final API Call Failed: Unknown error or no post made.`);
+            }
         }
 
         // Always mark as processed to avoid retry loop within the same 30-min window

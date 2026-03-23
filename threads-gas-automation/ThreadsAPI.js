@@ -9,9 +9,10 @@
  * @param {string} token - The long-lived access token
  * @param {string} text - The post text
  * @param {string|string[]} imageUrls - (Optional) Publicly queryable image URL(s). Can be a string or array of strings.
+ * @param {string} replyToId - (Optional) Parent Media ID to reply to.
  * @returns {object} - { success: boolean, mediaId: string, error: string }
  */
-function postToThreadsAPI(userId, token, text, imageUrls) {
+function postToThreadsAPI(userId, token, text, imageUrls, replyToId = null) {
     try {
         if (!userId || !token) {
             return { success: false, error: "Settings: UserID or Token is missing." };
@@ -30,6 +31,7 @@ function postToThreadsAPI(userId, token, text, imageUrls) {
         if (urls.length === 0) {
             // 1a. Text Only Container
             let containerPayload = { access_token: token, text: text, media_type: "TEXT" };
+            if (replyToId) containerPayload.reply_to_id = String(replyToId);
             const containerOptions = { method: "post", contentType: "application/json", payload: JSON.stringify(containerPayload), muteHttpExceptions: true };
             const containerRes = UrlFetchApp.fetch(baseUrl, containerOptions);
             const containerJson = JSON.parse(containerRes.getContentText());
@@ -43,6 +45,7 @@ function postToThreadsAPI(userId, token, text, imageUrls) {
         } else if (urls.length === 1) {
             // 1b. Single Image Container
             let containerPayload = { access_token: token, text: text, media_type: "IMAGE", image_url: urls[0] };
+            if (replyToId) containerPayload.reply_to_id = String(replyToId);
             const containerOptions = { method: "post", contentType: "application/json", payload: JSON.stringify(containerPayload), muteHttpExceptions: true };
             const containerRes = UrlFetchApp.fetch(baseUrl, containerOptions);
             const containerJson = JSON.parse(containerRes.getContentText());
@@ -93,6 +96,7 @@ function postToThreadsAPI(userId, token, text, imageUrls) {
                 text: text,
                 children: childrenIds // Pass as array in JSON
             };
+            if (replyToId) carouselPayload.reply_to_id = String(replyToId);
             const carouselOptions = {
                 method: "post",
                 contentType: "application/json",

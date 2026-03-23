@@ -115,7 +115,7 @@ function apiGetBoardData() {
     if (!sheet) return { status: "error", message: "Board sheet not found" };
 
     var lastRow = sheet.getLastRow();
-    var data = sheet.getRange(2, 1, lastRow - 1, 10).getValues(); // Get A-J roughly
+    var data = sheet.getRange(2, 1, lastRow - 1, 11).getValues(); // Get A-K roughly
     var rows = data.map((row, index) => {
         return {
             id: index + 2, // Row number (Starts at Row 2 in getValues array relative to Sheet?) 
@@ -124,9 +124,10 @@ function apiGetBoardData() {
             onAir: row[0],      // Col A (ON AIR)
             theme: row[2],      // Col C (Type)
             material: row[6],   // Col G (Assets)
-            generated1: row[7], // Col H (Output)
+            generated1: row[7], // Col H (Output Hook)
+            generated2: row[8], // Col I (Output Reply)
         };
-    }).filter(r => r.theme && r.theme !== "↓Type" && (r.material || r.generated1)); // Filter out guide row and empty rows
+    }).filter(r => r.theme && r.theme !== "↓Type" && (r.material || r.generated1 || r.generated2)); // Filter out guide row and empty rows
 
     return { status: "success", data: rows };
 }
@@ -203,12 +204,13 @@ function saveClipToBoard(data) {
     var imageUrls = data.imageUrls || [];
     var roomText = data.roomText || "";
     var threadsText = data.threadsText || "";
+    var replyText = data.replyText || "";
 
     var rowData = [];
 
     // --- CASE 1: Save Images Only ---
     if (action === 'save_images') {
-        // [FALSE, "", "単品", Img1, Img2, Img3, "", ""]
+        // [FALSE, "", "単品", Img1, Img2, Img3, "", "", ""]
         rowData = [
             false,
             "",
@@ -217,13 +219,14 @@ function saveClipToBoard(data) {
             imageUrls[1] ? `=IMAGE("${imageUrls[1]}")` : "",
             imageUrls[2] ? `=IMAGE("${imageUrls[2]}")` : "",
             "", // G: Empty
-            ""  // H: Empty
+            "", // H: Empty
+            ""  // I: Empty
         ];
     }
     // --- CASE 2: Save Text Only ---
     else if (action === 'save_text') {
         debugLog("Building rowData for save_text...");
-        // [FALSE, "", "単品", RoomText, ThreadsText, "", "", ""] 
+        // [FALSE, "", "単品", Empty, Empty, Empty, RoomText, ThreadsText, ReplyText] 
         rowData = [
             false,
             "",
@@ -232,19 +235,20 @@ function saveClipToBoard(data) {
             "", // E: Empty
             "", // F: Empty
             roomText, // G: ROOM Text
-            threadsText  // H: Threads Text
+            threadsText, // H: Threads Text (Hook)
+            replyText  // I: Reply Text
         ];
     }
     // --- CASE 3: Legacy / Fallback ---
     else {
-        // [FALSE, "", "単品", Img..., RoomText+Meta, ThreadsText]
+        // [FALSE, "", "単品", Img..., RoomText+Meta, ThreadsText, ReplyText]
         var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
         var metaInfo = "";
-        if (data.url) metaInfo += "\n[Source] " + data.url;
-        metaInfo += "\n[Saved] " + today;
+        if (data.url) metaInfo += "\\n[Source] " + data.url;
+        metaInfo += "\\n[Saved] " + today;
 
         var roomContent = roomText;
-        if (roomContent) roomContent += "\n\n";
+        if (roomContent) roomContent += "\\n\\n";
         roomContent += metaInfo;
 
         rowData = [
@@ -253,7 +257,8 @@ function saveClipToBoard(data) {
             imageUrls[1] ? `=IMAGE("${imageUrls[1]}")` : "",
             imageUrls[2] ? `=IMAGE("${imageUrls[2]}")` : "",
             roomContent,
-            threadsText
+            threadsText,
+            replyText
         ];
     }
 
@@ -272,7 +277,7 @@ function saveClipToBoard(data) {
     var lastUsedRow = -1;
 
     if (lastRow >= startRow) {
-        var range = sheet.getRange("C" + startRow + ":H" + (lastRow + 1));
+        var range = sheet.getRange("C" + startRow + ":I" + (lastRow + 1));
         var values = range.getValues();
 
         for (var i = 0; i < values.length; i++) {
@@ -290,9 +295,10 @@ function saveClipToBoard(data) {
             var lastImg1 = values[lastUsedRow - startRow][1]; // Col D
             var lastRoom = values[lastUsedRow - startRow][4]; // Col G
             var lastThreads = values[lastUsedRow - startRow][5]; // Col H
+            var lastReply = values[lastUsedRow - startRow][6]; // Col I
 
             if (lastType === "単品") {
-                if (action === 'save_text' && !lastRoom && !lastThreads && lastImg1) {
+                if (action === 'save_text' && !lastRoom && !lastThreads && !lastReply && lastImg1) {
                     // Last row has images but no text -> Merge Text
                     targetRow = lastUsedRow;
                     merged = true;
@@ -301,13 +307,14 @@ function saveClipToBoard(data) {
                     rowData[4] = sheet.getRange(targetRow, 5).getFormula() || sheet.getRange(targetRow, 5).getValue(); // E
                     rowData[5] = sheet.getRange(targetRow, 6).getFormula() || sheet.getRange(targetRow, 6).getValue(); // F
                     debugLog("Merging save_text into existing row " + targetRow);
-                } else if (action === 'save_images' && !lastImg1 && (lastRoom || lastThreads)) {
+                } else if (action === 'save_images' && !lastImg1 && (lastRoom || lastThreads || lastReply)) {
                     // Last row has text but no images -> Merge Images
                     targetRow = lastUsedRow;
                     merged = true;
                     // Keep existing text, update images
                     rowData[6] = lastRoom; // G
                     rowData[7] = lastThreads; // H
+                    rowData[8] = lastReply; // I
                     debugLog("Merging save_images into existing row " + targetRow);
                 }
             }
