@@ -1,0 +1,13 @@
+.claspignore
+.git/**
+node_modules/**
+temp_audit/**
+manifest.json
+sidepanel.js
+icon.png
+gema4_awakened.txt
+test_shokunin.js
+test_shokunin.gs
+*.md
+SCOUT_V42_PRO/**
+LABORATORY/**

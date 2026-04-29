@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "GEMA-V42 Phoenix PRO",
+  "version": "42.2.1",
+  "description": "Antigravity V42 PRO [ULTIMATE]：司令塔・斥候・本陣による三権分立システム",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*",
+    "https://*.rakuten.co.jp/*",
+    "https://*.r10s.jp/*"
+  ],
+  "action": {
+    "default_title": "GEMA PRO Sanctuary"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://item.rakuten.co.jp/*"],
+      "js": ["content.js"]
+    }
+  ]
+}

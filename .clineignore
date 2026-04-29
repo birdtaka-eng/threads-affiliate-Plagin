@@ -1,0 +1,6 @@
+# Ignore temporary directories
+temp_audit/
+temp_clone_test/
+
+# Ignore node_modules
+node_modules/
