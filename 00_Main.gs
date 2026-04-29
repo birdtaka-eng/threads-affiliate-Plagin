@@ -1,8 +1,10 @@
 /**
- * 00_Main.gs [聖域・完結編]
- * 司令塔。全ての実行はここから始まる。
+ * 00_Main.gs [聖域・真実の帰還]
  */
 
+/**
+ * 🚀 自動メニュー作成（Googleの掟）
+ */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('💎 Sanctuary')
@@ -16,11 +18,10 @@ function onOpen() {
 function syncActiveRow() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-  const row = sheet.getActiveCell().getRow(); // 👈 ここで行番号を特定しています！
+  const row = sheet.getActiveCell().getRow();
   
   if (row < 3) return ss.toast("⚠️ データ行（3行目以降）を選択してください。");
 
-  // 聖域の記憶（UserProperties）に保存
   PropertiesService.getUserProperties().setProperty('LATEST_TARGET_ROW', row.toString());
 
   const itemUrl = sheet.getRange(row, COL.ITEM_URL).getValue();
@@ -42,7 +43,6 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify(saveImagesToSheet(data)))
       .setMimeType(ContentService.MimeType.JSON);
   }
-  // ターゲット行の情報を返す
   if (data.action === "get_active_row_info") {
     const row = PropertiesService.getUserProperties().getProperty('LATEST_TARGET_ROW');
     return ContentService.createTextOutput(JSON.stringify({ row: row }))

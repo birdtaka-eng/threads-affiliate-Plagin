@@ -1,6 +1,5 @@
 /**
- * 02_Utils.gs [聖域・完結編]
- * 共通の便利ツールや、具体的な保存処理を記述。
+ * 02_Utils.gs [聖域・真実の帰還]
  */
 
 /**
@@ -8,7 +7,7 @@
  */
 function saveImagesToSheet(data) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SpreadsheetApp.openById(SS_ID);
     const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
     const row = parseInt(data.targetRow);
     
@@ -31,7 +30,6 @@ function saveImagesToSheet(data) {
         
         // 2. ドライブに保存
         const file = folder.createFile(blob).setName(fileName);
-        // 🚀 通行手形（共有設定）を発行：これがないとスプレッドシートから見えません！
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
         
         // 3. CellImageとしてセルに埋め込み
@@ -41,10 +39,9 @@ function saveImagesToSheet(data) {
       }
     });
 
-    // 🚀 【ナッジ】念のため表示をリフレッシュ
+    // 🚀 表示リフレッシュ
     const nudgeRange = sheet.getRange(row, 1);
     nudgeRange.setValue(nudgeRange.getValue());
-    nudgeRange.activate();
     SpreadsheetApp.flush(); 
     
     ss.toast("📸 聖域（ドライブ保存）完了！", "Threads職人", 3);

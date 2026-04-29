@@ -5,7 +5,7 @@
  * 任務：タカ様の聖域（スプレッドシート）を支配し、拡張機能と連動して「究極のThreads投稿」を生成する。
  */
 
-// --- ⚙️ 座標（列）マッピング（タカ様の最新シート構成に準拠） ---
+/* --- ⚙️ 座標（列）マッピング（BRAIN/01_Config.gs と衝突するため一時停止） ---
 const COL = {
   ON_AIR: 1,    // A列
   NO: 2,        // B列
@@ -22,10 +22,9 @@ const COL = {
 };
 
 const SHEET_NAME = "Board"; // メインシート名
+*/
 
-/**
- * 🚀 メニュー作成（Gemini）
- */
+/* 🚀 メニュー作成（Gemini） - BRAIN/00_Main.gs と衝突するため一時停止
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Gemini')
@@ -37,6 +36,7 @@ function onOpen() {
     .addItem('🛠️ システム診断・APIチェック', 'testApiConnection')
     .addToUi();
 }
+*/
 
 /**
  * ⚡ 座標同期：現在行をロックし、商品ページへ
@@ -78,9 +78,7 @@ function syncActiveRow() {
   }
 }
 
-/**
- * 📡 通信司令：拡張機能（サイドパネル）からのデータを受信
- */
+/* 📡 通信司令：拡張機能（サイドパネル）からのデータを受信 - BRAIN/00_Main.gs と衝突するため一時停止
 function doPost(e) {
   try {
     const payload = JSON.parse(e.postData.contents);
@@ -103,6 +101,7 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }
+*/
 
 /**
  * 📸 画像捕獲：拡張機能から送られた Base64 画像をシートに配置
