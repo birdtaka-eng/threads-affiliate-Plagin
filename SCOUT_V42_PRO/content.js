@@ -12,7 +12,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const isNotAd = !img.src.match(/icon|logo|button|pixel|ad|banner|recommend/i);
         return isSizeOk && isShapeOk && isNotAd;
       })
-      .map(img => img.src);
+      .map(img => {
+        let src = img.src;
+        if (src.includes('rakuten.co.jp')) {
+          // 🚀 楽天のサイズ制限パラメータを 1024px へ強制書き換え
+          src = src.replace(/_ex=\d+x\d+/g, '_ex=1024x1024')
+                   .replace(/fitin=\d+:\d+/g, 'fitin=1024:1024');
+        }
+        return src;
+      });
     
     sendResponse([...new Set(images)]);
   }
