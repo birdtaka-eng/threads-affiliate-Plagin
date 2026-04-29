@@ -1,9 +1,9 @@
 /**
- * 00_Main.gs [聖域・真実の帰還]
+ * 00_Main.gs [聖域・真実の帰還 - 最終完全版]
  */
 
 /**
- * 🚀 自動メニュー作成（Googleの掟）
+ * 🚀 自動メニュー作成
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -13,7 +13,7 @@ function onOpen() {
 }
 
 /**
- * ⚡ 座標同期：現在選択している「行」を聖域の記憶に刻む
+ * ⚡ 座標同期
  */
 function syncActiveRow() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -22,7 +22,7 @@ function syncActiveRow() {
   
   if (row < 3) return ss.toast("⚠️ データ行（3行目以降）を選択してください。");
 
-  PropertiesService.getUserProperties().setProperty('LATEST_TARGET_ROW', row.toString());
+  PropertiesService.getScriptProperties().setProperty('LATEST_TARGET_ROW', row.toString());
 
   const itemUrl = sheet.getRange(row, COL.ITEM_URL).getValue();
   if (itemUrl) {
@@ -35,16 +35,21 @@ function syncActiveRow() {
 }
 
 /**
- * 📥 doPost: 拡張機能（SCOUT）からのデータを受信する
+ * 📥 doPost: 拡張機能（SCOUT）からの全リクエストを処理
  */
 function doPost(e) {
   const data = JSON.parse(e.postData.contents);
+  
+  // 1. 画像の保存
   if (data.action === "save_images") {
-    return ContentService.createTextOutput(JSON.stringify(saveImagesToSheet(data)))
+    const result = saveImagesToSheet(data);
+    return ContentService.createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
   }
+  
+  // 2. 現在の行情報の回答
   if (data.action === "get_active_row_info") {
-    const row = PropertiesService.getUserProperties().getProperty('LATEST_TARGET_ROW');
+    const row = PropertiesService.getScriptProperties().getProperty('LATEST_TARGET_ROW');
     return ContentService.createTextOutput(JSON.stringify({ row: row }))
       .setMimeType(ContentService.MimeType.JSON);
   }
