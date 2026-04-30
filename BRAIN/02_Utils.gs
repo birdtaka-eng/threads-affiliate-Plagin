@@ -3,11 +3,11 @@
  */
 
 /**
- * 📸 写真をドライブに保存し、セル内に埋め込む：安全モード（ID指定なし）
+ * 📸 写真をドライブに保存し、セル内に埋め込む
  */
 function saveImagesToSheet(data) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet(); // 👈 安全な取得方法に変更
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
     const row = parseInt(data.targetRow);
     
@@ -26,7 +26,9 @@ function saveImagesToSheet(data) {
         
         const url = "https://drive.google.com/uc?export=view&id=" + file.getId();
         const cellImage = SpreadsheetApp.newCellImage().setSourceUrl(url).build();
-        sheet.getRange(row, col).setValue(cellImage);
+        const targetCell = sheet.getRange(row, col);
+        targetCell.setValue(cellImage);
+        targetCell.setNote(file.getId()); // 👈 AIが読み取れるようにIDをメモに隠す
       }
     });
 
@@ -36,6 +38,40 @@ function saveImagesToSheet(data) {
   } catch (e) {
     return { status: "error", message: e.toString() };
   }
+}
+
+/**
+ * 🔧 既存の画像セルからファイルIDを抽出し、メモに再設定する（過去分救出用）
+ */
+function fixExistingImageNotes() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  const lastRow = sheet.getLastRow();
+  const cols = [COL.IMAGE_F, COL.IMAGE_G, COL.IMAGE_H];
+  let count = 0;
+
+  for (let r = 3; r <= lastRow; r++) {
+    cols.forEach(c => {
+      const cell = sheet.getRange(r, c);
+      const cellImage = cell.getValue();
+      
+      // CellImageオブジェクトからソースURLを直接取得できないため、
+      // ドライブ内のファイル名を検索してIDを特定する（または、数式等があればそこから取る）
+      // ここでは、昨日作成されたファイル名パターンから検索を試みる
+      if (cellImage && !cell.getNote()) {
+         // 一旦、安全のために「手動で保存し直してください」と案内するか、
+         // またはファイル一覧から該当行番号のものを探すロジック
+         // 簡易版として、ファイル名に row が入っているものを探す
+         const files = DriveApp.getFoldersByName(DRIVE_FOLDER_NAME).next().searchFiles('title contains "thread_' + r + '_"');
+         while (files.hasNext()) {
+           const file = files.next();
+           cell.setNote(file.getId());
+           count++;
+         }
+      }
+    });
+  }
+  SpreadsheetApp.getUi().alert("✅ " + count + " 枚の写真をAIが視れるように修復しました。");
 }
 
 function getOrCreateFolder(folderName) {

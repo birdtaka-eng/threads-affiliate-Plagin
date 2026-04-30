@@ -26,8 +26,24 @@
     <div class="status-bar" id="target-info">ターゲット捕捉中...</div>
     <div id="image-grid"></div>
     <button id="send-btn">📸 聖域（シート）へ保存</button>
+    
+    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
+      <div style="font-size: 0.8rem; margin-bottom: 10px; color: #a29bfe; font-weight: bold;">✨ 文章生成（Gemini召喚）</div>
+      <div style="display: flex; gap: 8px;">
+        <button id="gen-a-btn" style="background: linear-gradient(135deg, #ff4757, #ff6b81); flex: 1;">影（偏愛）</button>
+        <button id="gen-b-btn" style="background: linear-gradient(135deg, #2ed573, #7bed9f); flex: 1;">光（勝利）</button>
+      </div>
+    </div>
+
     <div id="status-msg">Waiting for mission...</div>
-    <button id="sync-btn" style="margin-top: 10px; background: transparent; border: 1px solid var(--primary); font-size: 0.8rem; padding: 8px;">🔄 画像を再抽出</button>
+    
+    <div id="result-area" style="margin-top: 20px; display: none;">
+      <div id="result-hook" style="font-weight: bold; color: var(--accent); margin-bottom: 10px; font-size: 1.1rem; border-bottom: 1px dashed var(--accent); padding-bottom: 5px;"></div>
+      <div id="result-body" style="font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;"></div>
+      <button id="copy-btn" style="margin-top: 10px; background: #2f3542; font-size: 0.8rem; padding: 8px;">📋 クリップボードにコピー</button>
+    </div>
+
+    <button id="sync-btn" style="margin-top: 20px; background: transparent; border: 1px solid var(--primary); font-size: 0.8rem; padding: 8px;">🔄 画像を再抽出</button>
   </div>
   <script src="sidepanel.js"></script>
 </body>

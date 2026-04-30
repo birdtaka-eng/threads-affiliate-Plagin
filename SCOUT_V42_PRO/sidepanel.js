@@ -121,3 +121,52 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 document.getElementById('sync-btn').onclick = syncFromScout;
 document.getElementById('send-btn').onclick = sendImages;
+
+/**
+ * ✨ 文章生成アクション
+ */
+async function generateText(persona) {
+  if (!currentTarget.row) return alert("ターゲット行が同期されていません。");
+
+  const statusMsg = document.getElementById('status-msg');
+  const resultArea = document.getElementById('result-area');
+  
+  statusMsg.innerText = `⏳ Geminiが「${persona === 'A' ? '影' : '光'}」の文章を調合中...`;
+  resultArea.style.display = "none";
+
+  try {
+    const res = await fetch(GAS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "generate_text",
+        targetRow: currentTarget.row,
+        persona: persona
+      })
+    });
+    const data = await res.json();
+
+    if (data.status === "success") {
+      statusMsg.innerText = "✅ 劇薬の調合が完了しました。";
+      document.getElementById('result-hook').innerText = data.hook;
+      document.getElementById('result-body').innerText = data.body;
+      resultArea.style.display = "block";
+    } else {
+      statusMsg.innerText = "❌ 調合失敗: " + (data.message || "error");
+    }
+  } catch (e) {
+    statusMsg.innerText = "❌ 通信エラー";
+    console.error(e);
+  }
+}
+
+document.getElementById('gen-a-btn').onclick = () => generateText('A');
+document.getElementById('gen-b-btn').onclick = () => generateText('B');
+
+document.getElementById('copy-btn').onclick = () => {
+  const hook = document.getElementById('result-hook').innerText;
+  const body = document.getElementById('result-body').innerText;
+  const text = `${hook}\n\n${body}`;
+  navigator.clipboard.writeText(text).then(() => {
+    alert("📋 クリップボードにコピーしました！");
+  });
+};
