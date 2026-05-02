@@ -15,6 +15,7 @@ const SHEET_NAME = "Board";
 const COL = { 
   ITEM_URL: 4, 
   ITEM_NAME: 3, 
+  ITEM_CODE: 5,  // E列: 楽天ItemCode / ROOMリンク
   GEN_ROOM: 9,   // I列: ROOM投稿用（ノーマル）
   GEN_HOOK: 10,  // J列: スレッズ投稿用（偏愛）
   GEN_REPLY: 11, // K列: リプライ用（感情的）

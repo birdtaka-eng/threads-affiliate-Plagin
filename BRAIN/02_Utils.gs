@@ -32,6 +32,18 @@ function saveImagesToSheet(data) {
       }
     });
 
+    // 💡 新機能：ROOM連携（確定した正解URL形式：/mix?itemcode=shop:id）
+    const itemUrl = sheet.getRange(row, COL.ITEM_URL).getValue();
+    const itemcode = getRakutenItemcode(itemUrl);
+    if (itemcode) {
+      const parts = itemcode.split(':');
+      const shopCode = parts[0];
+      const itemId = parts[1];
+      // 🚀 確定正解：楽天市場の商品ページを経由してリファラを正規化する（自動反射）
+      const roomUrl = `${itemUrl}${itemUrl.includes('?') ? '&' : '?'}auto_collect=true#row=${row}`;
+      sheet.getRange(row, COL.ITEM_CODE).setFormula(`=HYPERLINK("${roomUrl}", "🚀ROOM投稿")`);
+    }
+
     SpreadsheetApp.flush(); 
     return { status: "success", row: row };
 
@@ -78,4 +90,68 @@ function getOrCreateFolder(folderName) {
   const folders = DriveApp.getFoldersByName(folderName);
   if (folders.hasNext()) return folders.next();
   return DriveApp.createFolder(folderName);
+}
+
+/**
+ * 🚀 E列のURL/IDを元に、ROOM投稿リンクを一括生成する
+ */
+function generateRoomLinks() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 3) return;
+
+  const data = sheet.getRange(3, COL.ITEM_URL, lastRow - 2, 1).getValues();
+  const formulas = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const itemUrl = data[i][0];
+    const row = i + 3;
+    
+    if (itemUrl) {
+      try {
+        const itemcode = getRakutenItemcode(itemUrl);
+        if (itemcode) {
+          const parts = itemcode.split(':');
+          const shopCode = parts[0];
+          const itemId = parts[1];
+          // 🚀 確定正解：楽天市場の商品ページを経由してリファラを正規化する（自動反射）
+          const roomUrl = `${itemUrl}${itemUrl.includes('?') ? '&' : '?'}auto_collect=true#row=${row}`;
+          formulas.push([`=HYPERLINK("${roomUrl}", "🚀ROOM投稿")`]);
+        } else {
+          formulas.push([""]);
+        }
+      } catch (e) {
+        formulas.push([""]);
+      }
+    } else {
+      formulas.push([""]);
+    }
+  }
+
+  if (formulas.length > 0) {
+    sheet.getRange(3, COL.ITEM_CODE, formulas.length, 1).setFormulas(formulas);
+    SpreadsheetApp.getUi().alert("✅ " + formulas.length + " 行分のROOMリンクを生成しました。");
+  }
+}
+
+/**
+ * 楽天市場の商品URLから itemcode（shop:item形式）を抽出する
+ */
+function getRakutenItemcode(itemUrl) {
+  if (!itemUrl) return null;
+  
+  // 通常のショップURL: https://item.rakuten.co.jp/[ショップコード]/[商品ID]/
+  let match = itemUrl.match(/item\.rakuten\.co\.jp\/([^/|?]+)\/([^/|?]+)/);
+  
+  if (!match) {
+    // アフィリエイトリンク等の場合はデコードして再検索
+    const decodedUrl = decodeURIComponent(itemUrl);
+    match = decodedUrl.match(/item\.rakuten\.co\.jp\/([^/|?]+)\/([^/|?]+)/);
+  }
+
+  if (match) {
+    return `${match[1]}:${match[2]}`;
+  }
+  return null;
 }

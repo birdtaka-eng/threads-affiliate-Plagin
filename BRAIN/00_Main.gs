@@ -16,6 +16,8 @@ function onOpen() {
     .addItem('✨【5】文章生成（勝利）', 'generateTextB')
     .addSeparator()
     .addItem('🔍【6】モデル名を確認', 'listAvailableGeminiModels')
+    .addSeparator()
+    .addItem('🚀【7】ROOMリンク一括生成', 'generateRoomLinks')
     .addToUi();
 }
 
@@ -118,5 +120,23 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: e.message }))
         .setMimeType(ContentService.MimeType.JSON);
     }
+  }
+
+  // 4. ROOM用文章の取得
+  if (data.action === "get_room_info") {
+    const row = parseInt(data.targetRow || PropertiesService.getScriptProperties().getProperty('LATEST_TARGET_ROW'));
+    if (!row || row < 3) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "行が特定できません。座標同期してください。" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+    const roomContent = sheet.getRange(row, COL.GEN_ROOM).getValue();
+    
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "success", 
+      roomContent: roomContent 
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }

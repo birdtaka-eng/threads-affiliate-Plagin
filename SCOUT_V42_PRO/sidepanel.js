@@ -12,18 +12,28 @@ async function syncFromScout() {
   if (!tab || !tab.url) return;
 
   currentTarget.url = tab.url;
+  
+  // 🎫 チケット方式：URLまたはハッシュから行番号を抽出
+  const urlParams = new URLSearchParams(new URL(tab.url).search);
+  const hashParams = new URLSearchParams(new URL(tab.url).hash.substring(1));
+  const urlRow = urlParams.get('row') || hashParams.get('row');
 
-  // 1. GASから現在のターゲット行を取得
-  try {
-    const res = await fetch(GAS_ENDPOINT, {
-      method: "POST",
-      body: JSON.stringify({ action: "get_active_row_info" })
-    });
-    const data = await res.json();
-    currentTarget.row = data.row;
-    document.getElementById('target-info').innerText = `🎯 Row: ${data.row}`;
-  } catch (e) {
-    console.error("Failed to sync row", e);
+  if (urlRow) {
+    currentTarget.row = urlRow;
+    document.getElementById('target-info').innerText = `🎯 Row: ${urlRow} (Ticket)`;
+  } else {
+    // 1. GASから現在のターゲット行を取得
+    try {
+      const res = await fetch(GAS_ENDPOINT, {
+        method: "POST",
+        body: JSON.stringify({ action: "get_active_row_info" })
+      });
+      const data = await res.json();
+      currentTarget.row = data.row;
+      document.getElementById('target-info').innerText = `🎯 Row: ${data.row}`;
+    } catch (e) {
+      console.error("Failed to sync row", e);
+    }
   }
 
   // 2. ページ内の画像を抽出
@@ -170,3 +180,61 @@ document.getElementById('copy-btn').onclick = () => {
     alert("📋 クリップボードにコピーしました！");
   });
 };
+
+/**
+ * 🚀 楽天ROOMへ流し込み
+ */
+document.getElementById('room-post-btn').addEventListener('click', async () => {
+  if (!currentTarget.row) return alert("同期されている行がありません。");
+
+  const btn = document.getElementById('room-post-btn');
+  const statusMsg = document.getElementById('status-msg');
+  
+  btn.disabled = true;
+  statusMsg.innerText = "⏳ GASから文章を取得中...";
+
+  try {
+    const res = await fetch(GAS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "get_room_info",
+        targetRow: currentTarget.row
+      })
+    });
+    const data = await res.json();
+
+    if (data.status === "success" && data.roomContent) {
+      statusMsg.innerText = "📡 ROOMへ流し込み中...";
+      
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      chrome.tabs.sendMessage(tab.id, {
+        action: "INJECT_TEXT",
+        text: data.roomContent
+      }, (response) => {
+        if (response && response.status === "success") {
+          statusMsg.innerText = "✅ 流し込み完了！";
+        } else {
+          statusMsg.innerText = "❌ 入力欄が見つかりません。ROOM投稿画面ですか？";
+        }
+      });
+    } else {
+      statusMsg.innerText = "❌ 文章取得失敗: " + (data.message || "No data");
+    }
+  } catch (e) {
+    statusMsg.innerText = "❌ 通信エラー";
+    console.error(e);
+  }
+  btn.disabled = false;
+});
+
+// 🚀 【真・完遂】ROOM着地検知：content.jsからの通知を受け取って自動注入
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "ROOM_LANDED") {
+    console.log(`📡 Automatically triggering injection for row: ${request.row}`);
+    currentTarget.row = request.row;
+    document.getElementById('target-info').innerText = `🎯 Row: ${request.row} (Memory)`;
+    
+    // 自動でボタンクリックをシミュレート
+    document.getElementById('room-post-btn').click();
+  }
+});
