@@ -123,14 +123,57 @@ function compressImage(src) {
 // 初回起動
 syncFromScout();
 
-// 【ブロック】タカ様の動きに追従する
-chrome.tabs.onActivated.addListener(syncFromScout);
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete') syncFromScout();
+// 🚀 【鉄壁】起動時に「やり残した仕事（行番号）」がないか確認
+chrome.storage.local.get(['scout_target_row'], (result) => {
+  const row = result.scout_target_row;
+  if (row) {
+    console.log(`🕵️ Sidepanel started: Found pending row ${row}. Resuming...`);
+    currentTarget.row = row;
+    document.getElementById('target-info').innerText = `🎯 Row: ${row} (Resume)`;
+    // 自動で文章注入を起動
+    generateAndInject();
+  }
 });
 
-document.getElementById('sync-btn').onclick = syncFromScout;
-document.getElementById('send-btn').onclick = sendImages;
+/**
+ * 🛠️ 文章生成 & 流し込みの統合アクション
+ */
+async function generateAndInject() {
+  const statusMsg = document.getElementById('status-msg');
+  statusMsg.innerText = "⏳ 聖域から文章を調合中...";
+  
+  try {
+    const res = await fetch(GAS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "get_room_info",
+        targetRow: currentTarget.row
+      })
+    });
+    const data = await res.json();
+
+    if (data.status === "success" && data.roomContent) {
+      statusMsg.innerText = "📡 ROOMへ流し込み中...";
+      
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      chrome.tabs.sendMessage(tab.id, {
+        action: "INJECT_TEXT",
+        text: data.roomContent
+      }, (response) => {
+        if (response && response.status === "success") {
+          statusMsg.innerText = "✅ 自動流し込み完了！";
+          // 成功したらストレージを掃除
+          chrome.storage.local.remove('scout_target_row');
+        } else {
+          statusMsg.innerText = "❌ 入力欄不在（ROOM画面で開いてください）";
+        }
+      });
+    }
+  } catch (e) {
+    console.error(e);
+    statusMsg.innerText = "❌ 調合失敗";
+  }
+}
 
 /**
  * ✨ 文章生成アクション

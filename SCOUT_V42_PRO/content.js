@@ -30,16 +30,24 @@ if (/row=\d+/.test(location.href)) {
 
 // 🚀 【真・完遂】ROOM着地時に自動で文章注入を起動
 if (location.href.includes('room.rakuten.co.jp/mix/collect')) {
+  console.log("🕵️ Checking storage for target row...");
   chrome.storage.local.get(['scout_target_row'], (result) => {
     const row = result.scout_target_row;
     if (row) {
       console.log(`🎯 Landed on ROOM! Restoring row from storage: ${row}`);
-      // 1.5秒待ってページが安定してからサイドパネルへ「文章ちょうだい」と通知
+      // 1.5秒待ってページが安定してから通知（司令塔経由でリレー）
       setTimeout(() => {
-        chrome.runtime.sendMessage({ action: "ROOM_LANDED", row: row });
-        // 使い終わったらメモリを掃除
-        chrome.storage.local.remove('scout_target_row');
+        try {
+          console.log("📡 Attempting to send ROOM_LANDED to hub...");
+          chrome.runtime.sendMessage({ action: "ROOM_LANDED", row: row });
+          console.log("📡 Message sent to hub.");
+        } catch (e) {
+          console.error("📡 Hub connection failed:", e);
+        }
+        // ここでの削除は廃止（サイドパネル側の注入完了時に削除する）
       }, 1500);
+    } else {
+      console.log("⚠️ No target row found in storage. Manual operation required.");
     }
   });
 }
