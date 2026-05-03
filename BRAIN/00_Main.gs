@@ -12,48 +12,29 @@ function onOpen() {
     .addItem('📂【2】フォルダを開く', 'openSanctuaryFolder')
     .addItem('🔧【3】既存写真の修復', 'fixExistingImageNotes')
     .addSeparator()
-    .addItem('✨【4】文章生成（偏愛）', 'generateTextA')
-    .addItem('✨【5】文章生成（勝利）', 'generateTextB')
+    .addItem('✨【4】魂の排出（3案生成）', 'generateTripleSets')
     .addSeparator()
-    .addItem('🔍【6】モデル名を確認', 'listAvailableGeminiModels')
+    .addItem('🔍【5】モデル名を確認', 'listAvailableGeminiModels')
     .addSeparator()
-    .addItem('🚀【7】ROOMリンク一括生成', 'generateRoomLinks')
+    .addItem('🚀【6】ROOMリンク一括生成', 'generateRoomLinks')
     .addToUi();
 }
 
 /**
- * ✨ シート上の選択行に対して人格A（偏愛）で生成
+ * ✨ シート上の選択行に対して3パターンの文章を同時生成
  */
-function generateTextA() {
+function generateTripleSets() {
   const row = SpreadsheetApp.getActiveSpreadsheet().getActiveCell().getRow();
   if (row < 3) return SpreadsheetApp.getUi().alert("3行目以降を選択してください。");
   
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ss.toast("⏳ 影（偏愛）の魂を召喚中...", "Gemini");
+  ss.toast("⏳ 3パターンの魂を召喚中...", "Gemini");
   
   try {
-    const res = generateThreadsPost(row, 'A');
-    ss.toast("✅ 調合完了！", "Gemini");
+    const res = generateThreadsPost(row);
+    ss.toast("✅ 3案の書き込みを完了しました！", "Gemini");
   } catch (e) {
-    SpreadsheetApp.getUi().alert("❌ エラー: " + e.message);
-  }
-}
-
-/**
- * ✨ シート上の選択行に対して人格B（勝利）で生成
- */
-function generateTextB() {
-  const row = SpreadsheetApp.getActiveSpreadsheet().getActiveCell().getRow();
-  if (row < 3) return SpreadsheetApp.getUi().alert("3行目以降を選択してください。");
-  
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ss.toast("⏳ 光（勝利）の魂を召喚中...", "Gemini");
-  
-  try {
-    const res = generateThreadsPost(row, 'B');
-    ss.toast("✅ 調合完了！", "Gemini");
-  } catch (e) {
-    SpreadsheetApp.getUi().alert("❌ エラー: " + e.message);
+    SpreadsheetApp.getUi().alert("❌ 調合エラー: " + e.message);
   }
 }
 

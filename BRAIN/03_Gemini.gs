@@ -4,9 +4,9 @@
  */
 
 /**
- * 🚀 写真を読み取り、人格DNA（AとBのハイブリッド）を統合して3種類の文章を生成・書き込み
+ * 🚀 写真を読み取り、ランダム変数を用いて3パターンの文章を生成・3行に展開して書き込み
  */
-function generateThreadsPost(row, persona = 'A') {
+function generateThreadsPost(row) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAME);
   
@@ -14,74 +14,102 @@ function generateThreadsPost(row, persona = 'A') {
   const itemName = sheet.getRange(row, COL.ITEM_NAME).getValue();
   const imageParts = getImageParts(sheet, row);
   
-  // 2. 魂（DNA）を取得
-  const dnaA = getSoul('A'); // 偏愛・毒
-  const dnaB = getSoul('B'); // 勝利・ノーマル
+  // 2. 3つの異なる変数セットをランダムに排出
+  const vars = [getRandomVariables(), getRandomVariables(), getRandomVariables()];
   
-  const systemPrompt = `あなたはタカ様の「異常な偏愛」と「社会的勝利」を司る二面性を持ったAIコピーライターです。
-以下の2つの人格DNAを融合させ、3つの異なる用途の文章を生成してください。
-
-【人格DNA-A：偏愛と毒】
+  const dnaA = getSoul('A');
+  const dnaB = getSoul('B');
+  
+  const systemPrompt = `あなたはタカ様の「偏愛」と「戦略」を司るAIコピーライターです。
+【人格DNA-A：偏愛・毒】
 ${dnaA}
+【人格DNA-B：信頼・実用】
+${dnaB}`;
 
-【人格DNA-B：社会的勝利】
-${dnaB}
-`;
-
-  // 3. ユーザープロンプトの構成（文字数制限を徹底）
-  const imageStatus = imageParts.length > 0 ? `（${imageParts.length}枚の写真を認識済み）` : "（写真は認識できません。アイテム名から想像せよ）";
   const userPrompt = `
-以下のアイテムについて、提供された写真のディテールを観察し、3種類の文章を【厳格な文字数制限】の下で作成せよ。
-${imageStatus}
+以下のアイテムについて、3組の異なる文章セットを生成せよ。各セットは指定された「変数」に基づき、全く異なる切り口で作成すること。
 
-【アイテム名】: ${itemName || "（写真から判断せよ）"}
+【アイテム名】: ${itemName || "（写真から判断）"}
 
 ---
-①【Threadsフック（J列用）】
-- 性格: 人格DNA-A（偏愛・10の型）
-- 制約: 30文字前後で脳を焼く。
-- 用途: 投稿の1枚目。
+【セット1 変数】: 毒=${vars[0].tone}, フォーカス=${vars[0].focus}, ターゲット=${vars[0].target}
+【セット2 変数】: 毒=${vars[1].tone}, フォーカス=${vars[1].focus}, ターゲット=${vars[1].target}
+【セット3 変数】: 毒=${vars[2].tone}, フォーカス=${vars[2].focus}, ターゲット=${vars[2].target}
 
-②【リプライ（K列用）】
-- 性格: 人格DNA-A（感情的・吐露）
-- 戦略: フックで突き放した読者を、個人的な「独白」や「心の震え」で共犯者にする。
-- 制約: 30文字前後。感嘆符（！）よりも、余韻のある句読点（。）や、ため息の漏れるような一文。
-- 用途: 投稿のすぐ下の自分へのリプライ。
+各セット、以下の3つを含めること。
+①hook: 人格DNA-A (30文字前後)
+②reply: 人格DNA-A (30文字前後、hookとの連動重視)
+③room: 人格DNA-B (80文字前後、実用的メリット)
 
-③【ROOM投稿用（I列用）】
-- 性格: 人格DNA-B（ノーマル・本物志向）
-- 制約: 最大60文字以内。
-- 用途: 楽天ROOMでの着地文章。
----
+出力は以下のJSON配列形式で返せ。
+[
+  {"hook": "...", "reply": "...", "room": "..."},
+  {"hook": "...", "reply": "...", "room": "..."},
+  {"hook": "...", "reply": "...", "room": "..."}
+]`;
 
-出力は必ず以下のJSON形式で返せ。余計な挨拶や解説、markdownの装飾は一切不要。
-{
-  "hook": "Threadsフック案",
-  "reply": "リプライ案",
-  "room": "ROOM投稿案",
-  "archetype": "フックで使用した型の名前"
-}`;
-
-  // 4. Gemini API 呼び出し
+  // 3. Gemini API 呼び出し
   const resultText = callGeminiApi(systemPrompt, userPrompt, imageParts);
   
   try {
-    const match = resultText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("AIの回答にJSONが含まれていません。");
-    
-    const res = JSON.parse(match[0]);
+    const match = resultText.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error("JSON形式のリストが見つかりません。");
+    const resList = JSON.parse(match[0]);
 
-    // 5. 三位一体の書き込み
-    sheet.getRange(row, COL.GEN_HOOK).setValue(res.hook);
-    sheet.getRange(row, COL.GEN_REPLY).setValue(res.reply);
-    sheet.getRange(row, COL.GEN_ROOM).setValue(res.room);
+    // 4. 3行にわたって展開（行の挿入とコピー）
+    if (resList.length > 1) {
+      sheet.insertRowsAfter(row, resList.length - 1);
+      const sourceRange = sheet.getRange(row, 1, 1, sheet.getLastColumn());
+      for (let i = 1; i < resList.length; i++) {
+        sourceRange.copyTo(sheet.getRange(row + i, 1));
+      }
+    }
 
-    return { status: "success", hook: res.hook, reply: res.reply, room: res.room };
+    // 5. 各行に生成文章を流し込み
+    resList.forEach((res, i) => {
+      const targetRow = row + i;
+      sheet.getRange(targetRow, COL.GEN_HOOK).setValue(res.hook);
+      sheet.getRange(targetRow, COL.GEN_REPLY).setValue(res.reply);
+      sheet.getRange(targetRow, COL.GEN_ROOM).setValue(res.room);
+    });
+
+    return { status: "success", count: resList.length };
 
   } catch (e) {
     console.error("Parse Error: " + e.message, resultText);
-    throw new Error("調合結果の解析に失敗しました。内容: " + resultText.substring(0, 100));
+    throw new Error("調合結果の解析に失敗しました。");
   }
+}
+
+/**
+ * 🔍 利用可能なGeminiモデルを表示する
+ */
+function listAvailableGeminiModels() {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`;
+  const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  const json = JSON.parse(response.getContentText());
+  
+  if (json.models) {
+    const modelList = json.models.map(m => m.name.replace("models/", "")).join("\n");
+    SpreadsheetApp.getUi().alert("🛠️ 利用可能なモデル一覧:\n\n" + modelList);
+  } else {
+    SpreadsheetApp.getUi().alert("❌ モデル一覧を取得できませんでした。");
+  }
+}
+
+/**
+ * 🎲 ランダムな変数を生成する
+ */
+function getRandomVariables() {
+  const tones = ["猛毒", "皮肉", "渇望", "悦楽", "絶望"];
+  const focuses = ["素材の変態性", "所有欲の解放", "社会への反逆", "機能の美学", "圧倒的な個"];
+  const targets = ["理解を拒む者", "本物を知る者", "退屈な日常に飽きた者", "聖域の住人"];
+  
+  return {
+    tone: tones[Math.floor(Math.random() * tones.length)],
+    focus: focuses[Math.floor(Math.random() * focuses.length)],
+    target: targets[Math.floor(Math.random() * targets.length)]
+  };
 }
 
 /**
