@@ -52,83 +52,10 @@ if (location.href.includes('room.rakuten.co.jp/mix/collect')) {
   });
 }
 
-// 🎯 ROOMアイテムページ着地検知（完了ボタン押下後のURL自動キャプチャ）
-// collect でも /items でもない room.rakuten.co.jp のページ = 投稿済みアイテムページ
-if (location.href.includes('room.rakuten.co.jp') &&
-    !location.href.includes('/mix/collect') &&
-    !location.href.includes('/items') &&
-    /room\.rakuten\.co\.jp\/[^/]+\/[^/?]+/.test(location.href)) {
-  chrome.storage.local.get(['scout_target_row'], (result) => {
-    const row = result.scout_target_row;
-    if (row) {
-      const capturedUrl = location.href;
-      console.log(`📸 ROOM Item URL captured: ${capturedUrl} for row ${row}`);
-      // メッセージング不要 → GASへ直接fetch
-      fetch("https://script.google.com/macros/s/AKfycbxbXwMHFdGYLp_vR39U6iVHoIf1XmWuz3aESCU7n8X308-vlNRC1nXuvmCZFPnidpgShw/exec", {
-        method: "POST",
-        body: JSON.stringify({
-          action: "save_room_url",
-          targetRow: row,
-          roomUrl: capturedUrl
-        })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.status === "success") {
-          console.log(`✅ ROOM URL saved to sheet: Row ${row} → ${capturedUrl}`);
-          // 🚀 保存できたら仕事を終えてタブを閉じる（1秒待って余韻を残す）
-          setTimeout(() => {
-            console.log("👋 Mission Accomplished. Closing tab.");
-            window.close();
-          }, 1000);
-        } else {
-          console.error("ROOM URL save error:", data);
-        }
-      })
-      .catch(e => console.error("ROOM URL fetch failed:", e));
-    }
-  });
-}
-
-// 🎊 投稿完了画面（confirm）で「my ROOM を見る」を自動クリック
-if (location.href.includes('/mix/collect')) {
-  let retryCount = 0;
-  const clickMyRoom = setInterval(() => {
-    // クラス名 .button-red で直接探す
-    const myRoomBtn = document.querySelector('.button-red');
-    if (myRoomBtn && myRoomBtn.innerText.includes('my ROOM を見る')) {
-      console.log("🚀 投稿完了検知！my ROOM へ移動します...");
-      myRoomBtn.click();
-      clearInterval(clickMyRoom);
-    }
-    if (++retryCount > 20) { // 最大10秒待機
-      console.log("⚠️ 完了ボタンが10秒待っても現れませんでした。");
-      clearInterval(clickMyRoom);
-    }
-  }, 500);
-}
-
-// 🏠 プロフィール画面（アイテム一覧）で、一番新しい商品を自動クリック
-if (location.href.includes('room.rakuten.co.jp') && location.href.includes('/items') && !location.href.includes('/mix/')) {
-  setTimeout(() => {
-    // 最初のアイテムの画像リンク（クラス名 link-image-- で始まるもの）を探す
-    const firstItem = document.querySelector('a[class*="link-image--"]');
-    if (firstItem) {
-      console.log("🎯 最新の商品を発見！自動キャプチャを開始します...");
-      firstItem.click();
-    } else {
-      console.log("⚠️ 最新の商品リンクが見つかりませんでした。");
-    }
-  }, 1500);
-}
-
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "GET_IMAGES") {
-    const allImgs = document.querySelectorAll('img');
-    console.log(`[SCOUT通信テスト] GET_IMAGESを受信！ ページ内のimgタグ総数: ${allImgs.length}`);
-    
     // 🚀 【究極】450px 以上 ＋ 形（比率）で小画像を根絶
-    const images = Array.from(allImgs)
+    const images = Array.from(document.querySelectorAll('img'))
       .filter(img => {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;

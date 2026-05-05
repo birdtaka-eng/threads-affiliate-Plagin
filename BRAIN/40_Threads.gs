@@ -55,11 +55,11 @@ function postToThreadsScheduled() {
  * 📡 Hook投稿 → Reply投稿 の本体
  */
 function _postWithReply(row, sheet, hookText, replyText) {
-  const token  = PropertiesService.getScriptProperties().getProperty('THREADS_ACCESS_TOKEN');
-  const userId = PropertiesService.getScriptProperties().getProperty('THREADS_USER_ID');
+  const token  = THREADS_ACCESS_TOKEN;
+  const userId = THREADS_USER_ID;
 
   if (!token || !userId) {
-    return { success: false, error: "アクセストークンまたはユーザーIDが未設定です。setupThreadsCredentials() を実行してください。" };
+    return { success: false, error: "スレッズの認証情報が設定されていません。Settingsシートまたはプロパティを確認してください。" };
   }
 
   // ===== ROOM URL をランダム選択（50/50）=====

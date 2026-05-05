@@ -18,6 +18,8 @@ function onOpen() {
     .addItem('🔍【5】モデル名を確認', 'listAvailableGeminiModels')
     .addSeparator()
     .addItem('🚀【6】ROOMリンク一括生成', 'generateRoomLinks')
+    .addSeparator()
+    .addItem('⚙️【S】設定シートの作成', 'initializeSettingsSheet')
     .addToUi();
 }
 
@@ -144,19 +146,17 @@ function doPost(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
-  // 5. ROOMアイテムURL保存（投稿完了後に自動キャプチャ）
+  // 5. ROOM投稿完了URLの保存
   if (data.action === "save_room_url") {
     const row = parseInt(data.targetRow);
-    const roomItemUrl = data.roomItemUrl;
-    if (!row || row < 3 || !roomItemUrl) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid data" }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
+    const url = data.roomUrl;
+    if (!row || !url) return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "データ不足" })).setMimeType(ContentService.MimeType.JSON);
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-    sheet.getRange(row, COL.ROOM_ITEM_URL).setValue(roomItemUrl);
-    SpreadsheetApp.flush();
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", row: row, url: roomItemUrl }))
+    sheet.getRange(row, COL.ROOM_ITEM_URL).setValue(url);
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
