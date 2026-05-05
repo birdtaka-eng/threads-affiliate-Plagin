@@ -54,8 +54,11 @@ if (location.href.includes('room.rakuten.co.jp/mix/collect')) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "GET_IMAGES") {
+    const allImgs = document.querySelectorAll('img');
+    console.log(`[SCOUT通信テスト] GET_IMAGESを受信！ ページ内のimgタグ総数: ${allImgs.length}`);
+    
     // 🚀 【究極】450px 以上 ＋ 形（比率）で小画像を根絶
-    const images = Array.from(document.querySelectorAll('img'))
+    const images = Array.from(allImgs)
       .filter(img => {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;

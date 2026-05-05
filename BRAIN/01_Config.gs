@@ -11,7 +11,8 @@ function setupGeminiKey() {
 }
 
 const SS_ID = "1vgpoDggisreX8xYDarTGMjWdE5qNgy9sGKp5fe9toP8";
-const SHEET_NAME = "Board"; 
+const SHEET_A = "Board_A"; // 人格A：偏愛・影
+const SHEET_B = "Board_B"; // 人格B：勝利・光
 const COL = { 
   ITEM_URL: 4, 
   ITEM_NAME: 3, 

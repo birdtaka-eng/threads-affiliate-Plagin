@@ -12,7 +12,8 @@ function onOpen() {
     .addItem('📂【2】フォルダを開く', 'openSanctuaryFolder')
     .addItem('🔧【3】既存写真の修復', 'fixExistingImageNotes')
     .addSeparator()
-    .addItem('✨【4】魂の排出（3案生成）', 'generateTripleSets')
+    .addItem('🔥【4-A】魂の排出（人格A・偏愛）', 'generateTripleSetsA')
+    .addItem('🌟【4-B】魂の排出（人格B・勝利）', 'generateTripleSetsB')
     .addSeparator()
     .addItem('🔍【5】モデル名を確認', 'listAvailableGeminiModels')
     .addSeparator()
@@ -21,18 +22,40 @@ function onOpen() {
 }
 
 /**
- * ✨ シート上の選択行に対して3パターンの文章を同時生成
+ * ✨ 人格A（異常な偏愛）で3セット生成
  */
-function generateTripleSets() {
-  const row = SpreadsheetApp.getActiveSpreadsheet().getActiveCell().getRow();
+function generateTripleSetsA() {
+  generateTripleSets('A');
+}
+
+/**
+ * ✨ 人格B（社会的勝利）で3セット生成
+ */
+function generateTripleSetsB() {
+  generateTripleSets('B');
+}
+
+/**
+ * シート上の選択行に対して指定された人格で同時生成
+ */
+function generateTripleSets(personaKey = 'A') {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const activeSheetName = ss.getActiveSheet().getName();
+  const targetSheetName = personaKey === 'A' ? SHEET_A : SHEET_B;
+
+  if (activeSheetName !== targetSheetName) {
+    return SpreadsheetApp.getUi().alert(`⚠️ シート不一致\n現在は '${activeSheetName}' です。\n'${targetSheetName}' シートを開いてから実行してください。`);
+  }
+
+  const row = ss.getActiveCell().getRow();
   if (row < 3) return SpreadsheetApp.getUi().alert("3行目以降を選択してください。");
   
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ss.toast("⏳ 3パターンの魂を召喚中...", "Gemini");
+  const personaLabel = personaKey === 'A' ? "人格A (偏愛)" : "人格B (勝利)";
+  ss.toast(`⏳ ${personaLabel} の魂を召喚中...`, "Gemini");
   
   try {
-    const res = generateThreadsPost(row);
-    ss.toast("✅ 3案の書き込みを完了しました！", "Gemini");
+    const res = generateThreadsPost(row, personaKey);
+    ss.toast(`✅ ${personaLabel} 3案の書き込みを完了しました！`, "Gemini");
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ 調合エラー: " + e.message);
   }

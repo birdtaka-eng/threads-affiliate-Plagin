@@ -4,52 +4,58 @@
  */
 
 /**
- * 🚀 写真を読み取り、ランダム変数を用いて3パターンの文章を生成・3行に展開して書き込み
+ * 📸 画像を読み取り、DNAの変数を用いて3パターンの文章を生成・展開する
  */
-function generateThreadsPost(row) {
+function generateThreadsPost(row, personaKey = 'A') {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(SHEET_NAME);
+  const sheetName = personaKey === 'A' ? SHEET_A : SHEET_B;
+  const sheet = ss.getSheetByName(sheetName);
   
-  // 1. シートから画像と情報を取得
+  if (!sheet) {
+    throw new Error(`シート '${sheetName}' が見つかりません。シートをコピーして作成してください。`);
+  }
+
   const itemName = sheet.getRange(row, COL.ITEM_NAME).getValue();
   const imageParts = getImageParts(sheet, row);
   
-  // 2. 3つの異なる変数セットをランダムに排出
-  const vars = [getRandomVariables(), getRandomVariables(), getRandomVariables()];
-  
-  const dnaA = getSoul('A');
-  const dnaB = getSoul('B');
-  
-  const systemPrompt = `あなたはタカ様の「偏愛」と「戦略」を司るAIコピーライターです。
-【人格DNA-A：偏愛・毒】
-${dnaA}
-【人格DNA-B：信頼・実用】
-${dnaB}`;
+  // 1. 人格DNAの選択（外部ファイル 31_Soul_DNA_X.gs から取得）
+  const dna = personaKey === 'A' ? SOUL_A : SOUL_B;
+  const systemPrompt = dna.systemInstruction;
+  const temp = dna.temperature || 0.7;
 
+  // 2. DNAに基づいた3つの異なる変数セットをランダムに抽出
+  const vars = [
+    getRandomVariablesFromDna(dna),
+    getRandomVariablesFromDna(dna),
+    getRandomVariablesFromDna(dna)
+  ];
+  
   const userPrompt = `
-以下のアイテムについて、3組の異なる文章セットを生成せよ。各セットは指定された「変数」に基づき、全く異なる切り口で作成すること。
+【最優先指令：思考プロセスを実行せよ】
+1. 分析：材料、塗装、精度を瞬時に見抜け。
+2. 選定：下記の変数と画像に基づき、最適な型を選べ。
+3. 憑依：師匠の事例を完全模倣し、魂を吹き込め。
 
 【アイテム名】: ${itemName || "（写真から判断）"}
 
----
-【セット1 変数】: 毒=${vars[0].tone}, フォーカス=${vars[0].focus}, ターゲット=${vars[0].target}
-【セット2 変数】: 毒=${vars[1].tone}, フォーカス=${vars[1].focus}, ターゲット=${vars[1].target}
-【セット3 変数】: 毒=${vars[2].tone}, フォーカス=${vars[2].focus}, ターゲット=${vars[2].target}
+【セット1 変数】: 韻=${vars[0].tone}, フォーカス=${vars[0].focus}, ターゲット=${vars[0].target}
+【セット2 変数】: 韻=${vars[1].tone}, フォーカス=${vars[1].focus}, ターゲット=${vars[2].target}
+【セット3 変数】: 韻=${vars[2].tone}, フォーカス=${vars[2].focus}, ターゲット=${vars[1].target}
 
-各セット、以下の3つを含めること。
-①hook: 人格DNA-A (30文字前後)
-②reply: 人格DNA-A (30文字前後、hookとの連動重視)
-③room: 人格DNA-B (80文字前後、実用的メリット)
-
-出力は以下のJSON配列形式で返せ。
+出力は以下のJSON配列形式（3パターン分）で返せ。
 [
-  {"hook": "...", "reply": "...", "room": "..."},
-  {"hook": "...", "reply": "...", "room": "..."},
-  {"hook": "...", "reply": "...", "room": "..."}
+  {
+    "analysis": "職人視点での分析",
+    "selected_type": "選んだ型名",
+    "hook": "25文字以内の衝撃",
+    "reply": "期待値を高めるリプライ",
+    "room": "商品の物理的価値（80文字前後）"
+  },
+  ...
 ]`;
 
   // 3. Gemini API 呼び出し
-  const resultText = callGeminiApi(systemPrompt, userPrompt, imageParts);
+  const resultText = callGeminiApi(systemPrompt, userPrompt, imageParts, temp);
   
   try {
     const match = resultText.match(/\[[\s\S]*\]/);
@@ -71,13 +77,18 @@ ${dnaB}`;
       sheet.getRange(targetRow, COL.GEN_HOOK).setValue(res.hook);
       sheet.getRange(targetRow, COL.GEN_REPLY).setValue(res.reply);
       sheet.getRange(targetRow, COL.GEN_ROOM).setValue(res.room);
+      
+      // 分析結果をメモとして残す
+      if (res.analysis) {
+        sheet.getRange(targetRow, COL.GEN_HOOK).setNote(`【分析】: ${res.analysis}\n【型】: ${res.selected_type}`);
+      }
     });
 
     return { status: "success", count: resList.length };
 
   } catch (e) {
     console.error("Parse Error: " + e.message, resultText);
-    throw new Error("調合結果の解析に失敗しました。");
+    throw new Error("AI応答の解析に失敗しました。");
   }
 }
 
@@ -91,24 +102,21 @@ function listAvailableGeminiModels() {
   
   if (json.models) {
     const modelList = json.models.map(m => m.name.replace("models/", "")).join("\n");
-    SpreadsheetApp.getUi().alert("🛠️ 利用可能なモデル一覧:\n\n" + modelList);
+    SpreadsheetApp.getUi().alert("🛠 利用可能なモデル一覧:\n\n" + modelList);
   } else {
-    SpreadsheetApp.getUi().alert("❌ モデル一覧を取得できませんでした。");
+    SpreadsheetApp.getUi().alert("モデル一覧を取得できませんでした。");
   }
 }
 
 /**
- * 🎲 ランダムな変数を生成する
+ * 🎲 DNAからランダムな変数を生成する
  */
-function getRandomVariables() {
-  const tones = ["猛毒", "皮肉", "渇望", "悦楽", "絶望"];
-  const focuses = ["素材の変態性", "所有欲の解放", "社会への反逆", "機能の美学", "圧倒的な個"];
-  const targets = ["理解を拒む者", "本物を知る者", "退屈な日常に飽きた者", "聖域の住人"];
-  
+function getRandomVariablesFromDna(dna) {
+  const v = dna.variables;
   return {
-    tone: tones[Math.floor(Math.random() * tones.length)],
-    focus: focuses[Math.floor(Math.random() * focuses.length)],
-    target: targets[Math.floor(Math.random() * targets.length)]
+    tone: v.tones[Math.floor(Math.random() * v.tones.length)],
+    focus: v.focuses[Math.floor(Math.random() * v.focuses.length)],
+    target: v.targets[Math.floor(Math.random() * v.targets.length)]
   };
 }
 
@@ -136,10 +144,10 @@ function getImageParts(sheet, row) {
 }
 
 /**
- * 📡 Gemini API (Multimodal) を叩く
+ * 📡 Gemini API (Multimodal) を叩く（一本化された通信関数）
  */
-function callGeminiApi(systemPrompt, userPrompt, imageParts) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+function callGeminiApi(systemPrompt, userPrompt, imageParts, temperature) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
   
   const payload = {
     contents: [
@@ -153,7 +161,7 @@ function callGeminiApi(systemPrompt, userPrompt, imageParts) {
       { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
     ],
     generationConfig: {
-      temperature: 0.85,
+      temperature: temperature, 
       maxOutputTokens: 4096,
       responseMimeType: "application/json"
     }

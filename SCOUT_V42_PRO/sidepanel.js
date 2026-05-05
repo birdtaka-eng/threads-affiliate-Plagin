@@ -3,6 +3,7 @@
  * 画像を軽量化して聖域（GAS）へ送り届ける。
  */
 
+// 🎯 確定版URL（最新デプロイ: V42 完全復旧版）
 const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbxbXwMHFdGYLp_vR39U6iVHoIf1XmWuz3aESCU7n8X308-vlNRC1nXuvmCZFPnidpgShw/exec";
 
 let currentTarget = { row: null, url: "" };
@@ -37,7 +38,7 @@ async function syncFromScout() {
   }
 
   // 2. ページ内の画像を抽出
-  chrome.tabs.sendMessage(tab.id, { action: "GET_IMAGES" }, (images) => {
+  chrome.tabs.sendMessage(tab.id, { action: "GET_IMAGES" }, { frameId: 0 }, (images) => {
     if (images) renderImageGrid(images);
   });
 }
