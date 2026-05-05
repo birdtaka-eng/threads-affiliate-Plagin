@@ -5,8 +5,9 @@ npx @google/clasp push -f
 
 Write-Host "`n📦 2. GitHub へバックアップ中..." -ForegroundColor Green
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$branch = git branch --show-current
 git add .
 git commit -m "Auto-save: $timestamp"
-git push origin main
+git push origin $branch
 
-Write-Host "`n✨ すべての保存とバックアップが完了しました！ [S1-Grade Saved]" -ForegroundColor Magenta
+Write-Host "`n✨ すべての保存とバックアップが完了しました！ (Branch: $branch) [S1-Grade Saved]" -ForegroundColor Magenta
