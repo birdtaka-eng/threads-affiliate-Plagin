@@ -155,3 +155,74 @@ function getRakutenItemcode(itemUrl) {
   }
   return null;
 }
+
+/**
+ * 🆔 Threads IDを半自動取得してSettingsシートに書き込む
+ */
+function fetchThreadsUserId() {
+  const token = THREADS_ACCESS_TOKEN;
+  if (!token) {
+    return SpreadsheetApp.getUi().alert("❌ 先にSettingsシートに THREADS_ACCESS_TOKEN を入力してください。");
+  }
+
+  try {
+    const url = `https://graph.threads.net/v1.0/me?fields=id,username&access_token=${token}`;
+    const res = UrlFetchApp.fetch(url);
+    const data = JSON.parse(res.getContentText());
+    
+    if (data.id) {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const settingsSheet = ss.getSheetByName('Settings');
+      if (settingsSheet) {
+        const values = settingsSheet.getDataRange().getValues();
+        let found = false;
+        for (let i = 0; i < values.length; i++) {
+          if (values[i][0] === 'THREADS_USER_ID') {
+            settingsSheet.getRange(i + 1, 2).setValue(data.id);
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          settingsSheet.appendRow(['THREADS_USER_ID', data.id, '自動取得されたID']);
+        }
+        SpreadsheetApp.getUi().alert(`✅ 取得成功！\nユーザー名: ${data.username}\nID: ${data.id}\n\nSettingsシートに自動書き込みしました。`);
+      }
+    }
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ ID取得エラー: " + e.message + "\nトークンが正しいか、有効期限が切れていないか確認してください。");
+  }
+}
+
+/**
+ * 🛡️ 全APIの疎通確認（ヘルスチェック）
+ */
+function verifyAllSettings() {
+  const results = [];
+  
+  // 1. Gemini Check
+  try {
+    const res = callGeminiApi("Test: Hello. Reply only 'OK'.");
+    results.push("✅ Gemini API: 接続成功");
+  } catch (e) {
+    results.push("❌ Gemini API: 失敗 (" + e.message + ")");
+  }
+
+  // 2. Threads Check
+  const token = THREADS_ACCESS_TOKEN;
+  const userId = THREADS_USER_ID;
+  if (token && userId) {
+    try {
+      const url = `https://graph.threads.net/v1.0/${userId}?fields=username&access_token=${token}`;
+      const res = UrlFetchApp.fetch(url);
+      const data = JSON.parse(res.getContentText());
+      results.push(`✅ Threads API: 接続成功 (@${data.username})`);
+    } catch (e) {
+      results.push("❌ Threads API: 失敗 (" + e.message + ")");
+    }
+  } else {
+    results.push("⚠️ Threads API: 未設定 (TokenまたはIDが空です)");
+  }
+
+  SpreadsheetApp.getUi().alert("🛡️ 接続テスト結果:\n\n" + results.join("\n"));
+}

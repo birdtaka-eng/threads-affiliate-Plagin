@@ -1,0 +1,12 @@
+# 🚀 Sanctuary All-in-One Save Script
+
+Write-Host "📡 1. GAS (Google Apps Script) へプッシュ中..." -ForegroundColor Cyan
+npx @google/clasp push -f
+
+Write-Host "`n📦 2. GitHub へバックアップ中..." -ForegroundColor Green
+$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+git add .
+git commit -m "Auto-save: $timestamp"
+git push origin main
+
+Write-Host "`n✨ すべての保存とバックアップが完了しました！ [S1-Grade Saved]" -ForegroundColor Magenta

@@ -28,23 +28,39 @@ const THREADS_USER_ID = getConfigValue('THREADS_USER_ID');
 function initializeSettingsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName('Settings');
+  
   if (!sheet) {
     sheet = ss.insertSheet('Settings');
     sheet.getRange('A1:C1').setValues([['項目', '設定値', '説明']])
          .setBackground('#d9ead3').setFontWeight('bold');
-    
-    const initialData = [
-      ['GEMINI_API_KEY', '', 'Google AI Studioで取得したキー'],
-      ['THREADS_ACCESS_TOKEN', '', 'Meta for Developersで取得したトークン'],
-      ['THREADS_USER_ID', '', 'ThreadsのアカウントID（数字）'],
-      ['RAKUTEN_APP_ID', '', '楽天ウェブサービスのアリフィエイトID等']
-    ];
-    sheet.getRange(2, 1, initialData.length, 3).setValues(initialData);
     sheet.setColumnWidth(1, 200);
     sheet.setColumnWidth(2, 400);
-    sheet.setColumnWidth(3, 300);
+    sheet.setColumnWidth(3, 400);
   }
-  SpreadsheetApp.getUi().alert("✅ Settingsシートを作成しました。値を入力してください。");
+  
+    const initialData = [
+      ['GEMINI_API_KEY', '', 'https://aistudio.google.com/app/apikey'],
+      ['THREADS_ACCESS_TOKEN', '', 'Metaで発行した「アクセストークン」を貼り付けてください'],
+      ['THREADS_USER_ID', '', 'トークンを貼った後、メニューから自動取得できます'],
+      ['RAKUTEN_APP_ID', '', 'https://webservice.rakuten.co.jp/app/list'],
+      ['RAKUTEN_AFFILIATE_ID', '', '楽天アフィリエイトID（例: 12345678.abcdefgh.12345678.abcdefgh）']
+    ];
+  
+  // 既存のデータを壊さないよう、A列の名前を見て説明(C列)だけを更新する、または新規追加
+  const existingData = sheet.getDataRange().getValues();
+  initialData.forEach(row => {
+    let found = false;
+    for (let i = 0; i < existingData.length; i++) {
+      if (existingData[i][0] === row[0]) {
+        sheet.getRange(i + 1, 3).setValue(row[2]); // 説明だけ更新
+        found = true;
+        break;
+      }
+    }
+    if (!found) sheet.appendRow(row);
+  });
+
+  SpreadsheetApp.getUi().alert("✅ Settingsシートを最新の状態（URL付き）に更新しました。");
 }
 
 const SS_ID = "1vgpoDggisreX8xYDarTGMjWdE5qNgy9sGKp5fe9toP8";
