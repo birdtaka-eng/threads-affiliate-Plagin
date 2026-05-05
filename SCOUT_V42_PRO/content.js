@@ -52,6 +52,25 @@ if (location.href.includes('room.rakuten.co.jp/mix/collect')) {
   });
 }
 
+// 🎯 ROOMアイテムページ着地検知（完了ボタン押下後のURL自動キャプチャ）
+// collect でも /items でもない room.rakuten.co.jp のページ = 投稿済みアイテムページ
+if (location.href.includes('room.rakuten.co.jp') &&
+    !location.href.includes('/mix/collect') &&
+    !location.href.includes('/items') &&
+    /room\.rakuten\.co\.jp\/[^/]+\/[^/?]+/.test(location.href)) {
+  chrome.storage.local.get(['scout_target_row'], (result) => {
+    const row = result.scout_target_row;
+    if (row) {
+      console.log(`📸 ROOM Item URL captured: ${location.href} for row ${row}`);
+      chrome.runtime.sendMessage({
+        action: "ROOM_ITEM_CAPTURED",
+        url: location.href,
+        row: row
+      });
+    }
+  });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "GET_IMAGES") {
     const allImgs = document.querySelectorAll('img');

@@ -134,7 +134,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     document.getElementById('target-info').innerText = `🎯 Row: ${request.row}`;
     autoInjectToRoom(request.row);
   }
+
+  // 🎯 ROOMアイテムURL自動キャプチャ → GASのM列に保存
+  if (request.action === "ROOM_ITEM_CAPTURED") {
+    fetch(GAS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "save_room_url",
+        targetRow: request.row,
+        roomItemUrl: request.url
+      })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === "success") {
+        console.log(`✅ ROOMアイテムURL保存完了: Row ${request.row} → ${request.url}`);
+        document.getElementById('status-msg').innerText = `✅ ROOMアイテムURL保存完了`;
+      }
+    })
+    .catch(e => console.error("ROOM URL保存失敗", e));
+  }
 });
+
 
 async function autoInjectToRoom(row) {
   const statusMsg = document.getElementById('status-msg');

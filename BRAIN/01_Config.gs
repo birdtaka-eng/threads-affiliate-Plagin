@@ -22,7 +22,8 @@ const COL = {
   GEN_REPLY: 11, // K列: リプライ用（感情的）
   IMAGE_F: 6, 
   IMAGE_G: 7, 
-  IMAGE_H: 8 
+  IMAGE_H: 8,
+  ROOM_ITEM_URL: 13 // M列: ROOM単品アイテムURL（投稿完了後に自動保存）
 };
 
 // 📂 ドライブ保存設定
