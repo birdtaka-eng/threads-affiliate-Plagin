@@ -126,3 +126,37 @@ syncFromScout();
 
 document.getElementById('send-btn').onclick = sendImages;
 document.getElementById('sync-btn').onclick = syncFromScout;
+
+// 🚀 ROOM着地時に自動注入
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "ROOM_LANDED") {
+    currentTarget.row = request.row;
+    document.getElementById('target-info').innerText = `🎯 Row: ${request.row}`;
+    autoInjectToRoom(request.row);
+  }
+});
+
+async function autoInjectToRoom(row) {
+  const statusMsg = document.getElementById('status-msg');
+  statusMsg.innerText = "⏳ 文章取得中...";
+  try {
+    const res = await fetch(GAS_ENDPOINT, {
+      method: "POST",
+      body: JSON.stringify({ action: "get_room_info", targetRow: row })
+    });
+    const data = await res.json();
+    if (data.status === "success" && data.roomContent) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      chrome.tabs.sendMessage(tab.id, { action: "INJECT_TEXT", text: data.roomContent }, { frameId: 0 }, (response) => {
+        if (response && response.status === "success") {
+          statusMsg.innerText = "✅ 注入完了！";
+        } else {
+          statusMsg.innerText = "❌ 注入失敗";
+        }
+      });
+    }
+  } catch (e) {
+    statusMsg.innerText = "❌ エラー";
+    console.error(e);
+  }
+}
